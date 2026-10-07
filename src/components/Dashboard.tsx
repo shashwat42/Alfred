@@ -3,9 +3,8 @@ import { CalendarWithPresets } from "./ui/calendar-with-presets";
 
 type ScheduleItem = { time: string; topic: string };
 
-const tasks = [
-    "Wash the dog", "Do laundry"
-]
+type taskItem = [string]
+
 
 export default function Dashboard() {
     const [schedule, setSchedule] = useState<ScheduleItem[]>([]);
@@ -27,6 +26,25 @@ export default function Dashboard() {
         void loadSchedule();
     }, []);
 
+
+    const [task, setTask] = useState<taskItem>([""])
+    useEffect(() => {
+        async function LoadTasks() {
+            try {
+                const response = await fetch("http://localhost:8000/api/tasks")  //change in prod
+                if (!response.ok) {
+                    throw new Error(`Request failed: ${response.status}`);
+                }
+                const data: taskItem = await response.json();
+                setTask(data);
+            }
+            catch (err) {
+                console.error("Could not load task", err);
+            }
+        }
+        void LoadTasks();
+    }, []);
+
     return <section className="Dashboard">
         <div className="DashboardLists">
             <section className="DashboardCard ScheduleCard">
@@ -45,7 +63,7 @@ export default function Dashboard() {
             <section className="DashboardCard TasksCard">
                 <h1>Upcoming Tasks</h1>
                 <ol>
-                    {tasks.map((item) => (
+                    {task.map((item) => (
                         <li> {item} </li>
                     ))}
                 </ol>
