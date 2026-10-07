@@ -1,18 +1,32 @@
+import { useEffect, useState } from "react";
 import { CalendarWithPresets } from "./ui/calendar-with-presets";
 
-const schedule = [
-    { time: "10:00", topic: "Team meeting" },
-    { time: "12:30", topic: "Lunch" },
-    { time: "15:00", topic: "Project work" },
-    { time: "18:00", topic: "Meeting" },
-    { time: "21:00", topic: "Shift" },
-];
+type ScheduleItem = { time: string; topic: string };
 
 const tasks = [
     "Wash the dog", "Do laundry"
 ]
 
 export default function Dashboard() {
+    const [schedule, setSchedule] = useState<ScheduleItem[]>([]);
+
+    useEffect(() => {
+        async function loadSchedule() {
+            try {
+                const response = await fetch("http://localhost:8000/api/schedule");
+                if (!response.ok) {
+                    throw new Error(`Request failed: ${response.status}`);
+                }
+                const data: ScheduleItem[] = await response.json();
+                setSchedule(data);
+            } catch (error) {
+                console.error("Could not load schedule:", error);
+            }
+        }
+
+        void loadSchedule();
+    }, []);
+
     return <section className="Dashboard">
         <div className="DashboardLists">
             <section className="DashboardCard ScheduleCard">
