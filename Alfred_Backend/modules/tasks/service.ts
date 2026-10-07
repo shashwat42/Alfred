@@ -1,4 +1,4 @@
-const tasks = ["Wash the dog", "Attend a meeting", "Murder Simp", "Smash Potato"];
+const tasks = ["Wash the dog", "Attend a meeting"];
 
 export function getTasks() {
     return tasks;
