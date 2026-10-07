@@ -43,7 +43,7 @@ export default function Dashboard() {
             }
         }
         void LoadTasks();
-    }, []);
+    }, [task]);
 
     return <section className="Dashboard">
         <div className="DashboardLists">
