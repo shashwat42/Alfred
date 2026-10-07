@@ -145,10 +145,14 @@ body {
     margin-top: 8px;
 }
 
-.scroll-button>button {
+.scroll-button>button,
+.task-add-form>button,
+.task-add-trigger,
+.task-dialog-close {
     display: flex;
     width: 34px;
     height: 34px;
+    flex: 0 0 34px;
     align-items: center;
     justify-content: center;
     border: 1px solid #777;
@@ -160,17 +164,153 @@ body {
     cursor: pointer;
 }
 
-.scroll-button>button:active {
+.task-add-trigger {
+    width: auto;
+    height: 34px;
+    flex: 0 0 auto;
+    gap: 6px;
+    padding: 0 10px;
+    white-space: nowrap;
+    font-size: 14px;
+}
+
+.task-add-form {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    margin-top: 8px;
+}
+
+.task-add-form>input {
+    box-sizing: border-box;
+    width: min(100%, 220px);
+    min-width: 0;
+    padding: 0 10px;
+    border: 1px solid #777;
+    border-radius: 6px;
+    background: #141313;
+    color: white;
+    font: inherit;
+}
+
+.task-add-form>input::placeholder {
+    color: #b5b1b1;
+}
+
+.task-add-form>button {
+    font-size: 22px;
+}
+
+.scroll-button>button:active,
+.task-add-form>button:active,
+.task-add-trigger:active,
+.task-dialog-close:active {
     transform: translateY(2px);
     box-shadow: none;
 }
 
-.DashboardCalendarPanel {
+.task-dialog-backdrop {
+    position: fixed;
+    z-index: 20;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 20px;
+    background: rgb(0 0 0 / 65%);
+}
+
+.task-dialog {
+    box-sizing: border-box;
+    width: min(100%, 420px);
+    padding: 22px;
+    border: 1px solid #777;
+    border-radius: 10px;
+    background: #a39c9c;
+    color: #080707;
+    box-shadow: 0 12px 40px rgb(0 0 0 / 40%);
+}
+
+.task-dialog-heading {
     display: flex;
     align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 18px;
+}
+
+.task-dialog-heading>h2 {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 500;
+}
+
+.task-dialog-close {
+    flex: 0 0 34px;
+    font-size: 24px;
+}
+
+.task-dialog .task-add-form {
+    margin-top: 0;
+}
+
+.task-dialog .task-add-form>input {
+    flex: 1;
+}
+
+.schedule-add-form {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.schedule-add-form>label {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 15px;
+}
+
+.schedule-add-form input {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 38px;
+    padding: 6px 10px;
+    border: 1px solid #777;
+    border-radius: 6px;
+    background: #141313;
+    color: white;
+    font: inherit;
+}
+
+.schedule-add-form>.task-add-trigger {
+    align-self: flex-end;
+}
+
+.task-error {
+    margin: 8px 0 0;
+    color: #8b0000;
+    font-size: 14px;
+    text-align: center;
+}
+
+.DashboardCalendarPanel {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
     justify-content: center;
     min-width: 0;
-    padding-top: 48px;
+}
+
+.DashboardActions {
+    display: flex;
+    width: 100%;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-bottom: 14px;
+}
+
+.DashboardCalendarPanel>.CalendarPresetCard {
+    align-self: center;
 }
 
 .CalendarPresetCard {

@@ -1,5 +1,10 @@
-const tasks = ["Wash the dog", "Attend a meeting"];
+const tasks: string[] = [];
 
 export function getTasks() {
     return tasks;
+}
+
+export function addTask(task: string) {
+    tasks.push(task);
+    return task;
 }

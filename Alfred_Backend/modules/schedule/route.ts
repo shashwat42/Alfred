@@ -1,8 +1,9 @@
 import { Router } from 'express'
 
-import { listSchedule } from './controller.ts'
+import { createSchedule, listSchedule } from './controller.ts'
 const router = Router();
 
 router.get("/", listSchedule);
+router.post("/", createSchedule);
 
 export default router;
