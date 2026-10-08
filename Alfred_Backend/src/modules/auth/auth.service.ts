@@ -4,11 +4,6 @@ import jwt from "jsonwebtoken";
 import { env } from "../../config/env.ts";
 import { Account, type IAccount } from "../../models/account.model.ts";
 
-const oauth2Client = new OAuth2Client(
-    env.google.clientId,
-    env.google.clientSecret,
-    env.google.callbackUrl
-);
 
 export interface GoogleUserProfile {
     googleId: string;
@@ -28,6 +23,61 @@ export interface AuthSessionResponse {
         picture?: string | undefined;
         createdAt: Date;
     };
+}
+
+interface HandoffData {
+    session: AuthSessionResponse;
+    expiresAt: number;
+    consumedAt?: number;
+}
+
+// In-memory handoff ticket store: ticket -> { session, expiresAt, consumedAt }
+// 60-second TTL, with 15-second grace window after first consumption to tolerate StrictMode / duplicate requests.
+const handoffStore = new Map<string, HandoffData>();
+
+// Periodic cleanup of expired tickets every 60 seconds
+setInterval(() => {
+    const now = Date.now();
+    for (const [ticket, data] of handoffStore.entries()) {
+        if (data.expiresAt < now) {
+            handoffStore.delete(ticket);
+        }
+    }
+}, 60000).unref();
+
+export function createHandoffTicket(session: AuthSessionResponse): string {
+    const ticket = crypto.randomBytes(32).toString("hex");
+    const expiresAt = Date.now() + 60 * 1000; // 60 seconds TTL
+    handoffStore.set(ticket, { session, expiresAt });
+    return ticket;
+}
+
+export function consumeHandoffTicket(ticket: string): AuthSessionResponse | null {
+    if (!ticket || typeof ticket !== "string") {
+        return null;
+    }
+
+    const data = handoffStore.get(ticket);
+    if (!data) {
+        return null;
+    }
+
+    const now = Date.now();
+    if (now > data.expiresAt) {
+        handoffStore.delete(ticket);
+        return null;
+    }
+
+    // On first consumption, allow a 15-second grace period for React StrictMode / parallel mounts
+    if (!data.consumedAt) {
+        data.consumedAt = now;
+        data.expiresAt = Math.min(data.expiresAt, now + 15000);
+        setTimeout(() => {
+            handoffStore.delete(ticket);
+        }, 15000).unref();
+    }
+
+    return data.session;
 }
 
 export function generateAuthToken(account: IAccount): string {
@@ -85,8 +135,17 @@ export async function findOrCreateGoogleAccount(
     return formatAuthResponse(account, token);
 }
 
+export function createOAuth2Client(): OAuth2Client {
+    return new OAuth2Client(
+        env.google.clientId,
+        env.google.clientSecret,
+        env.google.callbackUrl
+    );
+}
+
 export function getGoogleAuthUrl(): string {
-    return oauth2Client.generateAuthUrl({
+    const client = createOAuth2Client();
+    return client.generateAuthUrl({
         access_type: "offline",
         prompt: "consent",
         scope: ["openid", "email", "profile"],
@@ -94,13 +153,17 @@ export function getGoogleAuthUrl(): string {
 }
 
 export async function getGoogleUserFromCode(code: string): Promise<GoogleUserProfile> {
-    const { tokens } = await oauth2Client.getToken(code);
+    const client = createOAuth2Client();
+    const { tokens } = await client.getToken({
+        code,
+        redirect_uri: env.google.callbackUrl,
+    });
 
     if (!tokens.id_token) {
         throw new Error("Missing ID token from Google OAuth response");
     }
 
-    const ticket = await oauth2Client.verifyIdToken({
+    const ticket = await client.verifyIdToken({
         idToken: tokens.id_token,
         audience: env.google.clientId,
     });

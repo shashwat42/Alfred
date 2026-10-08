@@ -12,30 +12,44 @@ const presets = [
   { label: "In 2 weeks", value: 14 },
 ]
 
-export function CalendarWithPresets({ onDateChange }: { onDateChange: (date: Date) => void }) {
-  const [date, setDate] = React.useState<Date | undefined>(() => new Date())
+export function CalendarWithPresets({
+  selectedDate,
+  onDateChange,
+}: {
+  selectedDate?: Date;
+  onDateChange: (date: Date) => void;
+}) {
+  const [date, setDate] = React.useState<Date | undefined>(() => selectedDate ?? new Date());
   const [currentMonth, setCurrentMonth] = React.useState(
-    () => new Date(new Date().getFullYear(), new Date().getMonth(), 1)
-  )
+    () => new Date((selectedDate ?? new Date()).getFullYear(), (selectedDate ?? new Date()).getMonth(), 1)
+  );
+
+  React.useEffect(() => {
+    if (selectedDate) {
+      setDate(selectedDate);
+      setCurrentMonth(new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1));
+    }
+  }, [selectedDate]);
 
   const selectPreset = (days: number) => {
-    const newDate = addDays(new Date(), days)
-    setDate(newDate)
-    onDateChange(newDate)
-    setCurrentMonth(new Date(newDate.getFullYear(), newDate.getMonth(), 1))
-  }
+    const newDate = addDays(new Date(), days);
+    setDate(newDate);
+    onDateChange(newDate);
+    setCurrentMonth(new Date(newDate.getFullYear(), newDate.getMonth(), 1));
+  };
 
   return (
     <section className="CalendarPresetCard" aria-label="Calendar and date presets">
       <div className="CalendarPresetContent">
         <Calendar
           mode="single"
+          required
           selected={date}
           onSelect={(nextDate) => {
-            if (!nextDate) return
-            setDate(nextDate)
-            onDateChange(nextDate)
-            setCurrentMonth(new Date(nextDate.getFullYear(), nextDate.getMonth(), 1))
+            const chosenDate = nextDate ?? date ?? new Date();
+            setDate(chosenDate);
+            onDateChange(chosenDate);
+            setCurrentMonth(new Date(chosenDate.getFullYear(), chosenDate.getMonth(), 1));
           }}
           month={currentMonth}
           onMonthChange={setCurrentMonth}

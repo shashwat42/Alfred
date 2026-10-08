@@ -1,59 +1,93 @@
-const tasks: string[] = ["Wake up",
-    "Make the bed",
-    "Drink water",
-    "Morning exercise",
-    "Take a shower",
-    "Have breakfast",
-    "Check emails",
-    "Plan the day",
-    "Review calendar",
-    "Study TypeScript",
-    "Practice JavaScript",
-    "Work on backend",
-    "Build API endpoints",
-    "Test API",
-    "Fix bugs",
-    "Review code",
-    "Work on database",
-    "Write SQL queries",
-    "Read documentation",
-    "Work on personal project",
-    "Take a break",
-    "Go for a walk",
-    "Have lunch",
-    "Practice React",
-    "Build UI components",
-    "Work with APIs",
-    "Write unit tests",
-    "Commit changes",
-    "Push changes to GitHub",
-    "Review project progress",
-    "Practice DSA",
-    "Solve coding problems",
-    "Study system design",
-    "Learn Node.js",
-    "Practice Express.js",
-    "Organize files",
-    "Clean the workspace",
-    "Reply to messages",
-    "Read a book",
-    "Listen to music",
-    "Watch a tutorial",
-    "Work on resume",
-    "Apply for jobs",
-    "Learn something new",
-    "Have dinner",
-    "Relax",
-    "Plan tomorrow",
-    "Review today's work",
-    "Get ready for bed",
-    "Go to sleep"];
+import mongoose from "mongoose";
+import { Task, type ITask } from "../../models/task.model.ts";
 
-export function getTasks() {
-    return tasks;
+export async function getTasks(accountId: string): Promise<ITask[]> {
+    return Task.find({ accountId: new mongoose.Types.ObjectId(accountId) })
+        .sort({ createdAt: -1 })
+        .lean();
 }
 
-export function addTask(task: string) {
-    tasks.push(task);
-    return task;
+export async function addTask(accountId: string, taskText: string): Promise<ITask> {
+    const task = await Task.create({
+        accountId: new mongoose.Types.ObjectId(accountId),
+        task: taskText,
+        completed: false,
+    });
+    return task.toObject();
+}
+
+export async function updateTask(
+    accountId: string,
+    taskId: string,
+    updates: { task?: string; completed?: boolean }
+): Promise<ITask | null> {
+    if (!mongoose.isValidObjectId(taskId)) {
+        return null;
+    }
+
+    const updateData: { task?: string; completed?: boolean } = {};
+    if (typeof updates.task === "string" && updates.task.trim().length > 0) {
+        updateData.task = updates.task.trim();
+    }
+    if (typeof updates.completed === "boolean") {
+        updateData.completed = updates.completed;
+    }
+
+    return Task.findOneAndUpdate(
+        {
+            _id: new mongoose.Types.ObjectId(taskId),
+            accountId: new mongoose.Types.ObjectId(accountId),
+        },
+        { $set: updateData },
+        { returnDocument: "after" }
+    ).lean();
+}
+
+export async function completeTask(
+    accountId: string,
+    taskId: string,
+    completed?: boolean
+): Promise<ITask | null> {
+    if (!mongoose.isValidObjectId(taskId)) {
+        return null;
+    }
+
+    if (completed !== undefined) {
+        return Task.findOneAndUpdate(
+            {
+                _id: new mongoose.Types.ObjectId(taskId),
+                accountId: new mongoose.Types.ObjectId(accountId),
+            },
+            { $set: { completed } },
+            { returnDocument: "after" }
+        ).lean();
+    }
+
+    const existing = await Task.findOne({
+        _id: new mongoose.Types.ObjectId(taskId),
+        accountId: new mongoose.Types.ObjectId(accountId),
+    });
+    if (!existing) return null;
+
+    existing.completed = !existing.completed;
+    await existing.save();
+    return existing.toObject();
+}
+
+export async function clearAllTasks(accountId: string): Promise<{ deletedCount: number }> {
+    const result = await Task.deleteMany({
+        accountId: new mongoose.Types.ObjectId(accountId),
+    });
+    return { deletedCount: result.deletedCount };
+}
+
+export async function deleteTask(accountId: string, taskId: string): Promise<ITask | null> {
+    if (!mongoose.isValidObjectId(taskId)) {
+        return null;
+    }
+
+    return Task.findOneAndDelete({
+        _id: new mongoose.Types.ObjectId(taskId),
+        accountId: new mongoose.Types.ObjectId(accountId),
+    }).lean();
 }

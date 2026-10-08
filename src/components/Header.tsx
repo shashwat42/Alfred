@@ -1,9 +1,25 @@
-import Logo from '../assets/Alfred_Logo.png'
+import Logo from "../assets/Alfred_Logo.png";
 
-export default function Header() {
-    return <> <section className="Header">
-        <img src={Logo}></img>
+
+interface HeaderProps {
+  onGoHome?: () => void;
+}
+
+export default function Header({ onGoHome }: HeaderProps) {
+
+
+  return (
+    <header className="Header">
+      <div
+        className="HeaderBrand"
+        onClick={onGoHome}
+        role={onGoHome ? "button" : undefined}
+        tabIndex={onGoHome ? 0 : undefined}
+        style={{ cursor: onGoHome ? "pointer" : "default" }}
+      >
+        <img src={Logo} alt="Alfred Logo" />
         <h1>ALFRED</h1>
-    </section>
-    </>
+      </div>
+    </header>
+  );
 }
