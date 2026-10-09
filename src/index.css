@@ -23,6 +23,11 @@ body {
     flex-direction: column;
 }
 
+/* Mobile Segmented View Switcher (Desktop hidden) */
+.mobile-view-nav {
+    display: none;
+}
+
 .Header {
     position: relative;
     display: flex;
@@ -687,6 +692,12 @@ body {
 }
 
 /* Schedule Timeline Interface */
+.schedule-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
 .schedule-timeline-toolbar {
     display: flex;
     align-items: center;
@@ -1472,37 +1483,398 @@ body {
     box-shadow: none;
 }
 
+/* ==========================================================================
+   Responsive & Mobile Adaptations
+   ========================================================================== */
+
 @media (max-width: 1050px) {
-    .Dashboard {
-        grid-template-columns: minmax(0, 1fr);
-        gap: 20px;
+    .Main {
+        grid-template-columns: minmax(280px, 1fr) minmax(360px, 1.4fr);
     }
 
-    .DashboardCalendarPanel {
-        padding-top: 0;
+    .Dashboard {
+        padding: 24px 20px;
     }
 }
 
-@media (max-width: 700px) {
+@media (max-width: 768px) {
+    /* Header compact on mobile */
     .Header {
-        flex-basis: 88px;
+        flex: 0 0 58px;
+        min-height: 58px;
+        padding: 0 16px;
+        border-bottom: 1px solid #232121;
     }
 
+    .HeaderBrand {
+        gap: 10px;
+    }
+
+    .HeaderBrand>img {
+        width: 36px;
+        height: auto;
+    }
+
+    .HeaderBrand>h1 {
+        font-size: 22px;
+        letter-spacing: 1.5px;
+    }
+
+    /* Mobile view segmented switch bar */
+    .mobile-view-nav {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 8px 16px;
+        background: #141212;
+        border-bottom: 1px solid #262424;
+        position: sticky;
+        top: 0;
+        z-index: 15;
+    }
+
+    .mobile-view-tab {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 7px 16px;
+        border-radius: 9999px;
+        border: 1px solid #332f2f;
+        background: #1a1818;
+        color: #a1a1aa;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        flex: 1;
+        max-width: 160px;
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    .mobile-view-tab:hover {
+        color: #ffffff;
+        background: #252323;
+    }
+
+    .mobile-view-tab.active {
+        color: #ffffff;
+        background: #2b2828;
+        border-color: #524e4e;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+    }
+
+    .mobile-view-tab svg {
+        flex-shrink: 0;
+    }
+
+    /* Main container & Tab Visibility */
     .Main {
-        grid-template-columns: minmax(0, 1fr);
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+        min-height: calc(100vh - 106px);
     }
 
+    .Main.mobile-tab-assistant > .Dashboard {
+        display: none !important;
+    }
+
+    .Main.mobile-tab-dashboard > .Chat {
+        display: none !important;
+    }
+
+    .Main.mobile-tab-assistant > .Chat {
+        display: flex !important;
+        flex: 1;
+        min-height: calc(100vh - 106px);
+    }
+
+    .Main.mobile-tab-dashboard > .Dashboard {
+        display: flex !important;
+        flex: 1;
+        min-height: calc(100vh - 106px);
+    }
+
+    /* Chat view on mobile */
     .Chat {
-        min-height: 440px;
-        padding: 32px 20px;
+        padding: 24px 16px 20px;
+        min-height: auto;
+        width: 100%;
+        box-sizing: border-box;
     }
 
+    .chat-main-content>img {
+        width: clamp(100px, 26vw, 140px);
+    }
+
+    .chat-main-content>p {
+        margin: 20px 0 16px;
+        font-size: clamp(16px, 4.5vw, 20px);
+        padding: 0 8px;
+    }
+
+    .chat-main-content>input {
+        width: min(100%, 340px);
+        height: 46px;
+        font-size: 16px;
+        border-radius: 8px;
+    }
+
+    .chat-bottom-bar {
+        padding: 10px 8px;
+        margin-top: 20px;
+        border-top: 1px solid #232121;
+    }
+
+    /* Dashboard & Card on mobile */
     .Dashboard {
-        grid-template-columns: minmax(0, 1fr);
+        padding: 16px 12px 28px;
+        gap: 14px;
+        width: 100%;
+        box-sizing: border-box;
     }
 
-    .DashboardCalendarPanel {
-        padding: 0 0 20px;
+    .dashboard-date-banner {
+        min-width: 0;
+        width: 100%;
+        max-width: 580px;
+        padding: 8px 16px;
+        box-sizing: border-box;
+        border-radius: 12px;
+    }
+
+    .date-banner-weekday {
+        font-size: 19px;
+    }
+
+    .date-banner-day {
+        font-size: 14px;
+    }
+
+    .dashboard-main-card {
+        display: flex;
+        flex-direction: column;
+        grid-template-columns: none;
+        width: 100%;
+        max-width: 580px;
+        min-height: auto;
+        padding: 18px 14px 12px;
+        border-radius: 16px;
+        box-sizing: border-box;
+    }
+
+    .dashboard-content-area {
+        padding-right: 0;
+        width: 100%;
+        min-width: 0;
+        flex: 1;
+    }
+
+    .dashboard-content-header {
+        margin-bottom: 16px;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+
+    .dashboard-section-title {
+        font-size: 18px;
+    }
+
+    /* Horizontal Nav Bar on mobile */
+    .dashboard-nav-divider {
+        width: 100%;
+        height: 1px;
+        margin: 16px 0 8px;
+        background: #333030;
+    }
+
+    .dashboard-nav-strip {
+        flex-direction: row;
+        justify-content: space-around;
+        align-items: center;
+        width: 100%;
+        gap: 6px;
+        padding: 4px 0;
+    }
+
+    .nav-strip-btn {
+        flex-direction: column;
+        width: auto;
+        flex: 1;
+        max-width: 90px;
+        padding: 6px 4px;
+        gap: 4px;
+    }
+
+    .nav-strip-icon-box {
+        width: 28px;
+        height: 28px;
+    }
+
+    .nav-strip-icon {
+        width: 24px;
+        height: 24px;
+    }
+
+    .nav-strip-label {
+        font-size: 11px;
+    }
+
+    /* Schedule Timeline on mobile */
+    .schedule-timeline-container {
+        max-height: 290px;
+        padding-right: 4px;
+    }
+
+    .timeline-hour-row {
+        grid-template-columns: 50px 1fr;
+        min-height: 40px;
+    }
+
+    .timeline-hour-label {
+        font-size: 10px;
+        padding-top: 3px;
+    }
+
+    .timeline-hour-slot {
+        min-height: 40px;
+        padding: 3px 0;
+    }
+
+    .timeline-now-line {
+        left: -50px;
+    }
+
+    .timeline-now-dot {
+        left: 46px;
+    }
+
+    .timeline-event-chip {
+        padding: 5px 8px;
+        font-size: 12px;
+        border-radius: 6px;
+    }
+
+    .timeline-chip-del {
+        font-size: 18px;
+        padding: 2px 6px;
+    }
+
+    /* To-Do list on mobile */
+    .todo-items-list {
+        gap: 10px;
+    }
+
+    .todo-item-row {
+        padding: 8px 6px;
+        font-size: 15px;
+        border-radius: 8px;
+    }
+
+    .todo-checkbox-btn {
+        width: 22px;
+        height: 22px;
+        flex: 0 0 22px;
+    }
+
+    .todo-item-del-btn {
+        opacity: 0.8;
+        padding: 6px;
+        min-width: 32px;
+        min-height: 32px;
+    }
+
+    .pagination-section {
+        padding-top: 8px;
+    }
+
+    .pagination-arrow {
+        width: 34px;
+        height: 26px;
+    }
+
+    .pagination-page {
+        min-width: 24px;
+        height: 26px;
+        font-size: 13px;
+    }
+
+    /* Upcoming cards on mobile */
+    .upcoming-item-card {
+        padding: 10px 14px;
+        gap: 4px;
+    }
+
+    .upcoming-card-topic {
+        font-size: 15px;
+    }
+
+    /* Dialogs & forms on mobile */
+    .task-dialog-backdrop {
+        padding: 12px;
+    }
+
+    .task-dialog,
+    .calendar-dialog,
+    .settings-dialog {
+        width: min(100%, 380px);
+        padding: 18px 14px;
+        border-radius: 14px;
+        box-sizing: border-box;
+    }
+
+    .schedule-add-form input,
+    .task-add-form>input,
+    .chat-main-content>input {
+        font-size: 16px; /* prevent iOS auto-zoom */
+    }
+
+    .CalendarPresetButton {
+        min-width: 68px;
+        font-size: 12px;
+        padding: 4px 6px;
+    }
+}
+
+@media (max-width: 480px) {
+    .dashboard-content-header {
+        gap: 10px;
+    }
+
+    .schedule-header-actions {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .section-header-actions {
+        gap: 8px;
+    }
+
+    .section-clear-btn {
+        font-size: 12px;
+        padding: 4px 10px;
+    }
+
+    .section-add-trigger {
+        width: 28px;
+        height: 28px;
+        flex: 0 0 28px;
+        font-size: 20px;
+    }
+
+    .timeline-date-picker-trigger span {
+        font-size: 12px;
+    }
+
+    .timeline-today-btn {
+        font-size: 10px;
+        padding: 2px 6px;
+    }
+
+    .user-name {
+        max-width: 110px;
     }
 }
 

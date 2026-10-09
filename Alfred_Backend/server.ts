@@ -4,14 +4,18 @@ import authRouter from "./src/modules/auth/auth.routes.ts";
 import scheduleRouter from "./src/modules/schedule/route.ts";
 import taskRouter from "./src/modules/tasks/route.ts";
 import { connectDatabase } from "./src/config/database.ts";
+import { env } from "./src/config/env.ts";
+import { apiRateLimiter } from "./src/middleware/rateLimit.middleware.ts";
 
 const app = express();
-app.use(cors({ origin: "http://localhost:5173" }));
+app.use(cors({ origin: env.allowedOrigins }));
 
 app.use(express.json());
 app.use("/auth", authRouter);
+app.use("/api", apiRateLimiter);
 app.use("/api/schedule", scheduleRouter);
 app.use("/api/tasks", taskRouter);
+
 
 app.get("/health", (_req, res) => {
     res.json({ status: "ok" });
@@ -20,8 +24,8 @@ app.get("/health", (_req, res) => {
 async function startServer(): Promise<void> {
     try {
         await connectDatabase();
-        app.listen(8000, () => {
-            console.log("Server listening on port 8000");
+        app.listen(env.port, () => {
+            console.log(`Server listening on port ${env.port}`);
         });
     } catch (err) {
         console.error("Failed to start server due to database connection error:", err);

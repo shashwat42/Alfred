@@ -7,8 +7,7 @@ import {
     getGoogleAuthUrl,
     getGoogleUserFromCode,
 } from "./auth.service.ts";
-
-const FRONTEND_URL = "http://localhost:5173";
+import { env } from "../../config/env.ts";
 
 export async function guestAuth(_req: Request, res: Response): Promise<void> {
     try {
@@ -54,13 +53,13 @@ export async function googleAuthCallback(req: Request, res: Response): Promise<v
 
     if (error) {
         console.error("Google OAuth callback query error:", error);
-        res.redirect(`${FRONTEND_URL}/?auth_error=authorization_rejected`);
+        res.redirect(`${env.frontendUrl}/?auth_error=authorization_rejected`);
         return;
     }
 
     if (typeof code !== "string" || code.trim().length === 0) {
         console.error("Missing or invalid authorization code in query");
-        res.redirect(`${FRONTEND_URL}/?auth_error=invalid_request`);
+        res.redirect(`${env.frontendUrl}/?auth_error=invalid_request`);
         return;
     }
 
@@ -70,14 +69,14 @@ export async function googleAuthCallback(req: Request, res: Response): Promise<v
     const cached = codeExchangeCache.get(cleanCode);
     if (cached && Date.now() < cached.expiresAt) {
         if (cached.status === "resolved") {
-            res.redirect(`${FRONTEND_URL}/?ticket=${encodeURIComponent(cached.ticket)}`);
+            res.redirect(`${env.frontendUrl}/?ticket=${encodeURIComponent(cached.ticket)}`);
             return;
         } else {
             try {
                 const ticket = await cached.promise;
-                res.redirect(`${FRONTEND_URL}/?ticket=${encodeURIComponent(ticket)}`);
+                res.redirect(`${env.frontendUrl}/?ticket=${encodeURIComponent(ticket)}`);
             } catch {
-                res.redirect(`${FRONTEND_URL}/?auth_error=authentication_failed`);
+                res.redirect(`${env.frontendUrl}/?auth_error=authentication_failed`);
             }
             return;
         }
@@ -95,7 +94,7 @@ export async function googleAuthCallback(req: Request, res: Response): Promise<v
 
     try {
         const ticket = await exchangePromise;
-        res.redirect(`${FRONTEND_URL}/?ticket=${encodeURIComponent(ticket)}`);
+        res.redirect(`${env.frontendUrl}/?ticket=${encodeURIComponent(ticket)}`);
     } catch (err: unknown) {
         codeExchangeCache.delete(cleanCode);
         const isInvalidGrant =
@@ -106,12 +105,12 @@ export async function googleAuthCallback(req: Request, res: Response): Promise<v
 
         if (isInvalidGrant) {
             console.warn("Google OAuth authorization code expired or already used. Redirecting to frontend.");
-            res.redirect(`${FRONTEND_URL}/?auth_error=code_expired`);
+            res.redirect(`${env.frontendUrl}/?auth_error=code_expired`);
             return;
         }
 
         console.error("Error during Google OAuth callback:", err);
-        res.redirect(`${FRONTEND_URL}/?auth_error=authentication_failed`);
+        res.redirect(`${env.frontendUrl}/?auth_error=authentication_failed`);
     }
 }
 
