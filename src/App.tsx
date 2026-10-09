@@ -1,6 +1,7 @@
 import { useState } from "react";
 import Chat from "./components/Chat";
-import Dashboard, { type DashboardView } from "./components/Dashboard";
+import Dashboard from "./components/Dashboard";
+import type { DashboardView } from "./types/dashboard.ts";
 import Header from "./components/Header";
 import { useAuth } from "./auth/authContext.ts";
 
@@ -27,7 +28,7 @@ const App = () => {
         >
           <span>{error}</span>
           <button
-            onClick={() => void retry()}
+            onClick={() => retry()}
             style={{
               padding: "4px 10px",
               background: "#3f2020",

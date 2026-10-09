@@ -1,4 +1,6 @@
 import type { Request, Response } from "express";
+import { requireAccountId } from "../../utils/requireAccountId.ts";
+import { normalizeDateInput } from "../../utils/dateUtils.ts";
 import {
     addSchedule,
     deleteSchedule as removeSchedule,
@@ -14,11 +16,8 @@ export type ScheduleItem = {
 
 export async function listSchedule(req: Request, res: Response): Promise<void> {
     try {
-        const accountId = req.accountId;
-        if (!accountId) {
-            res.status(401).json({ error: "Unauthorized" });
-            return;
-        }
+        const accountId = requireAccountId(req, res);
+        if (!accountId) return;
 
         const now = new Date();
         const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
@@ -38,21 +37,18 @@ export async function createSchedule(
     req: Request<
         Record<string, never>,
         unknown,
-        { schedule?: Partial<ScheduleItem>; accountId?: unknown }
+        { schedule?: Partial<ScheduleItem> }
     >,
     res: Response
 ): Promise<void> {
     try {
-        const accountId = req.accountId;
-        if (!accountId) {
-            res.status(401).json({ error: "Unauthorized" });
-            return;
-        }
+        const accountId = requireAccountId(req, res);
+        if (!accountId) return;
 
         const payload = (req.body?.schedule ?? req.body ?? {}) as Partial<ScheduleItem>;
         const time = payload.time;
         const topic = payload.topic;
-        let date = payload.date;
+        const date = normalizeDateInput(payload.date);
 
         if (
             typeof time !== "string" ||
@@ -64,14 +60,7 @@ export async function createSchedule(
             return;
         }
 
-        if (typeof date === "string" && !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-            const parsed = new Date(date);
-            if (!Number.isNaN(parsed.getTime())) {
-                date = `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}-${String(parsed.getDate()).padStart(2, "0")}`;
-            }
-        }
-
-        if (typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        if (!date) {
             res.status(400).json({ error: "Schedule must include a valid date (YYYY-MM-DD)" });
             return;
         }
@@ -93,16 +82,13 @@ export async function updateSchedule(
     req: Request<
         { id: string },
         unknown,
-        { schedule?: Partial<ScheduleItem>; accountId?: unknown }
+        { schedule?: Partial<ScheduleItem> }
     >,
     res: Response
 ): Promise<void> {
     try {
-        const accountId = req.accountId;
-        if (!accountId) {
-            res.status(401).json({ error: "Unauthorized" });
-            return;
-        }
+        const accountId = requireAccountId(req, res);
+        if (!accountId) return;
 
         const { id } = req.params;
         const { time, topic, date } = req.body?.schedule ?? {};
@@ -155,11 +141,8 @@ export async function deleteSchedule(
     res: Response
 ): Promise<void> {
     try {
-        const accountId = req.accountId;
-        if (!accountId) {
-            res.status(401).json({ error: "Unauthorized" });
-            return;
-        }
+        const accountId = requireAccountId(req, res);
+        if (!accountId) return;
 
         const { id } = req.params;
         const deleted = await removeSchedule(accountId, id);

@@ -6,13 +6,17 @@ interface HeaderProps {
 }
 
 export default function Header({ onGoHome }: HeaderProps) {
-
-
   return (
     <header className="Header">
       <div
         className="HeaderBrand"
         onClick={onGoHome}
+        onKeyDown={(e) => {
+          if (onGoHome && (e.key === "Enter" || e.key === " ")) {
+            e.preventDefault();
+            onGoHome();
+          }
+        }}
         role={onGoHome ? "button" : undefined}
         tabIndex={onGoHome ? 0 : undefined}
         style={{ cursor: onGoHome ? "pointer" : "default" }}

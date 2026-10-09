@@ -5,7 +5,7 @@ export interface AuthContextType {
   session: AuthSession | null;
   loading: boolean;
   error: string | null;
-  retry: () => Promise<void>;
+  retry: () => void;
   loginWithGoogle: () => void;
   logout: () => void;
 }

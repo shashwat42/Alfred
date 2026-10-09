@@ -16,7 +16,6 @@ export default function Chat() {
                 <input aria-label="Ask" placeholder="Ask Alfred anything.." />
             </div>
 
-            {/* Bottom-left user profile & settings bar */}
             <div className="chat-bottom-bar">
                 <div className="user-bar-profile">
                     {isGoogleUser && session.account.picture ? (
@@ -42,7 +41,7 @@ export default function Chat() {
                                 className="user-bar-signin-btn"
                                 onClick={loginWithGoogle}
                             >
-                                Sign in with google
+                                Sign in with Google
                             </button>
                         )}
                     </div>
@@ -72,7 +71,6 @@ export default function Chat() {
                 </button>
             </div>
 
-            {/* Settings Modal */}
             {isSettingsOpen && (
                 <div
                     className="task-dialog-backdrop"
@@ -99,7 +97,6 @@ export default function Chat() {
                         </div>
 
                         <div className="settings-content">
-                            {/* Account Section */}
                             <div className="settings-section">
                                 <h3 className="settings-section-title">Account</h3>
                                 <div className="settings-account-card">
@@ -149,7 +146,6 @@ export default function Chat() {
                                 </div>
                             </div>
 
-                            {/* Preferences Section Placeholder */}
                             <div className="settings-section">
                                 <h3 className="settings-section-title">Preferences</h3>
                                 <div className="settings-placeholder-box">

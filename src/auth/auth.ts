@@ -33,7 +33,6 @@ export function getSession(): AuthSession | null {
       return parsed as AuthSession;
     }
 
-    // Corrupt or invalid shape, clean up
     clearSession();
     return null;
   } catch (error) {

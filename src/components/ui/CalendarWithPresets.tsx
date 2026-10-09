@@ -1,8 +1,7 @@
 import * as React from "react"
 import { addDays } from "date-fns"
 
-import { Button } from "@/components/ui/button"
-import { Calendar } from "@/components/ui/calendar"
+import { Calendar } from "./Calendar.tsx"
 
 const presets = [
   { label: "Today", value: 0 },
@@ -26,6 +25,7 @@ export function CalendarWithPresets({
 
   React.useEffect(() => {
     if (selectedDate) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setDate(selectedDate);
       setCurrentMonth(new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1));
     }
@@ -59,16 +59,14 @@ export function CalendarWithPresets({
       </div>
       <div className="CalendarPresetFooter">
         {presets.map((preset) => (
-          <Button
+          <button
             key={preset.value}
             type="button"
-            variant="outline"
-            size="sm"
             className="CalendarPresetButton"
             onClick={() => selectPreset(preset.value)}
           >
             {preset.label}
-          </Button>
+          </button>
         ))}
       </div>
     </section>

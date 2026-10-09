@@ -12,38 +12,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<AuthSession | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  // Incrementing this counter re-triggers the auth init effect.
+  const [retryCount, setRetryCount] = useState(0);
 
-  const init = useCallback(async () => {
+  // retry() resets UI state synchronously here (in a user callback, not an
+  // effect body), then bumps retryCount so the effect below re-runs.
+  const retry = useCallback(() => {
     setLoading(true);
     setError(null);
-    try {
-      const activeSession = await initAuthSession();
-      setSession(activeSession);
-    } catch (err) {
-      console.error("Authentication initialization failed:", err);
-      setSession(null);
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Failed to initialize authentication session."
-      );
-    } finally {
-      setLoading(false);
-    }
+    setRetryCount((c) => c + 1);
   }, []);
 
   useEffect(() => {
-    let isMounted = true;
+    // Local flag prevents setState from firing after this effect has cleaned up
+    // (e.g. component unmounts during an in-flight request, or retry fires again).
+    let cancelled = false;
 
     initAuthSession()
       .then((activeSession) => {
-        if (isMounted) {
+        if (!cancelled) {
           setSession(activeSession);
           setLoading(false);
         }
       })
       .catch((err: unknown) => {
-        if (isMounted) {
+        if (!cancelled) {
           console.error("Authentication initialization failed:", err);
           setSession(null);
           setError(
@@ -57,7 +50,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const handleAuthChange = (event: Event) => {
       const customEvent = event as CustomEvent<AuthSession | null>;
-      if (isMounted) {
+      if (!cancelled) {
         setSession(customEvent.detail ?? null);
         setLoading(false);
       }
@@ -66,10 +59,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     window.addEventListener(AUTH_CHANGE_EVENT, handleAuthChange);
 
     return () => {
-      isMounted = false;
+      cancelled = true;
       window.removeEventListener(AUTH_CHANGE_EVENT, handleAuthChange);
     };
-  }, []);
+  }, [retryCount]);
 
   const logout = () => {
     clearSession();
@@ -82,7 +75,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         session,
         loading,
         error,
-        retry: init,
+        retry,
         loginWithGoogle,
         logout,
       }}

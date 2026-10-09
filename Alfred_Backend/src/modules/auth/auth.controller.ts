@@ -20,8 +20,12 @@ export async function guestAuth(_req: Request, res: Response): Promise<void> {
     }
 }
 
-// Cache recent code exchanges for 30s to prevent invalid_grant if browser/extensions duplicate callback requests
-const codeExchangeCache = new Map<string, { ticket: string; expiresAt: number }>();
+// Cache recent code exchanges (or in-flight promises) for 30s to prevent invalid_grant if browser/extensions duplicate callback requests
+type CacheEntry = 
+    | { status: "pending"; promise: Promise<string>; expiresAt: number }
+    | { status: "resolved"; ticket: string; expiresAt: number };
+
+const codeExchangeCache = new Map<string, CacheEntry>();
 
 setInterval(() => {
     const now = Date.now();
@@ -62,22 +66,38 @@ export async function googleAuthCallback(req: Request, res: Response): Promise<v
 
     const cleanCode = code.trim();
 
-    // If this code was already processed in the last 30s, reuse the ticket
+    // If this code was already processed (or is currently being processed) in the last 30s, reuse the ticket
     const cached = codeExchangeCache.get(cleanCode);
     if (cached && Date.now() < cached.expiresAt) {
-        res.redirect(`${FRONTEND_URL}/?ticket=${encodeURIComponent(cached.ticket)}`);
-        return;
+        if (cached.status === "resolved") {
+            res.redirect(`${FRONTEND_URL}/?ticket=${encodeURIComponent(cached.ticket)}`);
+            return;
+        } else {
+            try {
+                const ticket = await cached.promise;
+                res.redirect(`${FRONTEND_URL}/?ticket=${encodeURIComponent(ticket)}`);
+            } catch {
+                res.redirect(`${FRONTEND_URL}/?auth_error=authentication_failed`);
+            }
+            return;
+        }
     }
 
-    try {
+    const exchangePromise = (async () => {
         const userProfile = await getGoogleUserFromCode(cleanCode);
         const session = await findOrCreateGoogleAccount(userProfile);
         const ticket = createHandoffTicket(session);
+        codeExchangeCache.set(cleanCode, { status: "resolved", ticket, expiresAt: Date.now() + 30000 });
+        return ticket;
+    })();
 
-        codeExchangeCache.set(cleanCode, { ticket, expiresAt: Date.now() + 30000 });
+    codeExchangeCache.set(cleanCode, { status: "pending", promise: exchangePromise, expiresAt: Date.now() + 30000 });
 
+    try {
+        const ticket = await exchangePromise;
         res.redirect(`${FRONTEND_URL}/?ticket=${encodeURIComponent(ticket)}`);
     } catch (err: unknown) {
+        codeExchangeCache.delete(cleanCode);
         const isInvalidGrant =
             typeof err === "object" &&
             err !== null &&

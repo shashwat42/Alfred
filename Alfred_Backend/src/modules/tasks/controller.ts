@@ -1,4 +1,5 @@
 import type { Request, Response } from "express";
+import { requireAccountId } from "../../utils/requireAccountId.ts";
 import {
     addTask,
     clearAllTasks as removeAllTasks,
@@ -10,11 +11,8 @@ import {
 
 export async function listTasks(req: Request, res: Response): Promise<void> {
     try {
-        const accountId = req.accountId;
-        if (!accountId) {
-            res.status(401).json({ error: "Unauthorized" });
-            return;
-        }
+        const accountId = requireAccountId(req, res);
+        if (!accountId) return;
 
         const tasks = await getTasks(accountId);
         res.json(tasks);
@@ -25,15 +23,12 @@ export async function listTasks(req: Request, res: Response): Promise<void> {
 }
 
 export async function createTask(
-    req: Request<Record<string, never>, unknown, { task?: unknown; accountId?: unknown }>,
+    req: Request<Record<string, never>, unknown, { task?: unknown }>,
     res: Response
 ): Promise<void> {
     try {
-        const accountId = req.accountId;
-        if (!accountId) {
-            res.status(401).json({ error: "Unauthorized" });
-            return;
-        }
+        const accountId = requireAccountId(req, res);
+        if (!accountId) return;
 
         const taskText = req.body?.task;
         if (typeof taskText !== "string" || taskText.trim().length === 0) {
@@ -50,15 +45,12 @@ export async function createTask(
 }
 
 export async function updateTask(
-    req: Request<{ id: string }, unknown, { task?: unknown; completed?: unknown; accountId?: unknown }>,
+    req: Request<{ id: string }, unknown, { task?: unknown; completed?: unknown }>,
     res: Response
 ): Promise<void> {
     try {
-        const accountId = req.accountId;
-        if (!accountId) {
-            res.status(401).json({ error: "Unauthorized" });
-            return;
-        }
+        const accountId = requireAccountId(req, res);
+        if (!accountId) return;
 
         const { id } = req.params;
         const { task, completed } = req.body ?? {};
@@ -103,11 +95,8 @@ export async function completeTask(
     res: Response
 ): Promise<void> {
     try {
-        const accountId = req.accountId;
-        if (!accountId) {
-            res.status(401).json({ error: "Unauthorized" });
-            return;
-        }
+        const accountId = requireAccountId(req, res);
+        if (!accountId) return;
 
         const { id } = req.params;
         const { completed } = req.body ?? {};
@@ -135,11 +124,8 @@ export async function clearAllTasks(
     res: Response
 ): Promise<void> {
     try {
-        const accountId = req.accountId;
-        if (!accountId) {
-            res.status(401).json({ error: "Unauthorized" });
-            return;
-        }
+        const accountId = requireAccountId(req, res);
+        if (!accountId) return;
 
         const result = await removeAllTasks(accountId);
         res.json({
@@ -157,11 +143,8 @@ export async function deleteTask(
     res: Response
 ): Promise<void> {
     try {
-        const accountId = req.accountId;
-        if (!accountId) {
-            res.status(401).json({ error: "Unauthorized" });
-            return;
-        }
+        const accountId = requireAccountId(req, res);
+        if (!accountId) return;
 
         const { id } = req.params;
         const deleted = await removeTask(accountId, id);
