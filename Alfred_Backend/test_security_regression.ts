@@ -578,4 +578,16 @@ async function main(): Promise<void> {
     }
 }
 
-void main();
+export function getSecurityTestCounts(): { testsRun: number; testsPassed: number } {
+    return { testsRun, testsPassed };
+}
+
+export {
+    runValidationAndSecurityTests,
+    runSecurityRegressionTests,
+    runRateLimitingTests,
+};
+
+if (process.argv[1]?.includes("test_security_regression")) {
+    void main();
+}

@@ -2,7 +2,9 @@ import React, { useCallback, useEffect, useState } from "react";
 import {
   AUTH_CHANGE_EVENT,
   clearSession,
+  handleDesktopDeepLink,
   initAuthSession,
+  isTauri,
   loginWithGoogle,
   type AuthSession,
 } from "./auth.ts";
@@ -63,6 +65,60 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       window.removeEventListener(AUTH_CHANGE_EVENT, handleAuthChange);
     };
   }, [retryCount]);
+
+  // Listen for Tauri desktop custom protocol deep links (e.g. alfred://auth/callback)
+  useEffect(() => {
+    if (!isTauri()) return;
+
+    let unlisten: (() => void) | undefined;
+    let active = true;
+
+    import("@tauri-apps/plugin-deep-link")
+      .then(({ onOpenUrl }) => {
+        if (!active) return;
+        return onOpenUrl(async (urls) => {
+          for (const url of urls) {
+            if (url.startsWith("alfred://auth/callback")) {
+              setLoading(true);
+              setError(null);
+              try {
+                const newSession = await handleDesktopDeepLink(url);
+                if (newSession && active) {
+                  setSession(newSession);
+                }
+              } catch (err) {
+                if (active) {
+                  setError(
+                    err instanceof Error
+                      ? err.message
+                      : "Desktop authentication failed."
+                  );
+                }
+              } finally {
+                if (active) {
+                  setLoading(false);
+                }
+              }
+            }
+          }
+        });
+      })
+      .then((unlistenFn) => {
+        if (active && unlistenFn) {
+          unlisten = unlistenFn;
+        } else if (unlistenFn) {
+          unlistenFn();
+        }
+      })
+      .catch((err) => {
+        console.warn("Failed to register Tauri deep-link listener:", err);
+      });
+
+    return () => {
+      active = false;
+      if (unlisten) unlisten();
+    };
+  }, []);
 
   const logout = () => {
     clearSession();

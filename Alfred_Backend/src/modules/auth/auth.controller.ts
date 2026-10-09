@@ -1,8 +1,11 @@
+import crypto from "node:crypto";
 import type { Request, Response } from "express";
 import {
-    consumeHandoffTicket,
+    atomicConsumeTicket,
     createGuestAccount,
-    createHandoffTicket,
+    createIssuedTicket,
+    createPendingOAuthState,
+    consumePendingOAuthState,
     findOrCreateGoogleAccount,
     getGoogleAuthUrl,
     getGoogleUserFromCode,
@@ -19,23 +22,45 @@ export async function guestAuth(_req: Request, res: Response): Promise<void> {
     }
 }
 
-// Cache recent code exchanges (or in-flight promises) for 30s to prevent invalid_grant if browser/extensions duplicate callback requests
-type CacheEntry = 
-    | { status: "pending"; promise: Promise<string>; expiresAt: number }
-    | { status: "resolved"; ticket: string; expiresAt: number };
+export async function googleAuth(req: Request, res: Response): Promise<void> {
+    try {
+        const { flow, state, code_challenge, code_challenge_method } = req.query as {
+            flow?: string;
+            state?: string;
+            code_challenge?: string;
+            code_challenge_method?: string;
+        };
 
-const codeExchangeCache = new Map<string, CacheEntry>();
+        if (flow === "desktop") {
+            const cleanState = String(state).trim();
+            await createPendingOAuthState({
+                state: cleanState,
+                codeChallenge: String(code_challenge).trim(),
+                codeChallengeMethod: String(code_challenge_method).trim(),
+                flow: "desktop",
+            });
+            const authUrl = getGoogleAuthUrl(cleanState);
+            res.redirect(authUrl);
+            return;
+        }
 
-setInterval(() => {
-    const now = Date.now();
-    for (const [k, v] of codeExchangeCache.entries()) {
-        if (v.expiresAt < now) codeExchangeCache.delete(k);
+        // Browser flow: generate secure state for CSRF defense
+        const browserState =
+            typeof state === "string" && state.trim().length >= 16
+                ? state.trim()
+                : crypto.randomBytes(16).toString("hex");
+
+        await createPendingOAuthState({
+            state: browserState,
+            flow: "browser",
+        });
+
+        const authUrl = getGoogleAuthUrl(browserState);
+        res.redirect(authUrl);
+    } catch (err) {
+        console.error("Error initiating Google OAuth:", err);
+        res.redirect(`${env.frontendUrl}/?auth_error=initialization_failed`);
     }
-}, 60000).unref();
-
-export function googleAuth(_req: Request, res: Response): void {
-    const authUrl = getGoogleAuthUrl();
-    res.redirect(authUrl);
 }
 
 export async function googleAuthCallback(req: Request, res: Response): Promise<void> {
@@ -49,84 +74,182 @@ export async function googleAuthCallback(req: Request, res: Response): Promise<v
         return;
     }
 
-    const { code, error } = req.query;
+    const { code, state, error } = req.query as {
+        code?: string;
+        state?: string;
+        error?: string;
+    };
 
+    const cleanState = typeof state === "string" ? state.trim() : "";
+
+    // 1. Handle OAuth provider errors (e.g. user denied consent)
     if (error) {
-        console.error("Google OAuth callback query error:", error);
+        const pendingState = cleanState ? await consumePendingOAuthState(cleanState) : null;
+        if (pendingState?.flow === "desktop") {
+            const desktopErrorUrl = `alfred://auth/callback?auth_error=authorization_rejected&state=${encodeURIComponent(cleanState)}`;
+            renderDesktopCallbackPage(res, desktopErrorUrl, "Authentication Cancelled", "You can close this tab and return to Alfred.");
+            return;
+        }
         res.redirect(`${env.frontendUrl}/?auth_error=authorization_rejected`);
         return;
     }
 
-    if (typeof code !== "string" || code.trim().length === 0) {
-        console.error("Missing or invalid authorization code in query");
+    // 2. Validate presence of code and state
+    if (!code || typeof code !== "string" || code.trim().length === 0 || !cleanState) {
         res.redirect(`${env.frontendUrl}/?auth_error=invalid_request`);
         return;
     }
 
     const cleanCode = code.trim();
 
-    // If this code was already processed (or is currently being processed) in the last 30s, reuse the ticket
-    const cached = codeExchangeCache.get(cleanCode);
-    if (cached && Date.now() < cached.expiresAt) {
-        if (cached.status === "resolved") {
-            res.redirect(`${env.frontendUrl}/?ticket=${encodeURIComponent(cached.ticket)}`);
-            return;
-        } else {
-            try {
-                const ticket = await cached.promise;
-                res.redirect(`${env.frontendUrl}/?ticket=${encodeURIComponent(ticket)}`);
-            } catch {
-                res.redirect(`${env.frontendUrl}/?auth_error=authentication_failed`);
-            }
-            return;
-        }
+    // 3. Atomically consume the pending OAuth state to guarantee single-use and prevent replay
+    const pendingState = await consumePendingOAuthState(cleanState);
+    if (!pendingState) {
+        // State was missing, expired, or already used
+        res.redirect(`${env.frontendUrl}/?auth_error=invalid_state`);
+        return;
     }
 
-    const exchangePromise = (async () => {
-        const userProfile = await getGoogleUserFromCode(cleanCode);
-        const session = await findOrCreateGoogleAccount(userProfile);
-        const ticket = createHandoffTicket(session);
-        codeExchangeCache.set(cleanCode, { status: "resolved", ticket, expiresAt: Date.now() + 30000 });
-        return ticket;
-    })();
-
-    codeExchangeCache.set(cleanCode, { status: "pending", promise: exchangePromise, expiresAt: Date.now() + 30000 });
-
     try {
-        const ticket = await exchangePromise;
-        res.redirect(`${env.frontendUrl}/?ticket=${encodeURIComponent(ticket)}`);
-    } catch (err: unknown) {
-        codeExchangeCache.delete(cleanCode);
-        const isInvalidGrant =
-            typeof err === "object" &&
-            err !== null &&
-            (String((err as { message?: string }).message).includes("invalid_grant") ||
-             String((err as { response?: { data?: { error?: string } } }).response?.data?.error).includes("invalid_grant"));
+        // 4. Exchange code for Google identity profile
+        const userProfile = await getGoogleUserFromCode(cleanCode);
+        const account = await findOrCreateGoogleAccount(userProfile);
 
-        if (isInvalidGrant) {
-            console.warn("Google OAuth authorization code expired or already used. Redirecting to frontend.");
-            res.redirect(`${env.frontendUrl}/?auth_error=code_expired`);
+        // 5. Issue single-use authorization ticket in MongoDB (strict 90s TTL, zero credentials at rest)
+        const ticket = await createIssuedTicket({
+            accountId: account._id,
+            codeChallenge: pendingState.codeChallenge,
+            flow: pendingState.flow,
+        });
+
+        // 6. Redirect back to client
+        if (pendingState.flow === "desktop") {
+            const desktopSuccessUrl = `alfred://auth/callback?ticket=${encodeURIComponent(ticket)}&state=${encodeURIComponent(cleanState)}`;
+            renderDesktopCallbackPage(
+                res,
+                desktopSuccessUrl,
+                "Authentication Complete",
+                "You can close this tab and return to Alfred."
+            );
             return;
         }
 
-        console.error("Error during Google OAuth callback:", err);
+        res.redirect(`${env.frontendUrl}/?ticket=${encodeURIComponent(ticket)}`);
+    } catch (err: unknown) {
+        console.error("Error during Google OAuth callback processing:", err);
+        if (pendingState.flow === "desktop") {
+            const desktopFailUrl = `alfred://auth/callback?auth_error=authentication_failed&state=${encodeURIComponent(cleanState)}`;
+            renderDesktopCallbackPage(res, desktopFailUrl, "Authentication Failed", "Please return to Alfred and try again.");
+            return;
+        }
         res.redirect(`${env.frontendUrl}/?auth_error=authentication_failed`);
     }
 }
 
-export function exchangeTicket(req: Request, res: Response): void {
-    const { ticket } = req.body ?? {};
+export async function exchangeTicket(req: Request, res: Response): Promise<void> {
+    const { ticket, code_verifier } = req.body ?? {};
 
     if (typeof ticket !== "string" || ticket.trim().length === 0) {
         res.status(400).json({ error: "Invalid or missing authorization ticket" });
         return;
     }
 
-    const session = consumeHandoffTicket(ticket.trim());
+    const session = await atomicConsumeTicket({
+        ticket: ticket.trim(),
+        codeVerifier: typeof code_verifier === "string" ? code_verifier.trim() : undefined,
+    });
+
     if (!session) {
         res.status(400).json({ error: "Invalid or expired authorization ticket" });
         return;
     }
 
     res.status(200).json(session);
+}
+
+const DESKTOP_CALLBACK_PATTERN = /^alfred:\/\/auth\/callback(?:\?[a-zA-Z0-9_\-.~%&=]*)?$/;
+
+export function isValidDesktopCallbackUri(uri: unknown): boolean {
+    if (typeof uri !== "string" || uri.length > 2048) {
+        return false;
+    }
+    return DESKTOP_CALLBACK_PATTERN.test(uri);
+}
+
+export function escapeHtml(str: string): string {
+    return str
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
+
+export function serializeForScriptContext(value: unknown): string {
+    return JSON.stringify(value)
+        .replace(/</g, "\\u003c")
+        .replace(/>/g, "\\u003e")
+        .replace(/&/g, "\\u0026")
+        .replace(/\u2028/g, "\\u2028")
+        .replace(/\u2029/g, "\\u2029");
+}
+
+export function generateDesktopCallbackHtml(
+    customUri: string,
+    title: string,
+    message: string
+): string {
+    if (!isValidDesktopCallbackUri(customUri)) {
+        throw new Error("Invalid desktop callback redirect URI");
+    }
+
+    const safeHtmlTitle = escapeHtml(title);
+    const safeHtmlMessage = escapeHtml(message);
+    const safeAttrUri = escapeHtml(customUri);
+    const safeScriptUri = serializeForScriptContext(customUri);
+
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>${safeHtmlTitle} - Alfred</title>
+  <meta http-equiv="refresh" content="0;url=${safeAttrUri}" />
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #09090b; color: #f4f4f5; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+    .card { background: #18181b; border: 1px solid #27272a; border-radius: 12px; padding: 2rem; max-width: 420px; text-align: center; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
+    h1 { font-size: 1.25rem; font-weight: 600; margin-top: 0; margin-bottom: 0.5rem; color: #fafafa; }
+    p { font-size: 0.875rem; color: #a1a1aa; margin-bottom: 1.5rem; line-height: 1.4; }
+    .btn { display: inline-block; background: #2563eb; color: #ffffff; padding: 0.625rem 1.25rem; font-size: 0.875rem; font-weight: 500; border-radius: 6px; text-decoration: none; transition: background 0.15s; }
+    .btn:hover { background: #1d4ed8; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>${safeHtmlTitle}</h1>
+    <p>${safeHtmlMessage}</p>
+    <a href="${safeAttrUri}" class="btn">Open Alfred</a>
+  </div>
+  <script>
+    window.location.href = ${safeScriptUri};
+  </script>
+</body>
+</html>`;
+}
+
+export function renderDesktopCallbackPage(
+    res: Response,
+    customUri: string,
+    title: string,
+    message: string
+): void {
+    if (!isValidDesktopCallbackUri(customUri)) {
+        res.status(400).send("<!DOCTYPE html><html><body><h1>Invalid callback redirect</h1></body></html>");
+        return;
+    }
+
+    const html = generateDesktopCallbackHtml(customUri, title, message);
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.setHeader("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline';");
+    res.status(200).send(html);
 }

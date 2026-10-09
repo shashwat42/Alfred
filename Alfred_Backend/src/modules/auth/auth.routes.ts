@@ -12,6 +12,7 @@ import {
 } from "./auth.controller.ts";
 import {
     exchangeTicketSchema,
+    googleAuthSchema,
     googleCallbackSchema,
     guestAuthSchema,
 } from "./auth.schema.ts";
@@ -19,9 +20,8 @@ import {
 const router = Router();
 
 router.post("/guest", guestRateLimiter, validate(guestAuthSchema), guestAuth);
-router.get("/google", authRateLimiter, googleAuth);
+router.get("/google", authRateLimiter, validate(googleAuthSchema), googleAuth);
 router.get("/google/callback", validate(googleCallbackSchema), googleAuthCallback);
 router.post("/exchange", authRateLimiter, validate(exchangeTicketSchema), exchangeTicket);
 
 export default router;
-

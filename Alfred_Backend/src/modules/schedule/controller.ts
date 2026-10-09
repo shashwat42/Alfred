@@ -91,7 +91,8 @@ export async function updateSchedule(
         if (!accountId) return;
 
         const { id } = req.params;
-        const { time, topic, date } = req.body?.schedule ?? {};
+        const payload = (req.body?.schedule ?? req.body ?? {}) as Partial<ScheduleItem>;
+        const { time, topic, date } = payload;
 
         const updates: { time?: string; topic?: string; date?: string } = {};
         if (time !== undefined) {

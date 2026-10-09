@@ -11,10 +11,18 @@ export type AuthSession = {
 };
 
 export const AUTH_STORAGE_KEY = "alfred_session";
+export const PENDING_DESKTOP_AUTH_KEY = "alfred_pending_desktop_auth";
 export const API_BASE_URL =
   (typeof import.meta !== "undefined" && import.meta.env?.VITE_API_BASE_URL)
     ? import.meta.env.VITE_API_BASE_URL
     : "http://localhost:8000";
+
+/**
+ * Checks whether the application is running inside a Tauri native desktop WebView.
+ */
+export function isTauri(): boolean {
+  return typeof window !== "undefined" && Boolean((window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__);
+}
 
 /**
  * Retrieves the persisted session from localStorage.
@@ -131,15 +139,102 @@ export async function createGuestSession(): Promise<AuthSession> {
 }
 
 /**
- * Exchanges a short-lived, one-time OAuth handoff ticket for an authenticated Alfred session.
+ * Generates cryptographically secure base64url random string for PKCE and state.
  */
-export async function exchangeTicket(ticket: string): Promise<AuthSession> {
+export function generateRandomString(byteLength = 32): string {
+  const buffer = new Uint8Array(byteLength);
+  crypto.getRandomValues(buffer);
+  const binary = String.fromCharCode(...buffer);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+/**
+ * Computes S256 code challenge from code_verifier via Web Crypto API.
+ */
+export async function deriveCodeChallenge(verifier: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(verifier);
+  const digest = await crypto.subtle.digest("SHA-256", data);
+  const binary = String.fromCharCode(...new Uint8Array(digest));
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+export interface PendingDesktopAuth {
+  state: string;
+  codeVerifier: string;
+  expiresAt: number;
+}
+
+let memoryPendingAuth: PendingDesktopAuth | null = null;
+
+export function savePendingDesktopAuth(state: string, codeVerifier: string): void {
+  const pending: PendingDesktopAuth = {
+    state,
+    codeVerifier,
+    expiresAt: Date.now() + 120_000, // Strict 2-minute lifetime
+  };
+  memoryPendingAuth = pending;
+  try {
+    localStorage.setItem(PENDING_DESKTOP_AUTH_KEY, JSON.stringify(pending));
+  } catch {
+    // In restricted storage environments, keep memory copy
+  }
+}
+
+export function getPendingDesktopAuth(): PendingDesktopAuth | null {
+  if (memoryPendingAuth) {
+    if (Date.now() <= memoryPendingAuth.expiresAt) {
+      return memoryPendingAuth;
+    }
+    clearPendingDesktopAuth();
+    return null;
+  }
+
+  try {
+    const raw = localStorage.getItem(PENDING_DESKTOP_AUTH_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<PendingDesktopAuth>;
+    if (
+      typeof parsed?.state === "string" &&
+      typeof parsed?.codeVerifier === "string" &&
+      typeof parsed?.expiresAt === "number"
+    ) {
+      if (Date.now() <= parsed.expiresAt) {
+        memoryPendingAuth = parsed as PendingDesktopAuth;
+        return memoryPendingAuth;
+      }
+    }
+  } catch {
+    // Ignore parse error and wipe below
+  }
+
+  clearPendingDesktopAuth();
+  return null;
+}
+
+export function clearPendingDesktopAuth(): void {
+  memoryPendingAuth = null;
+  try {
+    localStorage.removeItem(PENDING_DESKTOP_AUTH_KEY);
+  } catch {
+    // Ignore
+  }
+}
+
+/**
+ * Exchanges a short-lived, one-time OAuth handoff ticket for an authenticated Alfred session.
+ * Supports optional PKCE code_verifier for desktop authorization handoff.
+ */
+export async function exchangeTicket(ticket: string, codeVerifier?: string): Promise<AuthSession> {
   const response = await fetch(`${API_BASE_URL}/auth/exchange`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ ticket }),
+    body: JSON.stringify({
+      ticket,
+      ...(codeVerifier ? { code_verifier: codeVerifier } : {}),
+    }),
   });
 
   if (!response.ok) {
@@ -221,6 +316,25 @@ export function initAuthSession(): Promise<AuthSession> {
         }
       }
 
+      if (isTauri()) {
+        try {
+          const { getCurrent } = await import("@tauri-apps/plugin-deep-link");
+          const urls = await getCurrent();
+          if (urls && urls.length > 0) {
+            for (const url of urls) {
+              if (url.startsWith("alfred://auth/callback")) {
+                const session = await handleDesktopDeepLink(url);
+                if (session) {
+                  return session;
+                }
+              }
+            }
+          }
+        } catch (err) {
+          console.warn("Failed to check cold-start deep link:", err);
+        }
+      }
+
       const existingSession = getSession();
       if (existingSession) {
         return existingSession;
@@ -236,8 +350,80 @@ export function initAuthSession(): Promise<AuthSession> {
 }
 
 /**
- * Redirects the browser to backend Google OAuth initiation endpoint.
+ * Initiates Google OAuth login.
+ * On desktop (Tauri): generates PKCE challenge & state, stores verifier, and launches external system browser.
+ * On browser: redirects current window to backend Google auth endpoint.
  */
-export function loginWithGoogle(): void {
+export async function loginWithGoogle(): Promise<void> {
+  if (isTauri()) {
+    try {
+      const codeVerifier = generateRandomString(32);
+      const codeChallenge = await deriveCodeChallenge(codeVerifier);
+      const state = generateRandomString(24);
+
+      savePendingDesktopAuth(state, codeVerifier);
+
+      const targetUrl = `${API_BASE_URL}/auth/google?flow=desktop&state=${encodeURIComponent(state)}&code_challenge=${encodeURIComponent(codeChallenge)}&code_challenge_method=S256`;
+
+      const { openUrl } = await import("@tauri-apps/plugin-opener");
+      await openUrl(targetUrl);
+      return;
+    } catch (err) {
+      clearPendingDesktopAuth();
+      console.error("Failed to open external browser for desktop Google sign-in:", err);
+      throw err;
+    }
+  }
+
   window.location.href = `${API_BASE_URL}/auth/google`;
+}
+
+/**
+ * Parses and processes a desktop custom deep-link URI (alfred://auth/callback?ticket=...&state=...).
+ * Verifies scheme, extracts ticket, matches state against the active pending attempt,
+ * immediately wipes the PKCE verifier, and atomically exchanges the ticket.
+ */
+export async function handleDesktopDeepLink(rawUrl: string): Promise<AuthSession | null> {
+  if (!rawUrl || typeof rawUrl !== "string") return null;
+
+  if (!rawUrl.startsWith("alfred://auth/callback")) {
+    return null;
+  }
+
+  try {
+    const urlObj = new URL(rawUrl.replace(/^alfred:\/\//i, "https://alfred/"));
+    const searchParams = urlObj.searchParams;
+
+    const authError = searchParams.get("auth_error");
+    if (authError) {
+      clearPendingDesktopAuth();
+      throw new Error(`Desktop authentication failed: ${authError}`);
+    }
+
+    const ticket = searchParams.get("ticket");
+    const returnedState = searchParams.get("state");
+
+    if (!ticket || !returnedState) {
+      clearPendingDesktopAuth();
+      throw new Error("Missing ticket or state in desktop callback");
+    }
+
+    const pending = getPendingDesktopAuth();
+    if (!pending) {
+      throw new Error("No active pending desktop authentication attempt found or attempt expired");
+    }
+
+    if (pending.state !== returnedState) {
+      clearPendingDesktopAuth();
+      throw new Error("Mismatched OAuth state in desktop callback");
+    }
+
+    const verifier = pending.codeVerifier;
+    clearPendingDesktopAuth(); // Immediately wipe sensitive verifier from storage
+
+    return await exchangeTicket(ticket, verifier);
+  } catch (err) {
+    clearPendingDesktopAuth();
+    throw err;
+  }
 }
