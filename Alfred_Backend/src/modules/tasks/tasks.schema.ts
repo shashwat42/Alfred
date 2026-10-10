@@ -5,6 +5,8 @@ export const listTasksSchema = {
     query: z.object({}).strict(),
 };
 
+export const taskPriorityEnum = z.enum(["urgent", "high", "medium", "normal", "low"]);
+
 export const createTaskSchema = {
     body: z
         .object({
@@ -13,6 +15,7 @@ export const createTaskSchema = {
                 .trim()
                 .min(1, "Task must be a non-empty string")
                 .max(500, "Task cannot exceed 500 characters"),
+            priority: taskPriorityEnum.optional().default("normal"),
         })
         .strict(),
 };
@@ -32,10 +35,11 @@ export const updateTaskSchema = {
             completed: z
                 .boolean({ message: "Completed must be a boolean" })
                 .optional(),
+            priority: taskPriorityEnum.optional(),
         })
         .strict()
         .refine(
-            (data) => data.task !== undefined || data.completed !== undefined,
+            (data) => data.task !== undefined || data.completed !== undefined || data.priority !== undefined,
             { message: "No valid update fields provided" }
         ),
 };

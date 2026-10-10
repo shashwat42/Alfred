@@ -3,14 +3,13 @@ import { useAuth } from "../auth/authContext.ts";
 import type { DashboardView } from "../types/dashboard.ts";
 import { useTasks, ITEMS_PER_PAGE } from "../hooks/useTasks.ts";
 import { useSchedule } from "../hooks/useSchedule.ts";
-import { parseTimeToMinutes } from "../utils/scheduleUtils.ts";
 
 import { DashboardHeader } from "./dashboard/DashboardHeader.tsx";
 import { DashboardNav } from "./dashboard/DashboardNav.tsx";
 import { UpcomingView } from "./dashboard/UpcomingView.tsx";
 import { ScheduleTimelineView } from "./dashboard/ScheduleTimelineView.tsx";
 import { TodoView } from "./dashboard/TodoView.tsx";
-import { MailsView } from "./dashboard/MailsView.tsx";
+import { NotesView } from "./dashboard/NotesView.tsx";
 import { CalendarDialog } from "./dashboard/CalendarDialog.tsx";
 import { TaskDialog } from "./dashboard/TaskDialog.tsx";
 import { ScheduleDialog } from "./dashboard/ScheduleDialog.tsx";
@@ -49,6 +48,8 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
         setTaskPage,
         newTask,
         setNewTask,
+        newTaskPriority,
+        setNewTaskPriority,
         taskError,
         setTaskError,
         isTaskDialogOpen,
@@ -96,13 +97,6 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
         (taskPage + 1) * ITEMS_PER_PAGE
     );
 
-    const upcomingTop3 = activeTodaySchedule
-        .filter((item) => {
-            const itemMins = parseTimeToMinutes(item.time);
-            return itemMins >= currentMinutes;
-        })
-        .sort((a, b) => parseTimeToMinutes(a.time) - parseTimeToMinutes(b.time))
-        .slice(0, 3);
 
     /** Close dialogs on escape key */
     useEffect(() => {
@@ -126,11 +120,16 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
 
     return (
         <section className="Dashboard">
-            <div className="dashboard-date-banner">
-                <div className="date-banner-text">
-                    <span className="date-banner-weekday">{todayWeekdayLabel}</span>
-                    <span className="date-banner-day">{todayMonthDayLabel}</span>
+            <div className="dashboard-top-bar">
+                <div className="dashboard-date-banner">
+                    <div className="date-banner-text">
+                        <span className="date-banner-weekday">{todayWeekdayLabel}</span>
+                        <span className="date-banner-day">{todayMonthDayLabel}</span>
+                    </div>
                 </div>
+                <button type="button" className="focus-session-btn">
+                    start focus session
+                </button>
             </div>
 
             <div className="dashboard-main-card">
@@ -157,7 +156,11 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
                     />
 
                     {activeView === "home" && (
-                        <UpcomingView upcomingTop3={upcomingTop3} currentMinutes={currentMinutes} />
+                        <UpcomingView
+                            scheduleItems={activeTodaySchedule}
+                            priorityTasks={activeTasks}
+                            currentMinutes={currentMinutes}
+                        />
                     )}
 
                     {activeView === "schedule" && (
@@ -171,7 +174,7 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
                         />
                     )}
 
-                    {activeView === "todo" && (
+                    {(activeView === "tasks" || activeView === "todo") && (
                         <TodoView
                             visibleTasks={visibleTasks}
                             taskPage={taskPage}
@@ -182,7 +185,7 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
                         />
                     )}
 
-                    {activeView === "mails" && <MailsView />}
+                    {(activeView === "notes" || activeView === "mails") && <NotesView />}
                 </div>
 
                 <div className="dashboard-nav-divider" aria-hidden="true" />
@@ -202,6 +205,8 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
                 <TaskDialog
                     newTask={newTask}
                     setNewTask={setNewTask}
+                    newTaskPriority={newTaskPriority}
+                    setNewTaskPriority={setNewTaskPriority}
                     handleAddTask={handleAddTask}
                     taskError={taskError}
                     setIsTaskDialogOpen={setIsTaskDialogOpen}

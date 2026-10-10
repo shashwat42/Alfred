@@ -7,11 +7,18 @@ export async function getTasks(accountId: string): Promise<ITask[]> {
         .lean();
 }
 
-export async function addTask(accountId: string, taskText: string): Promise<ITask> {
+import type { TaskPriority } from "../../models/task.model.ts";
+
+export async function addTask(
+    accountId: string,
+    taskText: string,
+    priority: TaskPriority = "normal"
+): Promise<ITask> {
     const task = await Task.create({
         accountId: new mongoose.Types.ObjectId(accountId),
         task: taskText,
         completed: false,
+        priority,
     });
     return task.toObject();
 }
@@ -19,18 +26,21 @@ export async function addTask(accountId: string, taskText: string): Promise<ITas
 export async function updateTask(
     accountId: string,
     taskId: string,
-    updates: { task?: string; completed?: boolean }
+    updates: { task?: string; completed?: boolean; priority?: TaskPriority }
 ): Promise<ITask | null> {
     if (!mongoose.isValidObjectId(taskId)) {
         return null;
     }
 
-    const updateData: { task?: string; completed?: boolean } = {};
+    const updateData: { task?: string; completed?: boolean; priority?: TaskPriority } = {};
     if (typeof updates.task === "string" && updates.task.trim().length > 0) {
         updateData.task = updates.task.trim();
     }
     if (typeof updates.completed === "boolean") {
         updateData.completed = updates.completed;
+    }
+    if (updates.priority) {
+        updateData.priority = updates.priority;
     }
 
     return Task.findOneAndUpdate(

@@ -17,11 +17,22 @@ export const API_BASE_URL =
     ? import.meta.env.VITE_API_BASE_URL
     : "http://localhost:8000";
 
+import { isTauri as checkTauri } from "@tauri-apps/api/core";
+
 /**
  * Checks whether the application is running inside a Tauri native desktop WebView.
  */
 export function isTauri(): boolean {
-  return typeof window !== "undefined" && Boolean((window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__);
+  try {
+    if (checkTauri()) return true;
+  } catch {
+    // fallback if core check throws
+  }
+  if (typeof window !== "undefined") {
+    const win = window as unknown as { isTauri?: boolean; __TAURI_INTERNALS__?: unknown };
+    return Boolean(win.isTauri || win.__TAURI_INTERNALS__);
+  }
+  return false;
 }
 
 /**

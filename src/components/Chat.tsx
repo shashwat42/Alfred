@@ -1,5 +1,5 @@
 import { useState } from "react";
-import Mic from "../assets/Mic_Icon.png";
+import Logo from "../assets/Alfred_Logo.svg";
 import { useAuth } from "../auth/authContext.ts";
 
 export default function Chat() {
@@ -10,10 +10,38 @@ export default function Chat() {
 
     return (
         <section className="Chat">
+            <div className="chat-top-brand">
+                <img src={Logo} alt="Alfred Logo" className="chat-brand-logo" />
+                <h1 className="chat-brand-title">ALFRED</h1>
+            </div>
+
             <div className="chat-main-content">
-                <img src={Mic} alt="Microphone" />
-                <p>Ask anything / Schedule a meeting!</p>
-                <input aria-label="Ask" placeholder="Ask Alfred anything.." />
+                <button
+                    type="button"
+                    className="chat-mic-circle-btn"
+                    aria-label="Voice input"
+                >
+                    <svg
+                        className="chat-mic-icon"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="#1a1a1a"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                    >
+                        <rect x="9" y="2" width="6" height="12" rx="3" />
+                        <path d="M5 10a7 7 0 0 0 14 0" />
+                        <line x1="12" y1="17" x2="12" y2="21" />
+                        <line x1="8" y1="21" x2="16" y2="21" />
+                    </svg>
+                </button>
+                <p className="chat-prompt-label">Ask anything / Schedule a meeting!</p>
+                <input
+                    className="chat-prompt-input"
+                    aria-label="Ask"
+                    placeholder="Ask Alfred anything..."
+                />
             </div>
 
             <div className="chat-bottom-bar">
@@ -25,8 +53,10 @@ export default function Chat() {
                             className="user-bar-avatar-img"
                         />
                     ) : (
-                        <div className="user-bar-avatar-circle">
-                            {isGoogleUser ? displayName[0].toUpperCase() : ""}
+                        <div className="user-bar-avatar-circle" aria-label="User avatar">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="#141414">
+                                <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+                            </svg>
                         </div>
                     )}
 
@@ -41,7 +71,7 @@ export default function Chat() {
                                 className="user-bar-signin-btn"
                                 onClick={loginWithGoogle}
                             >
-                                Sign in with Google
+                                {displayName === "Guest" ? "Sign in with Google" : displayName}
                             </button>
                         )}
                     </div>

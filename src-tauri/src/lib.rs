@@ -22,6 +22,12 @@ pub fn run() {
       {
         use tauri_plugin_deep_link::DeepLinkExt;
         app.deep_link().register("alfred")?;
+
+        if let Some(window) = app.get_webview_window("main") {
+          if let Some(icon) = app.default_window_icon() {
+            let _ = window.set_icon(icon.clone());
+          }
+        }
       }
       if cfg!(debug_assertions) {
         app.handle().plugin(

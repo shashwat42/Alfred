@@ -53,6 +53,11 @@ export function TodoView({
                                     ) : null}
                                 </button>
                                 <span className="todo-item-text">{item.task}</span>
+                                {item.priority && item.priority !== "normal" && (
+                                    <span className={`todo-item-priority priority-${item.priority}`}>
+                                        {item.priority}
+                                    </span>
+                                )}
                                 <button
                                     type="button"
                                     className="todo-item-del-btn"

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import type { FormEvent } from "react";
 import { apiFetch } from "../lib/api.ts";
-import type { TaskItem } from "../types/dashboard.ts";
+import type { TaskItem, TaskPriority } from "../types/dashboard.ts";
 
 export const ITEMS_PER_PAGE = 5;
 
@@ -10,6 +10,7 @@ export function useTasks(accountId: string | undefined) {
     const [task, setTask] = useState<TaskItem[]>([]);
     const [taskPage, setTaskPage] = useState(0);
     const [newTask, setNewTask] = useState("");
+    const [newTaskPriority, setNewTaskPriority] = useState<TaskPriority>("normal");
     const [taskError, setTaskError] = useState("");
     const [isTaskDialogOpen, setIsTaskDialogOpen] = useState(false);
 
@@ -48,7 +49,7 @@ export function useTasks(accountId: string | undefined) {
         try {
             const response = await apiFetch("/api/tasks", {
                 method: "POST",
-                body: JSON.stringify({ task: taskName }),
+                body: JSON.stringify({ task: taskName, priority: newTaskPriority }),
             });
             if (!response.ok) {
                 const errorData = (await response.json().catch(() => null)) as { error?: string } | null;
@@ -58,6 +59,7 @@ export function useTasks(accountId: string | undefined) {
             const data = (await response.json()) as TaskItem;
             setTask((currentTasks) => [data, ...currentTasks]);
             setNewTask("");
+            setNewTaskPriority("normal");
             setIsTaskDialogOpen(false);
         } catch (error) {
             console.error("Could not add to-do:", error);
@@ -137,6 +139,8 @@ export function useTasks(accountId: string | undefined) {
         setTaskPage,
         newTask,
         setNewTask,
+        newTaskPriority,
+        setNewTaskPriority,
         taskError,
         setTaskError,
         isTaskDialogOpen,

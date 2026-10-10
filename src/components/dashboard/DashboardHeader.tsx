@@ -56,8 +56,8 @@ export function DashboardHeader({
                 <h2 className="dashboard-section-title">
                     {activeView === "home" && "UPCOMING"}
                     {activeView === "schedule" && "SCHEDULE"}
-                    {activeView === "todo" && "TO-DO"}
-                    {activeView === "mails" && "MAILS"}
+                    {(activeView === "tasks" || activeView === "todo") && "TASKS"}
+                    {(activeView === "notes" || activeView === "mails") && "NOTES"}
                 </h2>
             </div>
 
@@ -139,7 +139,7 @@ export function DashboardHeader({
                 </div>
             )}
 
-            {activeView === "todo" && (
+            {(activeView === "tasks" || activeView === "todo") && (
                 <div className="section-header-actions">
                     {activeTasks.length > 0 && (
                         <button

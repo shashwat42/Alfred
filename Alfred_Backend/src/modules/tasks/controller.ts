@@ -22,8 +22,10 @@ export async function listTasks(req: Request, res: Response): Promise<void> {
     }
 }
 
+import type { TaskPriority } from "../../models/task.model.ts";
+
 export async function createTask(
-    req: Request<Record<string, never>, unknown, { task?: unknown }>,
+    req: Request<Record<string, never>, unknown, { task?: unknown; priority?: unknown }>,
     res: Response
 ): Promise<void> {
     try {
@@ -36,7 +38,14 @@ export async function createTask(
             return;
         }
 
-        const createdTask = await addTask(accountId, taskText.trim());
+        const validPriorities = ["urgent", "high", "medium", "normal", "low"];
+        const rawPriority = req.body?.priority;
+        const priority: TaskPriority =
+            typeof rawPriority === "string" && validPriorities.includes(rawPriority)
+                ? (rawPriority as TaskPriority)
+                : "normal";
+
+        const createdTask = await addTask(accountId, taskText.trim(), priority);
         res.status(201).json(createdTask);
     } catch (err) {
         console.error("Error creating task:", err);
@@ -45,7 +54,7 @@ export async function createTask(
 }
 
 export async function updateTask(
-    req: Request<{ id: string }, unknown, { task?: unknown; completed?: unknown }>,
+    req: Request<{ id: string }, unknown, { task?: unknown; completed?: unknown; priority?: unknown }>,
     res: Response
 ): Promise<void> {
     try {
@@ -53,9 +62,9 @@ export async function updateTask(
         if (!accountId) return;
 
         const { id } = req.params;
-        const { task, completed } = req.body ?? {};
+        const { task, completed, priority } = req.body ?? {};
 
-        const updates: { task?: string; completed?: boolean } = {};
+        const updates: { task?: string; completed?: boolean; priority?: TaskPriority } = {};
         if (task !== undefined) {
             if (typeof task !== "string" || task.trim().length === 0) {
                 res.status(400).json({ error: "Task must be a non-empty string" });
@@ -72,7 +81,16 @@ export async function updateTask(
             updates.completed = completed;
         }
 
-        if (updates.task === undefined && updates.completed === undefined) {
+        if (priority !== undefined) {
+            const validPriorities = ["urgent", "high", "medium", "normal", "low"];
+            if (typeof priority !== "string" || !validPriorities.includes(priority)) {
+                res.status(400).json({ error: "Invalid priority value" });
+                return;
+            }
+            updates.priority = priority as TaskPriority;
+        }
+
+        if (updates.task === undefined && updates.completed === undefined && updates.priority === undefined) {
             res.status(400).json({ error: "No valid update fields provided" });
             return;
         }

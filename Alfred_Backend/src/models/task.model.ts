@@ -1,10 +1,13 @@
 import mongoose, { Schema } from "mongoose";
 
+export type TaskPriority = "urgent" | "high" | "medium" | "normal" | "low";
+
 export interface ITask {
     _id: mongoose.Types.ObjectId;
     accountId: mongoose.Types.ObjectId;
     task: string;
     completed: boolean;
+    priority: TaskPriority;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -25,6 +28,11 @@ const taskSchema = new Schema<ITask>(
         completed: {
             type: Boolean,
             default: false,
+        },
+        priority: {
+            type: String,
+            enum: ["urgent", "high", "medium", "normal", "low"],
+            default: "normal",
         },
     },
     {
