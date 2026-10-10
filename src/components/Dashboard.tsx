@@ -14,6 +14,8 @@ import { NotesView } from "./dashboard/NotesView.tsx";
 import { CalendarDialog } from "./dashboard/CalendarDialog.tsx";
 import { TaskDialog } from "./dashboard/TaskDialog.tsx";
 import { ScheduleDialog } from "./dashboard/ScheduleDialog.tsx";
+import { FocusSession } from "./focus/FocusSession.tsx";
+import { useFocusSession, formatTimeMMSS } from "../hooks/useFocusSession.ts";
 
 interface DashboardProps {
     currentView?: DashboardView;
@@ -25,6 +27,26 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
     const accountId = session?.account?.id;
     const [localView, setLocalView] = useState<DashboardView>(currentView);
     const activeView = onViewChange ? currentView : localView;
+    const [isFocusSessionOpen, setIsFocusSessionOpen] = useState(false);
+    const [isAbsorbing, setIsAbsorbing] = useState(false);
+    const [isExpanding, setIsExpanding] = useState(false);
+    const focusSession = useFocusSession();
+
+    const handleOpenFocusSession = () => {
+        setIsAbsorbing(true);
+        setTimeout(() => {
+            setIsAbsorbing(false);
+            setIsFocusSessionOpen(true);
+        }, 340);
+    };
+
+    const handleReturnToDashboard = () => {
+        setIsFocusSessionOpen(false);
+        setIsExpanding(true);
+        setTimeout(() => {
+            setIsExpanding(false);
+        }, 380);
+    };
 
     const handleViewChange = (view: DashboardView) => {
         setActiveNote(null);
@@ -138,20 +160,41 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
     }, [activeView, scheduleDate, todayDateStr, currentHourRef]);
 
     return (
-        <section className="Dashboard">
-            <div className="dashboard-top-bar">
-                <div className="dashboard-date-banner">
-                    <div className="date-banner-text">
-                        <span className="date-banner-weekday">{todayWeekdayLabel}</span>
-                        <span className="date-banner-day">{todayMonthDayLabel}</span>
+        <section className={`Dashboard ${isFocusSessionOpen ? "is-focus-mode" : ""} ${isAbsorbing ? "is-absorbing-mode" : ""}`}>
+            {isFocusSessionOpen ? (
+                <FocusSession
+                    todayWeekdayLabel={todayWeekdayLabel}
+                    todayMonthDayLabel={todayMonthDayLabel}
+                    onReturnToDashboard={handleReturnToDashboard}
+                    focusSession={focusSession}
+                />
+            ) : (
+                <>
+                    <div className={`dashboard-top-bar ${isAbsorbing ? "is-absorbing" : ""}`}>
+                        <div className="dashboard-date-banner">
+                            <div className="date-banner-text">
+                                <span className="date-banner-weekday">{todayWeekdayLabel}</span>
+                                <span className="date-banner-day">{todayMonthDayLabel}</span>
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            className={`focus-session-btn ${focusSession.isRunning ? "is-running-badge" : ""}`}
+                            onClick={handleOpenFocusSession}
+                            title="Open Focus Session"
+                        >
+                            {focusSession.isRunning ? (
+                                <span className="focus-btn-running-content">
+                                    <span className="focus-btn-pulse-dot" />
+                                    <span>Focus Session ({formatTimeMMSS(focusSession.remainingSeconds)})</span>
+                                </span>
+                            ) : (
+                                "Focus Session"
+                            )}
+                        </button>
                     </div>
-                </div>
-                <button type="button" className="focus-session-btn">
-                    Start Focus Session
-                </button>
-            </div>
 
-            <div className="dashboard-main-card">
+                    <div className={`dashboard-main-card ${isAbsorbing ? "is-absorbing" : isExpanding ? "is-expanding" : ""}`}>
                 <div className="dashboard-content-area">
                     <DashboardHeader
                         activeView={activeView}
@@ -189,7 +232,28 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
                                 }
                             }}
                             onSaveQuickNote={async (text) => {
-                                await saveNote({ content: text });
+                                const quickNoteRegex = /^Quick Note(?:\s+(\d+))?$/i;
+                                let maxNum = 0;
+                                let hasBaseQuickNote = false;
+
+                                for (const n of notes) {
+                                    const match = (n.title || "").trim().match(quickNoteRegex);
+                                    if (match) {
+                                        if (match[1]) {
+                                            const num = parseInt(match[1], 10);
+                                            if (!isNaN(num) && num > maxNum) maxNum = num;
+                                        } else {
+                                            hasBaseQuickNote = true;
+                                            if (maxNum < 1) maxNum = 1;
+                                        }
+                                    }
+                                }
+
+                                const defaultTitle = (!hasBaseQuickNote && maxNum === 0)
+                                    ? "Quick Note"
+                                    : `Quick Note ${Math.max(maxNum, 1) + 1}`;
+
+                                await saveNote({ title: defaultTitle, content: text });
                             }}
                         />
                     )}
@@ -234,6 +298,8 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
 
                 <DashboardNav activeView={activeView} handleViewChange={handleViewChange} />
             </div>
+            </>
+            )}
 
             {isCalendarOpen && (
                 <CalendarDialog

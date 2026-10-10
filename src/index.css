@@ -12,6 +12,32 @@ body,
     margin: 0;
 }
 
+/* Global Scrollbar matching Schedule page */
+*,
+*::before,
+*::after {
+    scrollbar-width: thin;
+    scrollbar-color: #444 #222;
+}
+
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: #222;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #444;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
 body {
     background: #141212;
     font-family: Inter, sans-serif;
@@ -595,7 +621,6 @@ body {
     cursor: pointer;
     box-shadow: 0 4px 16px rgba(255, 71, 71, 0.35);
     transition: transform 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
-    text-transform: lowercase;
 }
 
 .focus-session-btn:hover {
@@ -606,6 +631,740 @@ body {
 
 .focus-session-btn:active {
     transform: translateY(0);
+}
+
+/* ==========================================================================
+   Focus Session UI (Pomodoro Timer)
+   ========================================================================== */
+
+/* Toaster slide down / pop up animation */
+@keyframes dashboardToasterSink {
+    0% {
+        transform: translateY(0);
+        opacity: 1;
+    }
+    100% {
+        transform: translateY(115%);
+        opacity: 0;
+    }
+}
+
+@keyframes dashboardToasterPop {
+    0% {
+        transform: translateY(115%);
+        opacity: 0;
+    }
+    100% {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.dashboard-main-card.is-absorbing {
+    animation: dashboardToasterSink 0.32s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    pointer-events: none;
+}
+
+.dashboard-main-card.is-expanding {
+    animation: dashboardToasterPop 0.36s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.dashboard-top-bar.is-absorbing {
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+@keyframes focusWorkspaceEnter {
+    from {
+        opacity: 0;
+        transform: scale(0.988);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.Dashboard.is-focus-mode {
+    justify-content: space-between;
+}
+
+.focus-session-workspace {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: stretch;
+    width: 100%;
+    flex: 1;
+    height: 100%;
+    min-height: 0;
+    box-sizing: border-box;
+    animation: focusWorkspaceEnter 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.focus-session-top-bar {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    width: 100%;
+    flex: 0 0 auto;
+}
+
+.focus-session-center-stage {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+    gap: 36px;
+    margin: auto 0;
+}
+
+.focus-timer-container {
+    width: 100%;
+    max-width: 920px;
+    margin: 0 auto;
+}
+
+.focus-timer-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: clamp(36px, 8vw, 100px);
+    width: 100%;
+}
+
+.focus-column {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-width: 200px;
+    text-align: center;
+    gap: 12px;
+    user-select: none;
+    transition: opacity 0.25s ease, filter 0.25s ease;
+}
+
+.focus-column-label {
+    font-size: 15px;
+    font-weight: 500;
+    letter-spacing: 0.6px;
+    color: #8e8e8e;
+    transition: color 0.25s ease;
+}
+
+.focus-digit-display {
+    font-size: clamp(52px, 7vw, 84px);
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: 1px;
+    font-variant-numeric: tabular-nums;
+    transition: color 0.25s ease, opacity 0.25s ease, text-shadow 0.25s ease;
+}
+
+/* Vertical Roller Wheel Picker */
+.focus-wheel-container {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    height: 160px;
+    user-select: none;
+}
+
+.wheel-picker-drum {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    cursor: ns-resize;
+    outline: none;
+    touch-action: none;
+}
+
+.wheel-item {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    transition: all 0.16s ease;
+    cursor: pointer;
+}
+
+.wheel-item-prev,
+.wheel-item-next {
+    font-size: clamp(28px, 3.8vw, 38px);
+    color: rgba(255, 255, 255, 0.28);
+    opacity: 1;
+    height: 44px;
+    filter: blur(0.2px);
+}
+
+.wheel-item-prev:hover,
+.wheel-item-next:hover {
+    color: rgba(255, 255, 255, 0.7);
+    transform: scale(1.06);
+}
+
+.wheel-item-active {
+    font-size: clamp(52px, 7vw, 84px);
+    color: #ffffff;
+    height: 72px;
+    line-height: 1;
+    text-shadow: 0 0 28px rgba(255, 255, 255, 0.2);
+}
+
+.focus-wheel-colon {
+    font-size: clamp(48px, 6.5vw, 80px);
+    font-weight: 600;
+    color: #ffffff;
+    line-height: 1;
+    margin: 0 4px;
+    align-self: center;
+    user-select: none;
+    transform: translateY(-4px);
+    text-shadow: 0 0 28px rgba(255, 255, 255, 0.2);
+}
+
+.wheel-inline-input {
+    width: clamp(70px, 9vw, 110px);
+    height: 72px;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid #ff4747;
+    color: #ffffff;
+    font-size: clamp(52px, 7vw, 84px);
+    font-weight: 600;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+    outline: none;
+    padding: 0;
+    margin: 0;
+    font-family: inherit;
+    line-height: 1;
+}
+
+.wheel-inline-input::-webkit-outer-spin-button,
+.wheel-inline-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.focus-wheel-seconds-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    pointer-events: none;
+}
+
+.wheel-seconds-prev,
+.wheel-seconds-next {
+    font-size: clamp(28px, 3.8vw, 38px);
+    color: rgba(255, 255, 255, 0.16);
+    opacity: 1;
+    height: 44px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.wheel-seconds-active {
+    font-size: clamp(52px, 7vw, 84px);
+    color: #ffffff;
+    height: 72px;
+    line-height: 1;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 1px;
+}
+
+.focus-column.is-active .focus-column-label {
+    color: #cccccc;
+}
+
+.focus-column.is-active .focus-digit-display {
+    color: #ffffff;
+    text-shadow: 0 0 32px rgba(255, 255, 255, 0.2);
+}
+
+/* Ensure Break part has the same non-faded bright styling as Time */
+.focus-col-work,
+.focus-col-break {
+    opacity: 1 !important;
+}
+
+.focus-col-work .focus-column-label,
+.focus-col-break .focus-column-label {
+    color: #9c9ca4;
+}
+
+.focus-col-work .focus-digit-display,
+.focus-col-break .focus-digit-display {
+    color: #ffffff !important;
+    text-shadow: 0 0 28px rgba(255, 255, 255, 0.2);
+}
+
+/* Center Column: Big Red Button & RESET */
+.focus-center-column {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+    flex: 0 0 auto;
+}
+
+.focus-play-circle-btn {
+    width: clamp(120px, 14vw, 154px);
+    height: clamp(120px, 14vw, 154px);
+    border-radius: 50%;
+    border: none;
+    background: #ff4747;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 0 50px rgba(255, 71, 71, 0.45), 0 8px 30px rgba(255, 71, 71, 0.35);
+    transition: transform 0.16s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.16s ease, box-shadow 0.16s ease;
+    user-select: none;
+    padding: 0;
+}
+
+.focus-play-circle-btn:hover {
+    background: #ff5959;
+    transform: scale(1.05);
+    box-shadow: 0 0 60px rgba(255, 71, 71, 0.6), 0 12px 36px rgba(255, 71, 71, 0.45);
+}
+
+.focus-play-circle-btn:active {
+    transform: scale(0.96);
+}
+
+.focus-play-icon {
+    width: 100%;
+    height: 100%;
+    transition: transform 0.15s ease;
+}
+
+.focus-pause-icon {
+    width: 100%;
+    height: 100%;
+    transition: transform 0.15s ease;
+}
+
+/* Pill Reset Button */
+.focus-reset-pill-btn {
+    background: #1c1c1e;
+    border: 1px solid #2d2d30;
+    border-radius: 9999px;
+    padding: 8px 36px;
+    color: #e2e2e5;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+    transition: all 0.15s ease;
+}
+
+.focus-reset-pill-btn:hover {
+    background: #252528;
+    border-color: #444448;
+    color: #ffffff;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+}
+
+.focus-reset-pill-btn:active {
+    transform: translateY(0);
+}
+
+.focus-reset-confirm-box {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #1c1c1e;
+    border: 1px solid #3c3c40;
+    border-radius: 9999px;
+    padding: 4px 10px;
+    animation: focusWorkspaceEnter 0.15s ease-out;
+}
+
+.focus-reset-confirm-label {
+    font-size: 12.5px;
+    color: #999999;
+    padding-left: 4px;
+}
+
+.focus-reset-confirm-btn {
+    border: none;
+    border-radius: 9999px;
+    padding: 4px 10px;
+    font-size: 11.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.12s ease;
+}
+
+.focus-reset-confirm-btn.confirm-yes {
+    background: #ef4444;
+    color: #ffffff;
+}
+
+.focus-reset-confirm-btn.confirm-yes:hover {
+    background: #dc2626;
+}
+
+.focus-reset-confirm-btn.confirm-no {
+    background: #2e2e32;
+    color: #b0b0b5;
+}
+
+.focus-reset-confirm-btn.confirm-no:hover {
+    background: #3a3a40;
+    color: #ffffff;
+}
+
+/* Bottom Dashboard Button */
+.focus-session-bottom-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    flex: 0 0 auto;
+    padding: 8px 0 12px;
+}
+
+.focus-dashboard-pill-btn {
+    background: #1c1c1e;
+    border: 1px solid #2d2d30;
+    border-radius: 9999px;
+    padding: 11px 52px;
+    color: #ffffff;
+    font-size: 16px;
+    font-weight: 500;
+    letter-spacing: 0.3px;
+    cursor: pointer;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.4);
+    transition: all 0.16s ease;
+}
+
+.focus-dashboard-pill-btn:hover {
+    background: #262629;
+    border-color: #444448;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
+}
+
+.focus-dashboard-pill-btn:active {
+    transform: translateY(0);
+}
+
+/* Compact Configuration Toolbar (Original layout with Work, Break, Cycles, Presets) */
+.focus-config-strip {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: #19191b;
+    border: 1px solid #2b2b2e;
+    border-radius: 9999px;
+    padding: 6px 20px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+    user-select: none;
+}
+
+.focus-config-stepper {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.focus-config-label {
+    font-size: 12.5px;
+    color: #88888c;
+    font-weight: 500;
+}
+
+.focus-stepper-control {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: #222225;
+    border: 1px solid #333336;
+    border-radius: 8px;
+    padding: 2px 6px;
+}
+
+.focus-stepper-btn {
+    background: transparent;
+    border: none;
+    color: #99999e;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 4px;
+    transition: all 0.12s ease;
+    padding: 0;
+}
+
+.focus-stepper-btn:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.12);
+    color: #ffffff;
+}
+
+.focus-stepper-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+.focus-stepper-val {
+    font-size: 12px;
+    font-weight: 600;
+    color: #ffffff;
+    min-width: 26px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+
+.focus-stepper-val.is-clickable {
+    cursor: pointer;
+    border-radius: 4px;
+    padding: 1px 3px;
+    transition: background 0.12s ease;
+}
+
+.focus-stepper-val.is-clickable:hover {
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.focus-stepper-input {
+    width: 30px;
+    background: transparent;
+    border: none;
+    border-bottom: 1.5px solid #ff4747;
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 600;
+    text-align: center;
+    outline: none;
+    padding: 0;
+    font-variant-numeric: tabular-nums;
+    font-family: inherit;
+}
+
+.focus-stepper-input::-webkit-outer-spin-button,
+.focus-stepper-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.focus-config-divider {
+    width: 1px;
+    height: 16px;
+    background: #333336;
+}
+
+.focus-config-presets {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.focus-preset-pill {
+    background: #222225;
+    border: 1px solid #333336;
+    border-radius: 6px;
+    padding: 3px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #99999e;
+    cursor: pointer;
+    transition: all 0.12s ease;
+}
+
+.focus-preset-pill:hover {
+    background: #2b2b2f;
+    color: #ffffff;
+}
+
+.focus-preset-pill.active {
+    background: rgba(255, 71, 71, 0.2);
+    border-color: #ff4747;
+    color: #ff7070;
+}
+
+/* Active Session Progress & Dots */
+.focus-progress-bar-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    user-select: none;
+}
+
+.focus-cycle-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #aaaaae;
+}
+
+.focus-phase-indicator {
+    color: #ff5959;
+    font-weight: 600;
+}
+
+.focus-cycle-dots {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.focus-cycle-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #2d2d31;
+    border: 1px solid #3e3e42;
+    transition: all 0.25s ease;
+}
+
+.focus-cycle-dot.active-work {
+    background: #ff4747;
+    border-color: #ff7070;
+    box-shadow: 0 0 10px rgba(255, 71, 71, 0.7);
+    transform: scale(1.25);
+}
+
+.focus-cycle-dot.active-break {
+    background: #10b981;
+    border-color: #34d399;
+    box-shadow: 0 0 10px rgba(16, 185, 129, 0.7);
+    transform: scale(1.25);
+}
+
+.focus-cycle-dot.completed {
+    background: #6b7280;
+    border-color: #9ca3af;
+}
+
+/* Completed Card */
+.focus-completed-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    background: #1c1c1e;
+    border: 1px solid #2f2f33;
+    border-radius: 20px;
+    padding: 38px 44px;
+    max-width: 440px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+    animation: focusWorkspaceEnter 0.2s ease-out;
+}
+
+.focus-completed-icon-wrap {
+    color: #10b981;
+    margin-bottom: 12px;
+}
+
+.focus-completed-title {
+    margin: 0 0 8px 0;
+    font-size: 22px;
+    font-weight: 600;
+    color: #ffffff;
+}
+
+.focus-completed-subtitle {
+    margin: 0 0 24px 0;
+    font-size: 14px;
+    color: #99999e;
+    line-height: 1.5;
+}
+
+.focus-completed-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+}
+
+.focus-completed-restart-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: #ff4747;
+    color: #141313;
+    border: none;
+    border-radius: 9999px;
+    padding: 11px 24px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 4px 16px rgba(255, 71, 71, 0.4);
+    transition: all 0.15s ease;
+}
+
+.focus-completed-restart-btn:hover {
+    background: #ff5959;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(255, 71, 71, 0.5);
+}
+
+.focus-completed-dashboard-btn {
+    background: #252528;
+    color: #ffffff;
+    border: 1px solid #36363a;
+    border-radius: 9999px;
+    padding: 10px 24px;
+    font-size: 13.5px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.focus-completed-dashboard-btn:hover {
+    background: #303035;
+    border-color: #48484e;
+}
+
+/* Pulse animation on dashboard button when timer is running in background */
+.focus-btn-running-content {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.focus-btn-pulse-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #141313;
+    animation: focusDotPulse 1.4s ease-in-out infinite;
+}
+
+@keyframes focusDotPulse {
+    0%, 100% {
+        transform: scale(0.85);
+        opacity: 0.6;
+    }
+    50% {
+        transform: scale(1.35);
+        opacity: 1;
+    }
 }
 
 /* Main Unified Card - Fixed dimensions across all views */
@@ -913,7 +1672,7 @@ body {
     background: #1c1c1e;
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 12px;
-    height: 74px;
+    height: 120px;
     padding: 10px 12px;
     overflow: hidden;
     box-sizing: border-box;
@@ -926,7 +1685,8 @@ body {
     line-height: 1.4;
     color: #b0b0b5;
     display: -webkit-box;
-    -webkit-line-clamp: 3;
+    -webkit-line-clamp: 6;
+    line-clamp: 6;
     -webkit-box-orient: vertical;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -959,7 +1719,7 @@ body {
 .upcoming-recent-notes-empty {
     grid-column: 1 / -1;
     text-align: center;
-    padding: 14px 0;
+    padding: 36px 0;
     font-size: 13px;
     color: #555555;
     font-style: italic;
