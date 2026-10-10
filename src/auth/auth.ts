@@ -12,10 +12,56 @@ export type AuthSession = {
 
 export const AUTH_STORAGE_KEY = "alfred_session";
 export const PENDING_DESKTOP_AUTH_KEY = "alfred_pending_desktop_auth";
+export const RETURN_URL_STORAGE_KEY = "alfred_auth_return_url";
 export const API_BASE_URL =
   (typeof import.meta !== "undefined" && import.meta.env?.VITE_API_BASE_URL)
     ? import.meta.env.VITE_API_BASE_URL
     : "http://localhost:8000";
+
+export type AuthCallback = (session: AuthSession | null) => void;
+
+let memoryAuthCallback: AuthCallback | null = null;
+
+export function setAuthCompletionCallback(callback: AuthCallback | null): void {
+  memoryAuthCallback = callback;
+}
+
+export function triggerAuthCompletionCallback(session: AuthSession | null): void {
+  if (memoryAuthCallback) {
+    const cb = memoryAuthCallback;
+    memoryAuthCallback = null;
+    try {
+      cb(session);
+    } catch (err) {
+      console.error("Error executing auth completion callback:", err);
+    }
+  }
+}
+
+export function saveReturnLocation(): void {
+  if (typeof window !== "undefined" && window.location) {
+    try {
+      const currentLoc = window.location.pathname + window.location.search + window.location.hash;
+      sessionStorage.setItem(RETURN_URL_STORAGE_KEY, currentLoc);
+    } catch {
+      // Ignore storage restrictions
+    }
+  }
+}
+
+export function getAndClearReturnLocation(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const returnLoc = sessionStorage.getItem(RETURN_URL_STORAGE_KEY);
+    if (returnLoc) {
+      sessionStorage.removeItem(RETURN_URL_STORAGE_KEY);
+      return returnLoc;
+    }
+  } catch {
+    // Ignore
+  }
+  return null;
+}
 
 import { isTauri as checkTauri } from "@tauri-apps/api/core";
 
@@ -320,6 +366,14 @@ export function initAuthSession(): Promise<AuthSession> {
         try {
           const session = await exchangeTicket(ticket);
           cachedTicket = null;
+          triggerAuthCompletionCallback(session);
+          const returnLoc = getAndClearReturnLocation();
+          if (returnLoc && typeof window !== "undefined" && window.location) {
+            const currentLoc = window.location.pathname + window.location.search + window.location.hash;
+            if (returnLoc !== currentLoc && returnLoc !== "/") {
+              window.history.replaceState({}, document.title, returnLoc);
+            }
+          }
           return session;
         } catch (err) {
           console.error("Ticket exchange failed, falling back to guest session:", err);
@@ -336,6 +390,7 @@ export function initAuthSession(): Promise<AuthSession> {
               if (url.startsWith("alfred://auth/callback")) {
                 const session = await handleDesktopDeepLink(url);
                 if (session) {
+                  triggerAuthCompletionCallback(session);
                   return session;
                 }
               }
@@ -365,12 +420,17 @@ export function initAuthSession(): Promise<AuthSession> {
  * On desktop (Tauri): generates PKCE challenge & state, stores verifier, and launches external system browser.
  * On browser: redirects current window to backend Google auth endpoint.
  */
-export async function loginWithGoogle(): Promise<void> {
+export async function loginWithGoogle(callback?: AuthCallback): Promise<void> {
+  if (callback) {
+    setAuthCompletionCallback(callback);
+  }
+  saveReturnLocation();
+
   if (isTauri()) {
     try {
       const codeVerifier = generateRandomString(32);
       const codeChallenge = await deriveCodeChallenge(codeVerifier);
-      const state = generateRandomString(24);
+      const state = `desktop_${generateRandomString(24)}`;
 
       savePendingDesktopAuth(state, codeVerifier);
 
@@ -390,6 +450,53 @@ export async function loginWithGoogle(): Promise<void> {
 }
 
 /**
+ * Polls the backend for desktop authentication completion.
+ * Used as a zero-friction fallback alongside custom protocol deep-linking.
+ */
+export async function pollDesktopAuthStatus(
+  state: string,
+  codeVerifier: string,
+  signal?: AbortSignal
+): Promise<AuthSession | null> {
+  const startTime = Date.now();
+  const maxWaitMs = 90_000;
+  const intervalMs = 1500;
+
+  while (Date.now() - startTime < maxWaitMs) {
+    if (signal?.aborted) {
+      return null;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/desktop-poll`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ state, code_verifier: codeVerifier }),
+        signal,
+      });
+
+      if (response.ok) {
+        const sessionData = (await response.json()) as AuthSession;
+        if (sessionData?.token && sessionData?.account?.id) {
+          clearPendingDesktopAuth();
+          setSession(sessionData);
+          triggerAuthCompletionCallback(sessionData);
+          return sessionData;
+        }
+      }
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === "AbortError") {
+        return null;
+      }
+    }
+
+    await new Promise((res) => setTimeout(res, intervalMs));
+  }
+
+  return null;
+}
+
+/**
  * Parses and processes a desktop custom deep-link URI (alfred://auth/callback?ticket=...&state=...).
  * Verifies scheme, extracts ticket, matches state against the active pending attempt,
  * immediately wipes the PKCE verifier, and atomically exchanges the ticket.
@@ -397,12 +504,18 @@ export async function loginWithGoogle(): Promise<void> {
 export async function handleDesktopDeepLink(rawUrl: string): Promise<AuthSession | null> {
   if (!rawUrl || typeof rawUrl !== "string") return null;
 
-  if (!rawUrl.startsWith("alfred://auth/callback")) {
+  // Normalize quotes or trailing slashes that Windows or browsers may append
+  const cleanUrl = rawUrl.trim().replace(/^["']|["']$/g, "").replace(/\/$/, "");
+
+  // Accept alfred://auth/callback or alfred:/auth/callback (Windows can strip one slash)
+  if (!cleanUrl.startsWith("alfred://auth/callback") && !cleanUrl.startsWith("alfred:/auth/callback")) {
     return null;
   }
 
   try {
-    const urlObj = new URL(rawUrl.replace(/^alfred:\/\//i, "https://alfred/"));
+    // Normalize: replace the alfred:// or alfred:/ scheme prefix so URL() can parse query params
+    const httpUrl = cleanUrl.replace(/^alfred:\/+/i, "https://alfred-app/");
+    const urlObj = new URL(httpUrl);
     const searchParams = urlObj.searchParams;
 
     const authError = searchParams.get("auth_error");
@@ -421,6 +534,9 @@ export async function handleDesktopDeepLink(rawUrl: string): Promise<AuthSession
 
     const pending = getPendingDesktopAuth();
     if (!pending) {
+      // If already authenticated (e.g. by polling), return existing session
+      const existing = getSession();
+      if (existing) return existing;
       throw new Error("No active pending desktop authentication attempt found or attempt expired");
     }
 
@@ -432,7 +548,9 @@ export async function handleDesktopDeepLink(rawUrl: string): Promise<AuthSession
     const verifier = pending.codeVerifier;
     clearPendingDesktopAuth(); // Immediately wipe sensitive verifier from storage
 
-    return await exchangeTicket(ticket, verifier);
+    const session = await exchangeTicket(ticket, verifier);
+    triggerAuthCompletionCallback(session);
+    return session;
   } catch (err) {
     clearPendingDesktopAuth();
     throw err;

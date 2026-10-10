@@ -45,6 +45,15 @@ export const exchangeTicketSchema = {
         .strict(),
 };
 
+export const desktopPollSchema = {
+    body: z
+        .object({
+            state: z.string().trim().min(16).max(256),
+            code_verifier: z.string().trim().min(32).max(128),
+        })
+        .strict(),
+};
+
 export const googleCallbackSchema = {
     query: z.object({
         code: z.string().trim().optional(),

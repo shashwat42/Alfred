@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "../auth/authContext.ts";
 import type { DashboardView } from "../types/dashboard.ts";
 import { useTasks, ITEMS_PER_PAGE } from "../hooks/useTasks.ts";
 import { useSchedule } from "../hooks/useSchedule.ts";
+import { useNotes } from "../hooks/useNotes.ts";
 
 import { DashboardHeader } from "./dashboard/DashboardHeader.tsx";
 import { DashboardNav } from "./dashboard/DashboardNav.tsx";
@@ -26,6 +27,7 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
     const activeView = onViewChange ? currentView : localView;
 
     const handleViewChange = (view: DashboardView) => {
+        setActiveNote(null);
         if (onViewChange) {
             onViewChange(view);
         } else {
@@ -33,9 +35,16 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
         }
     };
 
-    // Memoize 'now' so the date/time values are stable for a full render cycle
-    // and don't drift if the component re-renders mid-computation.
-    const now = useMemo(() => new Date(), []);
+    // Keep 'now' updated regularly so current time and schedule filters advance in real-time
+    const [now, setNow] = useState(() => new Date());
+
+    useEffect(() => {
+        const timer = setInterval(() => {
+            setNow(new Date());
+        }, 30000);
+        return () => clearInterval(timer);
+    }, []);
+
     const todayDateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
@@ -86,6 +95,16 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
         handleToday,
     } = useSchedule(accountId, todayDateStr);
 
+    const {
+        notes,
+        recentNotes,
+        activeNote,
+        setActiveNote,
+        saveNote,
+        deleteNote,
+        openNote,
+    } = useNotes(accountId);
+
     const activeTodaySchedule = accountId ? todaySchedule : [];
     const activeTimelineSchedule = accountId ? timelineSchedule : [];
     // task is now typed as TaskItem[] — no string union
@@ -128,7 +147,7 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
                     </div>
                 </div>
                 <button type="button" className="focus-session-btn">
-                    start focus session
+                    Start Focus Session
                 </button>
             </div>
 
@@ -160,6 +179,18 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
                             scheduleItems={activeTodaySchedule}
                             priorityTasks={activeTasks}
                             currentMinutes={currentMinutes}
+                            recentNotes={accountId ? recentNotes : []}
+                            onOpenNote={(note) => {
+                                void openNote(note);
+                                if (onViewChange) {
+                                    onViewChange("notes");
+                                } else {
+                                    setLocalView("notes");
+                                }
+                            }}
+                            onSaveQuickNote={async (text) => {
+                                await saveNote({ content: text });
+                            }}
                         />
                     )}
 
@@ -185,11 +216,22 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
                         />
                     )}
 
-                    {(activeView === "notes" || activeView === "mails") && <NotesView />}
+                    {(activeView === "notes" || activeView === "mails") && (
+                        <NotesView
+                            notes={accountId ? notes : []}
+                            activeNote={activeNote}
+                            onSelectNote={(note) => {
+                                void openNote(note);
+                            }}
+                            onSaveNote={saveNote}
+                            onDeleteNote={deleteNote}
+                            onBackToList={() => setActiveNote(null)}
+                        />
+                    )}
                 </div>
 
                 <div className="dashboard-nav-divider" aria-hidden="true" />
-                
+
                 <DashboardNav activeView={activeView} handleViewChange={handleViewChange} />
             </div>
 

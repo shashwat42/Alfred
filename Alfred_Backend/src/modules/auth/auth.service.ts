@@ -27,34 +27,8 @@ export interface AuthSessionResponse {
     };
 }
 
-interface LegacyHandoffData {
-    session: AuthSessionResponse;
-    expiresAt: number;
-    consumedAt?: number;
-}
-const legacyHandoffStore = new Map<string, LegacyHandoffData>();
 
-export function createHandoffTicket(session: AuthSessionResponse): string {
-    const ticket = crypto.randomBytes(32).toString("hex");
-    const expiresAt = Date.now() + 60 * 1000;
-    legacyHandoffStore.set(ticket, { session, expiresAt });
-    return ticket;
-}
 
-export function consumeHandoffTicket(ticket: string): AuthSessionResponse | null {
-    if (!ticket || typeof ticket !== "string") return null;
-    const data = legacyHandoffStore.get(ticket);
-    if (!data || Date.now() > data.expiresAt) {
-        if (data) legacyHandoffStore.delete(ticket);
-        return null;
-    }
-    if (!data.consumedAt) {
-        data.consumedAt = Date.now();
-        data.expiresAt = Math.min(data.expiresAt, Date.now() + 15000);
-        setTimeout(() => legacyHandoffStore.delete(ticket), 15000).unref();
-    }
-    return data.session;
-}
 
 /**
  * Creates and persists a pending OAuth state document in MongoDB.
@@ -104,6 +78,7 @@ export async function createIssuedTicket(params: {
     accountId: mongoose.Types.ObjectId;
     codeChallenge?: string | undefined;
     flow: "browser" | "desktop";
+    state?: string | undefined;
 }): Promise<string> {
     const ticket = crypto.randomBytes(32).toString("hex");
     const expiresAt = new Date(Date.now() + 90 * 1000); // 90 seconds TTL
@@ -118,9 +93,69 @@ export async function createIssuedTicket(params: {
     if (params.codeChallenge) {
         doc.codeChallenge = params.codeChallenge;
     }
+    if (params.state) {
+        doc.state = params.state;
+    }
 
     await AuthTicket.create(doc);
     return ticket;
+}
+
+export async function atomicConsumeTicketByState(params: {
+    state: string;
+    codeVerifier: string;
+}): Promise<AuthSessionResponse | null> {
+    const { state, codeVerifier } = params;
+    if (!state || !codeVerifier) {
+        return null;
+    }
+
+    const cleanState = state.trim();
+    const existingTicket = await AuthTicket.findOne({
+        state: cleanState,
+        flow: "desktop",
+        expiresAt: { $gt: new Date() },
+    });
+
+    if (!existingTicket || existingTicket.status !== "issued") {
+        return null;
+    }
+
+    const computedChallenge = crypto
+        .createHash("sha256")
+        .update(codeVerifier.trim())
+        .digest("base64url");
+
+    const filter: Record<string, unknown> = {
+        state: cleanState,
+        flow: "desktop",
+        status: "issued",
+        codeChallenge: computedChallenge,
+        expiresAt: { $gt: new Date() },
+    };
+
+    const consumed = await AuthTicket.findOneAndUpdate(
+        filter,
+        {
+            $set: {
+                status: "consumed",
+                consumedAt: new Date(),
+            },
+        },
+        { returnDocument: "before" }
+    );
+
+    if (!consumed) {
+        return null;
+    }
+
+    const account = await Account.findById(consumed.accountId);
+    if (!account) {
+        return null;
+    }
+
+    const token = generateAuthToken(account);
+    return formatAuthResponse(account, token);
 }
 
 /**

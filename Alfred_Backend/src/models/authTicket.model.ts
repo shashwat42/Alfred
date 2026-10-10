@@ -6,6 +6,7 @@ export interface IAuthTicket extends Document {
     codeChallenge?: string | undefined;
     flow: "browser" | "desktop";
     status: "issued" | "consumed";
+    state?: string | undefined;
     createdAt: Date;
     expiresAt: Date;
     consumedAt?: Date | undefined;
@@ -34,6 +35,11 @@ const authTicketSchema = new Schema<IAuthTicket>(
             type: String,
             enum: ["browser", "desktop"],
             required: true,
+        },
+        state: {
+            type: String,
+            trim: true,
+            index: true,
         },
         status: {
             type: String,

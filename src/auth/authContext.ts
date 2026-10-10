@@ -1,12 +1,14 @@
 import { createContext, useContext } from "react";
 import type { AuthSession } from "./auth.ts";
 
+export type AuthCallback = (session: AuthSession | null) => void;
+
 export interface AuthContextType {
   session: AuthSession | null;
   loading: boolean;
   error: string | null;
   retry: () => void;
-  loginWithGoogle: () => void;
+  loginWithGoogle: (callback?: AuthCallback) => Promise<void> | void;
   logout: () => void;
 }
 

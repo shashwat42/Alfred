@@ -1,5 +1,7 @@
 import { useState, type KeyboardEvent } from "react";
 import type { ScheduleItem, TaskItem } from "../../types/dashboard.ts";
+import type { NoteItem } from "../../types/notes.ts";
+import { parseTimeToMinutes } from "../../utils/scheduleUtils.ts";
 
 const PRIORITY_WEIGHT: Record<string, number> = {
     urgent: 4,
@@ -12,30 +14,48 @@ const PRIORITY_WEIGHT: Record<string, number> = {
 export function UpcomingView({
     scheduleItems = [],
     priorityTasks = [],
+    currentMinutes,
+    recentNotes = [],
+    onOpenNote,
+    onSaveQuickNote,
 }: {
     scheduleItems?: ScheduleItem[];
     priorityTasks?: TaskItem[];
     currentMinutes?: number;
+    recentNotes?: NoteItem[];
+    onOpenNote?: (note: NoteItem) => void;
+    onSaveQuickNote?: (text: string) => Promise<void>;
 }) {
     const [noteText, setNoteText] = useState("");
 
-    const handleNoteKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    const handleNoteKeyDown = async (e: KeyboardEvent<HTMLInputElement>) => {
         if (e.key === "Enter" && noteText.trim()) {
-            try {
-                const existing = JSON.parse(localStorage.getItem("alfred_quick_notes") || "[]");
-                existing.unshift({
-                    text: noteText.trim(),
-                    createdAt: new Date().toISOString(),
-                });
-                localStorage.setItem("alfred_quick_notes", JSON.stringify(existing.slice(0, 50)));
-            } catch {
-                // Ignore localStorage errors
-            }
+            const textToSave = noteText.trim();
             setNoteText("");
+            if (onSaveQuickNote) {
+                await onSaveQuickNote(textToSave);
+            } else {
+                try {
+                    const existing = JSON.parse(localStorage.getItem("alfred_quick_notes") || "[]");
+                    existing.unshift({
+                        text: textToSave,
+                        createdAt: new Date().toISOString(),
+                    });
+                    localStorage.setItem("alfred_quick_notes", JSON.stringify(existing.slice(0, 50)));
+                } catch {
+                    // Ignore localStorage errors
+                }
+            }
         }
     };
 
-    const displaySchedule = scheduleItems.slice(0, 5);
+    const displaySchedule = scheduleItems
+        .filter((item) => {
+            if (currentMinutes === undefined) return true;
+            return parseTimeToMinutes(item.time) >= currentMinutes;
+        })
+        .sort((a, b) => parseTimeToMinutes(a.time) - parseTimeToMinutes(b.time))
+        .slice(0, 5);
 
     // Only show uncompleted tasks with priority higher than "normal", sorted by priority weight descending
     const filteredPriorityTasks = priorityTasks
@@ -67,7 +87,7 @@ export function UpcomingView({
                                 </div>
                             ))
                         ) : (
-                            <div className="upcoming-empty-hint">No events scheduled today</div>
+                            <div className="upcoming-empty-hint">No upcoming events scheduled today</div>
                         )}
                     </div>
                 </div>
@@ -96,6 +116,54 @@ export function UpcomingView({
                             <div className="upcoming-empty-hint">No priority tasks</div>
                         )}
                     </div>
+                </div>
+            </div>
+
+            {/* Recently Opened Notes Cards (Limit of 4, above the notes input bar) */}
+            <div className="upcoming-recent-notes-container">
+                <h3 className="upcoming-recent-notes-heading">Recently viewed</h3>
+                <div className="upcoming-recent-notes-grid">
+                    {recentNotes.length > 0 ? (
+                        recentNotes.slice(0, 4).map((note) => {
+                            const displayTitle = note.title.trim() || "No title";
+                            const dateStr = note.lastOpenedAt || note.updatedAt || note.createdAt;
+                            const formattedDate = dateStr
+                                ? new Date(dateStr).toLocaleDateString("en-US", { day: "numeric", month: "short" })
+                                : "";
+                            const cleanPreview = (note.content || "")
+                                .replace(/<br\s*\/?>/gi, " ")
+                                .replace(/<\/?[^>]+(>|$)/g, " ")
+                                .replace(/\*\*/g, "")
+                                .replace(/\*/g, "")
+                                .replace(/\s+/g, " ")
+                                .trim();
+
+                            return (
+                                <div
+                                    key={note._id}
+                                    className="upcoming-recent-note-card"
+                                    onClick={() => onOpenNote?.(note)}
+                                    title={`Open ${displayTitle}`}
+                                >
+                                    <div className="recent-note-preview-box">
+                                        <p className="recent-note-preview-text">
+                                            {cleanPreview || "Empty note"}
+                                        </p>
+                                    </div>
+                                    <div className="recent-note-card-meta">
+                                        <span className="recent-note-title" title={displayTitle}>
+                                            {displayTitle}
+                                        </span>
+                                        <span className="recent-note-date">{formattedDate}</span>
+                                    </div>
+                                </div>
+                            );
+                        })
+                    ) : (
+                        <div className="upcoming-recent-notes-empty">
+                            <span>No recently opened notes</span>
+                        </div>
+                    )}
                 </div>
             </div>
 

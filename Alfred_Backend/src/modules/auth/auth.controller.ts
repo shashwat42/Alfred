@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import type { Request, Response } from "express";
 import {
     atomicConsumeTicket,
+    atomicConsumeTicketByState,
     createGuestAccount,
     createIssuedTicket,
     createPendingOAuthState,
@@ -81,11 +82,12 @@ export async function googleAuthCallback(req: Request, res: Response): Promise<v
     };
 
     const cleanState = typeof state === "string" ? state.trim() : "";
+    const isDesktopState = cleanState.startsWith("desktop_");
 
     // 1. Handle OAuth provider errors (e.g. user denied consent)
     if (error) {
         const pendingState = cleanState ? await consumePendingOAuthState(cleanState) : null;
-        if (pendingState?.flow === "desktop") {
+        if (isDesktopState || pendingState?.flow === "desktop") {
             const desktopErrorUrl = `alfred://auth/callback?auth_error=authorization_rejected&state=${encodeURIComponent(cleanState)}`;
             renderDesktopCallbackPage(res, desktopErrorUrl, "Authentication Cancelled", "You can close this tab and return to Alfred.");
             return;
@@ -96,6 +98,11 @@ export async function googleAuthCallback(req: Request, res: Response): Promise<v
 
     // 2. Validate presence of code and state
     if (!code || typeof code !== "string" || code.trim().length === 0 || !cleanState) {
+        if (isDesktopState) {
+            const desktopErrorUrl = `alfred://auth/callback?auth_error=invalid_request&state=${encodeURIComponent(cleanState)}`;
+            renderDesktopCallbackPage(res, desktopErrorUrl, "Invalid Request", "Please return to Alfred and try again.");
+            return;
+        }
         res.redirect(`${env.frontendUrl}/?auth_error=invalid_request`);
         return;
     }
@@ -105,10 +112,17 @@ export async function googleAuthCallback(req: Request, res: Response): Promise<v
     // 3. Atomically consume the pending OAuth state to guarantee single-use and prevent replay
     const pendingState = await consumePendingOAuthState(cleanState);
     if (!pendingState) {
+        if (isDesktopState) {
+            const desktopErrorUrl = `alfred://auth/callback?auth_error=invalid_state&state=${encodeURIComponent(cleanState)}`;
+            renderDesktopCallbackPage(res, desktopErrorUrl, "Authentication Expired", "Please return to Alfred and try again.");
+            return;
+        }
         // State was missing, expired, or already used
         res.redirect(`${env.frontendUrl}/?auth_error=invalid_state`);
         return;
     }
+
+    const isDesktopFlow = pendingState.flow === "desktop" || isDesktopState;
 
     try {
         // 4. Exchange code for Google identity profile
@@ -120,10 +134,11 @@ export async function googleAuthCallback(req: Request, res: Response): Promise<v
             accountId: account._id,
             codeChallenge: pendingState.codeChallenge,
             flow: pendingState.flow,
+            state: cleanState,
         });
 
         // 6. Redirect back to client
-        if (pendingState.flow === "desktop") {
+        if (isDesktopFlow) {
             const desktopSuccessUrl = `alfred://auth/callback?ticket=${encodeURIComponent(ticket)}&state=${encodeURIComponent(cleanState)}`;
             renderDesktopCallbackPage(
                 res,
@@ -137,7 +152,7 @@ export async function googleAuthCallback(req: Request, res: Response): Promise<v
         res.redirect(`${env.frontendUrl}/?ticket=${encodeURIComponent(ticket)}`);
     } catch (err: unknown) {
         console.error("Error during Google OAuth callback processing:", err);
-        if (pendingState.flow === "desktop") {
+        if (isDesktopFlow) {
             const desktopFailUrl = `alfred://auth/callback?auth_error=authentication_failed&state=${encodeURIComponent(cleanState)}`;
             renderDesktopCallbackPage(res, desktopFailUrl, "Authentication Failed", "Please return to Alfred and try again.");
             return;
@@ -161,6 +176,27 @@ export async function exchangeTicket(req: Request, res: Response): Promise<void>
 
     if (!session) {
         res.status(400).json({ error: "Invalid or expired authorization ticket" });
+        return;
+    }
+
+    res.status(200).json(session);
+}
+
+export async function desktopPoll(req: Request, res: Response): Promise<void> {
+    const { state, code_verifier } = req.body ?? {};
+
+    if (typeof state !== "string" || !state.trim() || typeof code_verifier !== "string" || !code_verifier.trim()) {
+        res.status(400).json({ error: "Invalid state or code_verifier" });
+        return;
+    }
+
+    const session = await atomicConsumeTicketByState({
+        state: state.trim(),
+        codeVerifier: code_verifier.trim(),
+    });
+
+    if (!session) {
+        res.status(404).json({ error: "Pending authentication not completed or expired" });
         return;
     }
 

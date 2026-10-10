@@ -69,7 +69,7 @@ export default function Chat() {
                             <button
                                 type="button"
                                 className="user-bar-signin-btn"
-                                onClick={loginWithGoogle}
+                                onClick={() => loginWithGoogle()}
                             >
                                 {displayName === "Guest" ? "Sign in with Google" : displayName}
                             </button>
@@ -166,7 +166,9 @@ export default function Chat() {
                                             type="button"
                                             className="settings-signin-btn"
                                             onClick={() => {
-                                                loginWithGoogle();
+                                                loginWithGoogle(() => {
+                                                    setIsSettingsOpen(false);
+                                                });
                                                 setIsSettingsOpen(false);
                                             }}
                                         >

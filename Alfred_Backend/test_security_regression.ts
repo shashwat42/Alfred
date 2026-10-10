@@ -8,8 +8,6 @@ import {
     resetRateLimitStores,
 } from "./src/middleware/rateLimit.middleware.ts";
 import {
-    createHandoffTicket,
-    consumeHandoffTicket,
     type AuthSessionResponse,
 } from "./src/modules/auth/auth.service.ts";
 
@@ -434,30 +432,8 @@ async function runSecurityRegressionTests(): Promise<void> {
         headers: { Authorization: `Bearer ${userA.token}` },
     });
 
-    // 2.3 OAuth Ticket Mechanics (Single-Use & In-Memory Store)
-    const mockSession: AuthSessionResponse = {
-        token: "mock-token",
-        account: {
-            id: "6ac8aad4e3939d3bc15dffcc",
-            type: "user",
-            email: "test@example.com",
-            createdAt: new Date(),
-        },
-    };
-    const ticket = createHandoffTicket(mockSession);
-    assert(typeof ticket === "string" && ticket.length === 64, "Handoff ticket is 64-char hex string");
-
-    // First consumption succeeds
-    const consumedFirst = consumeHandoffTicket(ticket);
-    assert(consumedFirst?.token === "mock-token", "First ticket consumption succeeds");
-
-    // Duplicate consumption within grace window succeeds (tolerates StrictMode)
-    const consumedSecond = consumeHandoffTicket(ticket);
-    assert(consumedSecond?.token === "mock-token", "Duplicate consumption within grace period succeeds");
-
-    // Invalid ticket consumption fails
-    const invalidTicket = consumeHandoffTicket("non-existent-ticket");
-    assert(invalidTicket === null, "Non-existent ticket returns null");
+    // 2.3 OAuth Ticket note: in-memory legacy handoff store was removed;
+    // tickets are now issued and consumed via MongoDB (atomicConsumeTicket / atomicConsumeTicketByState).
 }
 
 async function runRateLimitingTests(): Promise<void> {
