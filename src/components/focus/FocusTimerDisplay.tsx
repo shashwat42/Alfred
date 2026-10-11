@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { formatTimeMMSS } from "../../hooks/useFocusSession.ts";
 import { WheelPicker } from "./WheelPicker.tsx";
 
@@ -35,9 +34,6 @@ export function FocusTimerDisplay({
     togglePlayPause,
     resetTimer,
 }: FocusTimerDisplayProps) {
-    const [confirmReset, setConfirmReset] = useState(false);
-
-    // Compute display values for active countdown
     const totalWorkSecs = workMinutes * 60 + workSeconds;
     const totalBreakSecs = breakMinutes * 60 + breakSeconds;
 
@@ -56,19 +52,6 @@ export function FocusTimerDisplay({
     }
 
     const isIdle = !hasStarted && !isRunning;
-
-    const handleResetClick = () => {
-        if (!hasStarted) {
-            resetTimer();
-            return;
-        }
-        if (confirmReset) {
-            resetTimer();
-            setConfirmReset(false);
-        } else {
-            setConfirmReset(true);
-        }
-    };
 
     return (
         <div className="focus-timer-container">
@@ -133,37 +116,14 @@ export function FocusTimerDisplay({
                     </button>
 
                     {/* Reset Button */}
-                    {confirmReset ? (
-                        <div className="focus-reset-confirm-box">
-                            <span className="focus-reset-confirm-label">Reset?</span>
-                            <button
-                                type="button"
-                                className="focus-reset-confirm-btn confirm-yes"
-                                onClick={() => {
-                                    resetTimer();
-                                    setConfirmReset(false);
-                                }}
-                            >
-                                Yes
-                            </button>
-                            <button
-                                type="button"
-                                className="focus-reset-confirm-btn confirm-no"
-                                onClick={() => setConfirmReset(false)}
-                            >
-                                Cancel
-                            </button>
-                        </div>
-                    ) : (
-                        <button
-                            type="button"
-                            className="focus-reset-pill-btn"
-                            onClick={handleResetClick}
-                            title="Reset session to start"
-                        >
-                            RESET
-                        </button>
-                    )}
+                    <button
+                        type="button"
+                        className="focus-reset-pill-btn"
+                        onClick={resetTimer}
+                        title="Reset session to start"
+                    >
+                        RESET
+                    </button>
                 </div>
 
                 {/* Right Column: Break Time (Matching bright colors with Time) */}

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import Logo from "../assets/Alfred_Logo.svg";
 import { useAuth } from "../auth/authContext.ts";
 
@@ -101,7 +102,7 @@ export default function Chat() {
                 </button>
             </div>
 
-            {isSettingsOpen && (
+            {isSettingsOpen && createPortal(
                 <div
                     className="task-dialog-backdrop"
                     onClick={(e) => {
@@ -188,7 +189,8 @@ export default function Chat() {
                             </div>
                         </div>
                     </section>
-                </div>
+                </div>,
+                document.body
             )}
         </section>
     );

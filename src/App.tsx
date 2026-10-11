@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Chat from "./components/Chat";
 import Dashboard from "./components/Dashboard";
 import type { DashboardView } from "./types/dashboard.ts";
@@ -47,8 +47,45 @@ const App = () => {
     setMobileTab("dashboard");
   };
 
+  const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length !== 1) return;
+    const target = e.target as HTMLElement | null;
+    if (target && target.closest("input, textarea, select, button, [role='slider'], .timeline-event-chip, dialog, .dialog-backdrop")) {
+      return;
+    }
+    const touch = e.touches[0];
+    touchStartRef.current = { x: touch.clientX, y: touch.clientY, time: Date.now() };
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (!touchStartRef.current || e.changedTouches.length !== 1) {
+      touchStartRef.current = null;
+      return;
+    }
+    const touch = e.changedTouches[0];
+    const deltaX = touch.clientX - touchStartRef.current.x;
+    const deltaY = touch.clientY - touchStartRef.current.y;
+    const elapsed = Date.now() - touchStartRef.current.time;
+    touchStartRef.current = null;
+
+    const minDistance = 50;
+    if (elapsed < 500 && Math.abs(deltaX) >= minDistance && Math.abs(deltaX) > Math.abs(deltaY) * 1.5) {
+      if (deltaX < 0 && mobileTab === "assistant") {
+        setMobileTab("dashboard");
+      } else if (deltaX > 0 && mobileTab === "dashboard") {
+        setMobileTab("assistant");
+      }
+    }
+  };
+
   return (
-    <div className="App">
+    <div
+      className="App"
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+    >
       <Header
         onGoHome={handleGoHome}
         isSidebarCollapsed={isSidebarCollapsed}

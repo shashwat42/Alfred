@@ -172,6 +172,7 @@ export async function createGuestSession(): Promise<AuthSession> {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        "ngrok-skip-browser-warning": "true",
       },
     });
 
@@ -287,6 +288,7 @@ export async function exchangeTicket(ticket: string, codeVerifier?: string): Pro
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      "ngrok-skip-browser-warning": "true",
     },
     body: JSON.stringify({
       ticket,
@@ -470,7 +472,10 @@ export async function pollDesktopAuthStatus(
     try {
       const response = await fetch(`${API_BASE_URL}/auth/desktop-poll`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "ngrok-skip-browser-warning": "true",
+        },
         body: JSON.stringify({ state, code_verifier: codeVerifier }),
         signal,
       });

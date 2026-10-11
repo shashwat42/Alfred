@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import { CalendarWithPresets } from "../ui/CalendarWithPresets.tsx";
 
 export function CalendarDialog({
@@ -9,7 +10,7 @@ export function CalendarDialog({
     setScheduleSelectedDate: (date: Date) => void;
     setIsCalendarOpen: (open: boolean) => void;
 }) {
-    return (
+    return createPortal(
         <div
             className="task-dialog-backdrop"
             onClick={(event) => {
@@ -41,6 +42,7 @@ export function CalendarDialog({
                     }}
                 />
             </section>
-        </div>
+        </div>,
+        document.body
     );
 }

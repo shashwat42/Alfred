@@ -1,0 +1,8 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "identifier": "com.alfred.app",
+  "build": {
+    "devUrl": null,
+    "frontendDist": "../dist"
+  }
+}

@@ -9,6 +9,7 @@ import { env } from "./src/config/env.ts";
 import { apiRateLimiter } from "./src/middleware/rateLimit.middleware.ts";
 
 const app = express();
+app.set("trust proxy", 1);
 app.use(cors({ origin: env.allowedOrigins }));
 
 app.use(express.json());

@@ -14,7 +14,6 @@ import {
     ListOrdered,
     Undo2,
     Redo2,
-    FileDown,
     X,
 } from "lucide-react";
 import type { NoteItem } from "../../types/notes.ts";
@@ -46,64 +45,6 @@ function sanitizeForPreview(htmlOrText: string): string[] {
         .slice(0, 8);
 }
 
-/**
- * Triggers the native Windows "Save As" file dialog modal via WebView2 / Chromium File System Access API.
- * Falls back to browser download if user agent does not support showSaveFilePicker.
- */
-async function saveFileWithPicker(
-    content: Blob | string,
-    defaultName: string,
-    mimeType: string,
-    extension: string
-) {
-    type FilePickerWindow = Window & {
-        showSaveFilePicker?: (options: {
-            suggestedName: string;
-            types: Array<{ description: string; accept: Record<string, string[]> }>;
-        }) => Promise<{
-            createWritable: () => Promise<{
-                write: (data: Blob | string) => Promise<void>;
-                close: () => Promise<void>;
-            }>;
-        }>;
-    };
-
-    const win = window as FilePickerWindow;
-
-    if (typeof win.showSaveFilePicker === "function") {
-        try {
-            const handle = await win.showSaveFilePicker({
-                suggestedName: defaultName,
-                types: [
-                    {
-                        description: `${extension.toUpperCase()} Document`,
-                        accept: { [mimeType]: [`.${extension}`] },
-                    },
-                ],
-            });
-            const writable = await handle.createWritable();
-            await writable.write(content);
-            await writable.close();
-            return true;
-        } catch (err: unknown) {
-            // If the user cancelled out of the Windows file dialog
-            if (err && typeof err === "object" && "name" in err && err.name === "AbortError") {
-                return false;
-            }
-        }
-    }
-
-    // Fallback: standard browser anchor download
-    const blob = content instanceof Blob ? content : new Blob([content], { type: mimeType });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = defaultName;
-    a.click();
-    URL.revokeObjectURL(url);
-    return true;
-}
-
 export function NotesView({
     notes,
     activeNote,
@@ -114,9 +55,6 @@ export function NotesView({
 }: NotesViewProps) {
     const [searchQuery, setSearchQuery] = useState("");
     const [isSearching, setIsSearching] = useState(false);
-
-    // Export dropdown state
-    const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
 
     // Editor local state
     const [editId, setEditId] = useState<string | undefined>(activeNote?._id);
@@ -179,31 +117,27 @@ export function NotesView({
         }
     }, []);
 
-    // Sync editor state when activeNote changes
-    useEffect(() => {
-        if (activeNote) {
-            setEditId(activeNote._id);
-            setTitle(activeNote.title || "");
-            const noteContent = activeNote.content || "";
-            setContent(noteContent);
-            lastSavedRef.current = {
-                id: activeNote._id,
-                title: activeNote.title || "",
-                content: noteContent,
-            };
-            setSaveStatus("saved");
+    // Synchronize local state with activeNote during render when activeNote changes
+    const [prevActiveNote, setPrevActiveNote] = useState<NoteItem | null>(activeNote);
+    if (activeNote !== prevActiveNote) {
+        setPrevActiveNote(activeNote);
+        setEditId(activeNote?._id);
+        setTitle(activeNote?.title || "");
+        setContent(activeNote?.content || "");
+        setSaveStatus("saved");
+    }
 
-            if (editorRef.current && editorRef.current.innerHTML !== noteContent) {
+    // Keep DOM and lastSavedRef in sync when activeNote changes
+    useEffect(() => {
+        lastSavedRef.current = {
+            id: activeNote?._id,
+            title: activeNote?.title || "",
+            content: activeNote?.content || "",
+        };
+        if (editorRef.current) {
+            const noteContent = activeNote?.content || "";
+            if (editorRef.current.innerHTML !== noteContent) {
                 editorRef.current.innerHTML = noteContent;
-            }
-        } else {
-            setEditId(undefined);
-            setTitle("");
-            setContent("");
-            lastSavedRef.current = { id: undefined, title: "", content: "" };
-            setSaveStatus("saved");
-            if (editorRef.current) {
-                editorRef.current.innerHTML = "";
             }
         }
     }, [activeNote]);
@@ -218,18 +152,15 @@ export function NotesView({
             content !== lastSavedRef.current.content;
 
         if (!isChanged) {
-            setSaveStatus("saved");
             return;
         }
 
         const plainText = content.replace(/<[^>]*>/g, "").trim();
         // Do not auto-save completely empty draft note
         if (!editId && !title.trim() && !plainText) {
-            setSaveStatus("saved");
             return;
         }
 
-        setSaveStatus("unsaved");
         if (saveTimeoutRef.current) {
             clearTimeout(saveTimeoutRef.current);
         }
@@ -267,6 +198,7 @@ export function NotesView({
     const handleEditorInput = () => {
         if (editorRef.current) {
             setContent(editorRef.current.innerHTML);
+            setSaveStatus("unsaved");
             checkActiveFormats();
         }
     };
@@ -456,8 +388,9 @@ export function NotesView({
     const groupedNotes = useMemo(() => {
         const groups: { [key: string]: NoteItem[] } = {};
         for (const note of filteredNotes) {
-            const date = new Date(note.updatedAt || note.createdAt || Date.now());
-            const monthLabel = date.toLocaleDateString("en-US", { month: "short" });
+            const dateStr = note.updatedAt || note.createdAt;
+            const date = dateStr ? new Date(dateStr) : new Date(0);
+            const monthLabel = dateStr ? date.toLocaleDateString("en-US", { month: "short" }) : "Recent";
             if (!groups[monthLabel]) {
                 groups[monthLabel] = [];
             }
@@ -470,52 +403,6 @@ export function NotesView({
         if (!dateStr) return "";
         const date = new Date(dateStr);
         return date.toLocaleDateString("en-US", { day: "numeric", month: "short" });
-    };
-
-    // Export As handler (for current active note only)
-    const handleExportAs = async (format: "txt" | "doc") => {
-        setIsExportMenuOpen(false);
-
-        const cleanTitle = title.trim() || "Untitled Note";
-        const plainTextBody = content
-            .replace(/<br\s*\/?>/gi, "\n")
-            .replace(/<\/p>/gi, "\n\n")
-            .replace(/<\/div>/gi, "\n")
-            .replace(/<\/li>/gi, "\n")
-            .replace(/<[^>]*>/g, "")
-            .trim();
-
-        if (!title.trim() && !plainTextBody) {
-            return;
-        }
-
-        const filenameBase = cleanTitle.toLowerCase().replace(/[^a-z0-9_-]/gi, "_");
-
-        if (format === "txt") {
-            const plainText = `${cleanTitle}\n${"=".repeat(cleanTitle.length)}\n\n${plainTextBody}`;
-            await saveFileWithPicker(
-                plainText,
-                `${filenameBase}.txt`,
-                "text/plain",
-                "txt"
-            );
-        } else if (format === "doc") {
-            const docContent = `
-                <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
-                <head><meta charset='utf-8'><title>${cleanTitle}</title></head>
-                <body style="font-family: Arial, sans-serif; font-size: 11pt; line-height: 1.5;">
-                    <h1>${cleanTitle}</h1>
-                    <div>${content}</div>
-                </body>
-                </html>
-            `;
-            await saveFileWithPicker(
-                docContent,
-                `${filenameBase}.doc`,
-                "application/msword",
-                "doc"
-            );
-        }
     };
 
     // ----------------------------------------------------
@@ -540,53 +427,14 @@ export function NotesView({
                             className="note-editor-title-input"
                             placeholder="Title"
                             value={title}
-                            onChange={(e) => setTitle(e.target.value)}
+                            onChange={(e) => {
+                                setTitle(e.target.value);
+                                setSaveStatus("unsaved");
+                            }}
                         />
                     </div>
 
                     <div className="note-editor-header-right">
-                        {/* Export As Menu in Editor (Disabled if note has no content) */}
-                        <div className="note-export-menu-wrapper">
-                            {(() => {
-                                const isNoteEmpty = !title.trim() && !content.replace(/<[^>]*>/g, "").trim();
-                                return (
-                                    <>
-                                        <button
-                                            type="button"
-                                            className="note-editor-icon-btn"
-                                            disabled={isNoteEmpty}
-                                            onClick={() => {
-                                                if (isNoteEmpty) return;
-                                                setIsExportMenuOpen((prev) => !prev);
-                                            }}
-                                            title={isNoteEmpty ? "Cannot export an empty note" : "Export Note"}
-                                        >
-                                            <FileDown size={19} />
-                                        </button>
-                                        {isExportMenuOpen && !isNoteEmpty && (
-                                            <div className="note-export-dropdown-menu">
-                                                <span className="export-menu-title">Save / Export As</span>
-                                                <button
-                                                    type="button"
-                                                    className="export-menu-item-btn"
-                                                    onClick={() => handleExportAs("txt")}
-                                                >
-                                                    Text File (.txt)
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    className="export-menu-item-btn"
-                                                    onClick={() => handleExportAs("doc")}
-                                                >
-                                                    Word Document (.doc)
-                                                </button>
-                                            </div>
-                                        )}
-                                    </>
-                                );
-                            })()}
-                        </div>
-
                         {/* Prominent Save / Status Action Button */}
                         <button
                             type="button"

@@ -1,4 +1,5 @@
 import type { Dispatch, FormEvent, SetStateAction } from "react";
+import { createPortal } from "react-dom";
 import type { TaskPriority } from "../../types/dashboard.ts";
 
 const PRIORITIES: { value: TaskPriority; label: string }[] = [
@@ -26,7 +27,7 @@ export function TaskDialog({
     taskError: string;
     setIsTaskDialogOpen: Dispatch<SetStateAction<boolean>>;
 }) {
-    return (
+    return createPortal(
         <div
             className="task-dialog-backdrop"
             onClick={(event) => {
@@ -83,6 +84,7 @@ export function TaskDialog({
                 </form>
                 {taskError && <p className="task-error" role="alert">{taskError}</p>}
             </section>
-        </div>
+        </div>,
+        document.body
     );
 }

@@ -67,6 +67,10 @@ export async function apiFetch(
     headers.set("Content-Type", "application/json");
   }
 
+  if (!headers.has("ngrok-skip-browser-warning")) {
+    headers.set("ngrok-skip-browser-warning", "true");
+  }
+
   let response = await fetch(url, {
     ...init,
     headers,
