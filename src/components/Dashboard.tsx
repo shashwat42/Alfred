@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useAuth } from "../auth/authContext.ts";
 import type { DashboardView } from "../types/dashboard.ts";
+import type { NoteItem } from "../types/notes.ts";
 import { useTasks, ITEMS_PER_PAGE } from "../hooks/useTasks.ts";
 import { useSchedule } from "../hooks/useSchedule.ts";
 import { useNotes } from "../hooks/useNotes.ts";
@@ -17,6 +18,8 @@ import { ScheduleDialog } from "./dashboard/ScheduleDialog.tsx";
 import { FocusSession } from "./focus/FocusSession.tsx";
 import { useFocusSession, formatTimeMMSS } from "../hooks/useFocusSession.ts";
 
+const EMPTY_ARRAY: never[] = [];
+
 interface DashboardProps {
     currentView?: DashboardView;
     onViewChange?: (view: DashboardView) => void;
@@ -32,31 +35,6 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
     const [isExpanding, setIsExpanding] = useState(false);
     const focusSession = useFocusSession();
 
-    const handleOpenFocusSession = () => {
-        setIsAbsorbing(true);
-        setTimeout(() => {
-            setIsAbsorbing(false);
-            setIsFocusSessionOpen(true);
-        }, 340);
-    };
-
-    const handleReturnToDashboard = () => {
-        setIsFocusSessionOpen(false);
-        setIsExpanding(true);
-        setTimeout(() => {
-            setIsExpanding(false);
-        }, 380);
-    };
-
-    const handleViewChange = (view: DashboardView) => {
-        setActiveNote(null);
-        if (onViewChange) {
-            onViewChange(view);
-        } else {
-            setLocalView(view);
-        }
-    };
-
     // Keep 'now' updated regularly so current time and schedule filters advance in real-time
     const [now, setNow] = useState(() => new Date());
 
@@ -67,11 +45,23 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
         return () => clearInterval(timer);
     }, []);
 
-    const todayDateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+    const todayDateStr = useMemo(
+        () => `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`,
+        [now]
+    );
+    const currentMinutes = useMemo(
+        () => now.getHours() * 60 + now.getMinutes(),
+        [now]
+    );
 
-    const todayWeekdayLabel = now.toLocaleDateString("en-US", { weekday: "long" }).toUpperCase();
-    const todayMonthDayLabel = now.toLocaleDateString("en-US", { month: "short", day: "numeric" }).toUpperCase();
+    const todayWeekdayLabel = useMemo(
+        () => now.toLocaleDateString("en-US", { weekday: "long" }).toUpperCase(),
+        [now]
+    );
+    const todayMonthDayLabel = useMemo(
+        () => now.toLocaleDateString("en-US", { month: "short", day: "numeric" }).toUpperCase(),
+        [now]
+    );
 
     const {
         task,
@@ -127,16 +117,80 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
         openNote,
     } = useNotes(accountId);
 
-    const activeTodaySchedule = accountId ? todaySchedule : [];
-    const activeTimelineSchedule = accountId ? timelineSchedule : [];
-    // task is now typed as TaskItem[] — no string union
-    const activeTasks = accountId ? task : [];
+    const activeTodaySchedule = accountId ? todaySchedule : EMPTY_ARRAY;
+    const activeTimelineSchedule = accountId ? timelineSchedule : EMPTY_ARRAY;
+    const activeTasks = accountId ? task : EMPTY_ARRAY;
+    const activeRecentNotes = accountId ? recentNotes : EMPTY_ARRAY;
+    const activeNotes = accountId ? notes : EMPTY_ARRAY;
 
     const taskPageCount = Math.ceil(activeTasks.length / ITEMS_PER_PAGE);
-    const visibleTasks = activeTasks.slice(
-        taskPage * ITEMS_PER_PAGE,
-        (taskPage + 1) * ITEMS_PER_PAGE
+    const visibleTasks = useMemo(
+        () =>
+            activeTasks.slice(
+                taskPage * ITEMS_PER_PAGE,
+                (taskPage + 1) * ITEMS_PER_PAGE
+            ),
+        [activeTasks, taskPage]
     );
+
+    const handleOpenFocusSession = useCallback(() => {
+        setIsAbsorbing(true);
+        setTimeout(() => {
+            setIsAbsorbing(false);
+            setIsFocusSessionOpen(true);
+        }, 340);
+    }, []);
+
+    const handleReturnToDashboard = useCallback(() => {
+        setIsFocusSessionOpen(false);
+        setIsExpanding(true);
+        setTimeout(() => {
+            setIsExpanding(false);
+        }, 380);
+    }, []);
+
+    const handleViewChange = useCallback((view: DashboardView) => {
+        setActiveNote(null);
+        if (onViewChange) {
+            onViewChange(view);
+        } else {
+            setLocalView(view);
+        }
+    }, [onViewChange, setActiveNote]);
+
+    const handleOpenNoteFromUpcoming = useCallback((note: NoteItem) => {
+        void openNote(note);
+        if (onViewChange) {
+            onViewChange("notes");
+        } else {
+            setLocalView("notes");
+        }
+    }, [openNote, onViewChange]);
+
+    const handleSaveQuickNote = useCallback(async (text: string) => {
+        const quickNoteRegex = /^Quick Note(?:\s+(\d+))?$/i;
+        let maxNum = 0;
+        let hasBaseQuickNote = false;
+
+        for (const n of notes) {
+            const match = (n.title || "").trim().match(quickNoteRegex);
+            if (match) {
+                if (match[1]) {
+                    const num = parseInt(match[1], 10);
+                    if (!isNaN(num) && num > maxNum) maxNum = num;
+                } else {
+                    hasBaseQuickNote = true;
+                    if (maxNum < 1) maxNum = 1;
+                }
+            }
+        }
+
+        const defaultTitle = (!hasBaseQuickNote && maxNum === 0)
+            ? "Quick Note"
+            : `Quick Note ${Math.max(maxNum, 1) + 1}`;
+
+        await saveNote({ title: defaultTitle, content: text });
+    }, [notes, saveNote]);
 
 
     /** Close dialogs on escape key */
@@ -222,39 +276,9 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
                             scheduleItems={activeTodaySchedule}
                             priorityTasks={activeTasks}
                             currentMinutes={currentMinutes}
-                            recentNotes={accountId ? recentNotes : []}
-                            onOpenNote={(note) => {
-                                void openNote(note);
-                                if (onViewChange) {
-                                    onViewChange("notes");
-                                } else {
-                                    setLocalView("notes");
-                                }
-                            }}
-                            onSaveQuickNote={async (text) => {
-                                const quickNoteRegex = /^Quick Note(?:\s+(\d+))?$/i;
-                                let maxNum = 0;
-                                let hasBaseQuickNote = false;
-
-                                for (const n of notes) {
-                                    const match = (n.title || "").trim().match(quickNoteRegex);
-                                    if (match) {
-                                        if (match[1]) {
-                                            const num = parseInt(match[1], 10);
-                                            if (!isNaN(num) && num > maxNum) maxNum = num;
-                                        } else {
-                                            hasBaseQuickNote = true;
-                                            if (maxNum < 1) maxNum = 1;
-                                        }
-                                    }
-                                }
-
-                                const defaultTitle = (!hasBaseQuickNote && maxNum === 0)
-                                    ? "Quick Note"
-                                    : `Quick Note ${Math.max(maxNum, 1) + 1}`;
-
-                                await saveNote({ title: defaultTitle, content: text });
-                            }}
+                            recentNotes={activeRecentNotes}
+                            onOpenNote={handleOpenNoteFromUpcoming}
+                            onSaveQuickNote={handleSaveQuickNote}
                         />
                     )}
 
@@ -282,7 +306,7 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
 
                     {(activeView === "notes" || activeView === "mails") && (
                         <NotesView
-                            notes={accountId ? notes : []}
+                            notes={activeNotes}
                             activeNote={activeNote}
                             onSelectNote={(note) => {
                                 void openNote(note);

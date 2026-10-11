@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Chat from "./components/Chat";
 import Dashboard from "./components/Dashboard";
 import type { DashboardView } from "./types/dashboard.ts";
@@ -11,6 +11,36 @@ const App = () => {
   const { loading, error, retry } = useAuth();
   const [currentView, setCurrentView] = useState<DashboardView>("home");
   const [mobileTab, setMobileTab] = useState<MobileTab>("assistant");
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("alfred_sidebar_collapsed") === "true";
+    } catch {
+      return false;
+    }
+  });
+
+  const handleToggleSidebar = () => {
+    setIsSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("alfred_sidebar_collapsed", String(next));
+      } catch {
+        // ignore storage errors
+      }
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === "b" || e.key === "B")) {
+        e.preventDefault();
+        handleToggleSidebar();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   const handleGoHome = () => {
     setCurrentView("home");
@@ -19,7 +49,11 @@ const App = () => {
 
   return (
     <div className="App">
-      <Header onGoHome={handleGoHome} />
+      <Header
+        onGoHome={handleGoHome}
+        isSidebarCollapsed={isSidebarCollapsed}
+        onToggleSidebar={handleToggleSidebar}
+      />
 
       {/* Mobile view segmented switch bar (hidden on desktop via CSS) */}
       <nav className="mobile-view-nav" role="tablist" aria-label="Mobile navigation">
@@ -119,7 +153,7 @@ const App = () => {
           Initializing session...
         </div>
       ) : (
-        <main className={`Main mobile-tab-${mobileTab}`}>
+        <main className={`Main mobile-tab-${mobileTab} ${isSidebarCollapsed ? "sidebar-collapsed" : ""}`}>
           <Chat />
           <Dashboard currentView={currentView} onViewChange={setCurrentView} />
         </main>

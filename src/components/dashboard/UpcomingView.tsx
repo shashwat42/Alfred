@@ -1,7 +1,8 @@
-import { useState, type KeyboardEvent } from "react";
+import { useState, useMemo, memo, type KeyboardEvent } from "react";
+import { Clock } from "lucide-react";
 import type { ScheduleItem, TaskItem } from "../../types/dashboard.ts";
 import type { NoteItem } from "../../types/notes.ts";
-import { parseTimeToMinutes } from "../../utils/scheduleUtils.ts";
+import { getRelativeTimeBadge, parseTimeToMinutes } from "../../utils/scheduleUtils.ts";
 
 const PRIORITY_WEIGHT: Record<string, number> = {
     urgent: 4,
@@ -11,7 +12,7 @@ const PRIORITY_WEIGHT: Record<string, number> = {
     normal: 0,
 };
 
-export function UpcomingView({
+function UpcomingViewComponent({
     scheduleItems = [],
     priorityTasks = [],
     currentMinutes,
@@ -49,23 +50,27 @@ export function UpcomingView({
         }
     };
 
-    const displaySchedule = scheduleItems
-        .filter((item) => {
-            if (currentMinutes === undefined) return true;
-            return parseTimeToMinutes(item.time) >= currentMinutes;
-        })
-        .sort((a, b) => parseTimeToMinutes(a.time) - parseTimeToMinutes(b.time))
-        .slice(0, 5);
+    const displaySchedule = useMemo(() => {
+        return scheduleItems
+            .filter((item) => {
+                if (currentMinutes === undefined) return true;
+                return parseTimeToMinutes(item.time) >= currentMinutes;
+            })
+            .sort((a, b) => parseTimeToMinutes(a.time) - parseTimeToMinutes(b.time))
+            .slice(0, 5);
+    }, [scheduleItems, currentMinutes]);
 
     // Only show uncompleted tasks with priority higher than "normal", sorted by priority weight descending
-    const filteredPriorityTasks = priorityTasks
-        .filter((t) => !t.completed && t.priority && t.priority !== "normal")
-        .sort((a, b) => {
-            const weightA = PRIORITY_WEIGHT[a.priority || "normal"] || 0;
-            const weightB = PRIORITY_WEIGHT[b.priority || "normal"] || 0;
-            return weightB - weightA;
-        })
-        .slice(0, 5);
+    const filteredPriorityTasks = useMemo(() => {
+        return priorityTasks
+            .filter((t) => !t.completed && t.priority && t.priority !== "normal")
+            .sort((a, b) => {
+                const weightA = PRIORITY_WEIGHT[a.priority || "normal"] || 0;
+                const weightB = PRIORITY_WEIGHT[b.priority || "normal"] || 0;
+                return weightB - weightA;
+            })
+            .slice(0, 5);
+    }, [priorityTasks]);
 
     return (
         <div className="upcoming-view-container">
@@ -75,17 +80,38 @@ export function UpcomingView({
                     <h3 className="upcoming-col-header">Schedule</h3>
                     <div className="upcoming-col-list">
                         {displaySchedule.length > 0 ? (
-                            displaySchedule.map((item, index) => (
-                                <div
-                                    key={item._id || `${item.time}-${item.topic}-${index}`}
-                                    className="upcoming-schedule-row"
-                                >
-                                    <span className="upcoming-schedule-time">{item.time}</span>
-                                    <span className="upcoming-schedule-topic" title={item.topic}>
-                                        {item.topic}
-                                    </span>
-                                </div>
-                            ))
+                            displaySchedule.map((item, index) => {
+                                const isNextUp = index === 0;
+                                const relTime =
+                                    currentMinutes !== undefined
+                                        ? getRelativeTimeBadge(parseTimeToMinutes(item.time), currentMinutes)
+                                        : null;
+
+                                return (
+                                    <div
+                                        key={item._id || `${item.time}-${item.topic}-${index}`}
+                                        className={`upcoming-schedule-card ${isNextUp ? "is-next-up" : "is-compact"}`}
+                                    >
+                                        <div className="upcoming-schedule-card-left">
+                                            <span className={`upcoming-schedule-card-time ${isNextUp ? "is-next-up" : ""}`}>
+                                                <Clock size={isNextUp ? 12 : 11} className="upcoming-schedule-clock-icon" />
+                                                {item.time}
+                                            </span>
+                                            <span
+                                                className={`upcoming-schedule-card-topic ${isNextUp ? "is-next-up" : ""}`}
+                                                title={item.topic}
+                                            >
+                                                {item.topic}
+                                            </span>
+                                        </div>
+                                        {relTime && (
+                                            <span className={`upcoming-schedule-rel-badge ${isNextUp ? "is-next-up" : ""}`}>
+                                                {relTime}
+                                            </span>
+                                        )}
+                                    </div>
+                                );
+                            })
                         ) : (
                             <div className="upcoming-empty-hint">No upcoming events scheduled today</div>
                         )}
@@ -100,7 +126,7 @@ export function UpcomingView({
                             filteredPriorityTasks.map((t, index) => (
                                 <div
                                     key={t._id || `${t.task}-${index}`}
-                                    className="upcoming-task-row"
+                                    className="upcoming-task-card"
                                 >
                                     <span className="upcoming-task-text" title={t.task}>
                                         {t.task}
@@ -182,3 +208,6 @@ export function UpcomingView({
         </div>
     );
 }
+
+export const UpcomingView = memo(UpcomingViewComponent);
+

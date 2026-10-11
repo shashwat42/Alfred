@@ -181,7 +181,7 @@ export function useFocusSession() {
 
             const now = Date.now();
             const left = Math.max(0, Math.ceil((targetEndTimeRef.current - now) / 1000));
-            setRemainingSeconds(left);
+            setRemainingSeconds((prev) => (prev === left ? prev : left));
 
             if (left <= 0) {
                 const workTotal = getTotalWorkSeconds(workMinutes, workSeconds);
@@ -231,7 +231,7 @@ export function useFocusSession() {
             if (isRunning && targetEndTimeRef.current) {
                 const now = Date.now();
                 const left = Math.max(0, Math.ceil((targetEndTimeRef.current - now) / 1000));
-                setRemainingSeconds(left);
+                setRemainingSeconds((prev) => (prev === left ? prev : left));
             }
         }
 

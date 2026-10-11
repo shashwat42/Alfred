@@ -1,7 +1,7 @@
-import type { Dispatch, SetStateAction } from "react";
+import { memo, type Dispatch, type SetStateAction } from "react";
 import type { DashboardView, TaskItem } from "../../types/dashboard.ts";
 
-export function DashboardHeader({
+function DashboardHeaderComponent({
     activeView,
     handleViewChange,
     scheduleSelectedDate,
@@ -170,3 +170,6 @@ export function DashboardHeader({
         </div>
     );
 }
+
+export const DashboardHeader = memo(DashboardHeaderComponent);
+

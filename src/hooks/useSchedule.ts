@@ -3,6 +3,54 @@ import { apiFetch } from "../lib/api.ts";
 import type { ScheduleItem } from "../types/dashboard.ts";
 import { useState, useEffect, useRef } from "react";
 
+interface ScheduleCacheEntry {
+    promise?: Promise<ScheduleItem[]>;
+    data?: ScheduleItem[];
+    timestamp: number;
+}
+
+const scheduleRequestCache = new Map<string, ScheduleCacheEntry>();
+
+async function fetchSchedule(url: string, maxAgeMs = 2000): Promise<ScheduleItem[]> {
+    const cached = scheduleRequestCache.get(url);
+    if (cached) {
+        if (cached.promise) {
+            return cached.promise;
+        }
+        if (cached.data && Date.now() - cached.timestamp < maxAgeMs) {
+            return cached.data;
+        }
+    }
+
+    const promise = (async () => {
+        try {
+            const response = await apiFetch(url);
+            if (!response.ok) {
+                throw new Error(`Request failed: ${response.status}`);
+            }
+            const data: ScheduleItem[] = await response.json();
+            scheduleRequestCache.set(url, { data, timestamp: Date.now() });
+            return data;
+        } finally {
+            const entry = scheduleRequestCache.get(url);
+            if (entry && entry.promise) {
+                delete entry.promise;
+            }
+        }
+    })();
+
+    scheduleRequestCache.set(url, { promise, timestamp: Date.now() });
+    return promise;
+}
+
+function invalidateScheduleCache(date?: string) {
+    if (date) {
+        scheduleRequestCache.delete(`/api/schedule?date=${date}`);
+    } else {
+        scheduleRequestCache.clear();
+    }
+}
+
 /** Custom hook to manage all schedule-related state and handlers. */
 export function useSchedule(accountId: string | undefined, todayDateStr: string) {
     const [scheduleSelectedDate, setScheduleSelectedDate] = useState(() => new Date());
@@ -26,11 +74,7 @@ export function useSchedule(accountId: string | undefined, todayDateStr: string)
         let isMounted = true;
         async function loadTodaySchedule() {
             try {
-                const response = await apiFetch(`/api/schedule?date=${todayDateStr}`);
-                if (!response.ok) {
-                    throw new Error(`Request failed: ${response.status}`);
-                }
-                const data: ScheduleItem[] = await response.json();
+                const data = await fetchSchedule(`/api/schedule?date=${todayDateStr}`);
                 if (isMounted) {
                     setTodaySchedule(data);
                 }
@@ -49,11 +93,7 @@ export function useSchedule(accountId: string | undefined, todayDateStr: string)
         let isMounted = true;
         async function loadTimelineSchedule() {
             try {
-                const response = await apiFetch(`/api/schedule?date=${scheduleDate}`);
-                if (!response.ok) {
-                    throw new Error(`Request failed: ${response.status}`);
-                }
-                const data: ScheduleItem[] = await response.json();
+                const data = await fetchSchedule(`/api/schedule?date=${scheduleDate}`);
                 if (isMounted) {
                     setTimelineSchedule(data);
                 }
@@ -85,6 +125,8 @@ export function useSchedule(accountId: string | undefined, todayDateStr: string)
             }
 
             const data: { schedule: ScheduleItem } = await response.json();
+            invalidateScheduleCache(newScheduleDate);
+            invalidateScheduleCache(todayDateStr);
             if (data.schedule.date === todayDateStr) {
                 setTodaySchedule((curr) =>
                     [...curr, data.schedule].sort((a, b) => a.time.localeCompare(b.time))
@@ -108,6 +150,8 @@ export function useSchedule(accountId: string | undefined, todayDateStr: string)
         try {
             const response = await apiFetch(`/api/schedule/${id}`, { method: "DELETE" });
             if (response.ok) {
+                invalidateScheduleCache(scheduleDate);
+                invalidateScheduleCache(todayDateStr);
                 setTodaySchedule((prev) => prev.filter((item) => item._id !== id));
                 setTimelineSchedule((prev) => prev.filter((item) => item._id !== id));
             }

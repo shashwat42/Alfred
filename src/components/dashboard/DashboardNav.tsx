@@ -1,6 +1,7 @@
+import { memo } from "react";
 import type { DashboardView } from "../../types/dashboard.ts";
 
-export function DashboardNav({
+function DashboardNavComponent({
     activeView,
     handleViewChange,
 }: {
@@ -18,6 +19,7 @@ export function DashboardNav({
                 className={`nav-strip-btn ${isScheduleActive ? "active" : ""}`}
                 onClick={() => handleViewChange(isScheduleActive ? "home" : "schedule")}
                 aria-label="Schedule"
+                aria-current={isScheduleActive ? "page" : undefined}
                 title="Schedule"
             >
                 <div className="nav-strip-icon-box">
@@ -58,6 +60,7 @@ export function DashboardNav({
                 className={`nav-strip-btn ${isNotesActive ? "active" : ""}`}
                 onClick={() => handleViewChange(isNotesActive ? "home" : "notes")}
                 aria-label="Notes"
+                aria-current={isNotesActive ? "page" : undefined}
                 title="Notes"
             >
                 <div className="nav-strip-icon-box">
@@ -102,6 +105,7 @@ export function DashboardNav({
                 className={`nav-strip-btn ${isTasksActive ? "active" : ""}`}
                 onClick={() => handleViewChange(isTasksActive ? "home" : "tasks")}
                 aria-label="Tasks"
+                aria-current={isTasksActive ? "page" : undefined}
                 title="Tasks"
             >
                 <div className="nav-strip-icon-box">
@@ -125,3 +129,6 @@ export function DashboardNav({
         </nav>
     );
 }
+
+export const DashboardNav = memo(DashboardNavComponent);
+
