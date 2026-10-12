@@ -70,6 +70,20 @@ const authLimitMax = parsePositiveIntEnv("RATE_LIMIT_AUTH_MAX", 30);
 const apiLimitWindowMs = parsePositiveIntEnv("RATE_LIMIT_API_WINDOW_MS", 60000);
 const apiLimitMax = parsePositiveIntEnv("RATE_LIMIT_API_MAX", 120);
 
+const aiLimitWindowMs = parsePositiveIntEnv("RATE_LIMIT_AI_WINDOW_MS", 60000);
+const aiLimitMax = parsePositiveIntEnv("RATE_LIMIT_AI_MAX", 20);
+
+const llmBaseUrl = getOptionalEnv(
+    "LLM_BASE_URL",
+    "https://generativelanguage.googleapis.com/v1beta/openai/"
+);
+const rawLlmApiKey = process.env.LLM_API_KEY;
+const llmApiKey = rawLlmApiKey ? rawLlmApiKey.trim() : "";
+const llmModel = getOptionalEnv("LLM_MODEL", "gemini-3.5-flash");
+const llmSiteUrl = getOptionalEnv("LLM_SITE_URL", frontendUrl);
+const llmSiteName = getOptionalEnv("LLM_SITE_NAME", "Alfred");
+const llmMaxOutputTokens = parsePositiveIntEnv("LLM_MAX_OUTPUT_TOKENS", 1024);
+const llmTimeoutMs = parsePositiveIntEnv("LLM_TIMEOUT_MS", 30000);
 
 export const env = {
     port,
@@ -88,6 +102,19 @@ export const env = {
             windowMs: apiLimitWindowMs,
             max: apiLimitMax,
         },
+        ai: {
+            windowMs: aiLimitWindowMs,
+            max: aiLimitMax,
+        },
+    },
+    llm: {
+        baseUrl: llmBaseUrl,
+        apiKey: llmApiKey,
+        model: llmModel,
+        siteUrl: llmSiteUrl,
+        siteName: llmSiteName,
+        maxOutputTokens: llmMaxOutputTokens,
+        timeoutMs: llmTimeoutMs,
     },
     google: {
         clientId: getRequiredEnv("GOOGLE_CLIENT_ID"),

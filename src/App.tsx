@@ -31,6 +31,20 @@ const App = () => {
     });
   };
 
+  const [chatResetSignal, setChatResetSignal] = useState(0);
+
+  const handleNewChat = () => {
+    setChatResetSignal((prev) => prev + 1);
+    if (isSidebarCollapsed) {
+      setIsSidebarCollapsed(false);
+      try {
+        localStorage.setItem("alfred_sidebar_collapsed", "false");
+      } catch {
+        // ignore storage errors
+      }
+    }
+  };
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && (e.key === "b" || e.key === "B")) {
@@ -49,10 +63,44 @@ const App = () => {
 
   const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
 
+  const isInteractiveOrScrollable = (target: HTMLElement | null): boolean => {
+    if (!target) return false;
+    if (
+      target.closest(
+        "input, textarea, select, button, [role='button'], [role='slider'], [role='dialog'], dialog, .dialog-backdrop, .chat-composer-box, .chat-prompt-input-wrapper, .timeline-event-chip"
+      )
+    ) {
+      return true;
+    }
+
+    let el: HTMLElement | null = target;
+    while (el && el !== document.body && el !== document.documentElement) {
+      if (el.classList.contains("Main") || el.classList.contains("App")) {
+        break;
+      }
+      try {
+        const style = window.getComputedStyle(el);
+        const overflowX = style.overflowX;
+        const isScrollableX = (overflowX === "auto" || overflowX === "scroll") && el.scrollWidth > el.clientWidth + 4;
+        if (isScrollableX) {
+          return true;
+        }
+      } catch {
+        // Fallback for detached nodes
+      }
+      el = el.parentElement;
+    }
+    return false;
+  };
+
   const handleTouchStart = (e: React.TouchEvent) => {
-    if (e.touches.length !== 1) return;
+    if (e.touches.length !== 1) {
+      touchStartRef.current = null;
+      return;
+    }
     const target = e.target as HTMLElement | null;
-    if (target && target.closest("input, textarea, select, button, [role='slider'], .timeline-event-chip, dialog, .dialog-backdrop")) {
+    if (isInteractiveOrScrollable(target)) {
+      touchStartRef.current = null;
       return;
     }
     const touch = e.touches[0];
@@ -72,12 +120,16 @@ const App = () => {
 
     const minDistance = 50;
     if (elapsed < 500 && Math.abs(deltaX) >= minDistance && Math.abs(deltaX) > Math.abs(deltaY) * 1.5) {
-      if (deltaX < 0 && mobileTab === "assistant") {
+      if (mobileTab === "assistant") {
         setMobileTab("dashboard");
-      } else if (deltaX > 0 && mobileTab === "dashboard") {
+      } else if (mobileTab === "dashboard") {
         setMobileTab("assistant");
       }
     }
+  };
+
+  const handleTouchCancel = () => {
+    touchStartRef.current = null;
   };
 
   return (
@@ -85,12 +137,9 @@ const App = () => {
       className="App"
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchCancel}
     >
-      <Header
-        onGoHome={handleGoHome}
-        isSidebarCollapsed={isSidebarCollapsed}
-        onToggleSidebar={handleToggleSidebar}
-      />
+      <Header onGoHome={handleGoHome} />
 
       {/* Mobile view segmented switch bar (hidden on desktop via CSS) */}
       <nav className="mobile-view-nav" role="tablist" aria-label="Mobile navigation">
@@ -191,7 +240,12 @@ const App = () => {
         </div>
       ) : (
         <main className={`Main mobile-tab-${mobileTab} ${isSidebarCollapsed ? "sidebar-collapsed" : ""}`}>
-          <Chat />
+          <Chat
+            key={chatResetSignal}
+            isCollapsed={isSidebarCollapsed}
+            onToggleCollapse={handleToggleSidebar}
+            onNewChat={handleNewChat}
+          />
           <Dashboard currentView={currentView} onViewChange={setCurrentView} />
         </main>
       )}

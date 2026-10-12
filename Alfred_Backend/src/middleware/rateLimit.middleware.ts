@@ -10,6 +10,7 @@ import { env } from "../config/env.ts";
 export const guestStore = new MemoryStore();
 export const authStore = new MemoryStore();
 export const apiStore = new MemoryStore();
+export const aiStore = new MemoryStore();
 
 function createRateLimitHandler(message: string) {
     return (_req: Request, res: Response): void => {
@@ -65,10 +66,30 @@ export const apiRateLimiter = rateLimit({
 });
 
 /**
+ * Rate limiter for AI chat completions (/api/ai/chat).
+ * Protects upstream LLM provider quota and prevents resource exhaustion.
+ *
+ * NOTE / PRODUCTION LIMITATION:
+ * This limiter uses an in-memory MemoryStore. Memory stores reset whenever the server process
+ * restarts and are NOT synchronized across multi-instance clusters or load balancers. For
+ * production multi-instance deployments, replace this with a distributed backing store (e.g. Redis).
+ */
+export const aiRateLimiter = rateLimit({
+    windowMs: env.rateLimit.ai.windowMs,
+    limit: env.rateLimit.ai.max,
+    standardHeaders: "draft-7",
+    legacyHeaders: false,
+    store: aiStore,
+    handler: createRateLimitHandler("Too many AI requests. Please slow down and try again later."),
+});
+
+/**
  * Utility function for test isolation and suite teardown.
  */
 export function resetRateLimitStores(): void {
     guestStore.resetAll?.();
     authStore.resetAll?.();
     apiStore.resetAll?.();
+    aiStore.resetAll?.();
 }
+

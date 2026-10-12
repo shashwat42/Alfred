@@ -1,18 +1,13 @@
 import Logo from "../assets/Alfred_Logo.svg";
 import { isTauri } from "../auth/auth.ts";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 
 interface HeaderProps {
   onGoHome?: () => void;
-  isSidebarCollapsed?: boolean;
-  onToggleSidebar?: () => void;
 }
 
 export default function Header({
   onGoHome,
-  isSidebarCollapsed = false,
-  onToggleSidebar,
 }: HeaderProps) {
   const inTauri = isTauri();
 
@@ -42,36 +37,12 @@ export default function Header({
 
   return (
     <header className="Header" data-tauri-drag-region>
-      {onToggleSidebar && (
-        <div className="header-sidebar-toggle-container" data-tauri-drag-region="false">
-          <button
-            type="button"
-            className="header-sidebar-toggle-btn"
-            onClick={onToggleSidebar}
-            aria-label={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-            title={isSidebarCollapsed ? "Expand sidebar (Ctrl+B)" : "Collapse sidebar (Ctrl+B)"}
-            data-tauri-drag-region="false"
-          >
-            {isSidebarCollapsed ? (
-              <PanelLeftOpen size={16} aria-hidden="true" />
-            ) : (
-              <PanelLeftClose size={16} aria-hidden="true" />
-            )}
-          </button>
-        </div>
-      )}
 
       <div
         className="HeaderBrand"
         onClick={onGoHome}
-        onKeyDown={(e) => {
-          if (onGoHome && (e.key === "Enter" || e.key === " ")) {
-            e.preventDefault();
-            onGoHome();
-          }
-        }}
         role={onGoHome ? "button" : undefined}
-        tabIndex={onGoHome ? 0 : undefined}
+        tabIndex={-1}
         style={{ cursor: onGoHome ? "pointer" : "default" }}
       >
         <img src={Logo} alt="Alfred Logo" />

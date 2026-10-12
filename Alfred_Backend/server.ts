@@ -4,6 +4,7 @@ import authRouter from "./src/modules/auth/auth.routes.ts";
 import scheduleRouter from "./src/modules/schedule/route.ts";
 import taskRouter from "./src/modules/tasks/route.ts";
 import notesRouter from "./src/modules/notes/route.ts";
+import aiRouter from "./src/modules/ai/route.ts";
 import { connectDatabase } from "./src/config/database.ts";
 import { env } from "./src/config/env.ts";
 import { apiRateLimiter } from "./src/middleware/rateLimit.middleware.ts";
@@ -18,6 +19,7 @@ app.use("/api", apiRateLimiter);
 app.use("/api/schedule", scheduleRouter);
 app.use("/api/tasks", taskRouter);
 app.use("/api/notes", notesRouter);
+app.use("/api/ai", aiRouter);
 
 
 app.get("/health", (_req, res) => {
