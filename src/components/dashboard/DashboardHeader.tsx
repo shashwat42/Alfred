@@ -1,4 +1,5 @@
 import { memo, type Dispatch, type SetStateAction } from "react";
+import { Settings } from "lucide-react";
 import type { DashboardView, TaskItem } from "../../types/dashboard.ts";
 
 function DashboardHeaderComponent({
@@ -41,7 +42,7 @@ function DashboardHeaderComponent({
     isTaskDialogOpen: boolean;
 }) {
     return (
-        <div className="dashboard-content-header">
+        <div className={`dashboard-content-header ${activeView === "schedule" ? "is-schedule-header" : ""}`}>
             <div className="content-header-title-row">
                 {activeView !== "home" && (
                     <button
@@ -58,7 +59,19 @@ function DashboardHeaderComponent({
                     {activeView === "schedule" && "SCHEDULE"}
                     {(activeView === "tasks" || activeView === "todo") && "TASKS"}
                     {(activeView === "notes" || activeView === "mails") && "NOTES"}
+                    {activeView === "settings" && "SETTINGS"}
                 </h2>
+                {activeView === "home" && (
+                    <button
+                        type="button"
+                        className="dashboard-settings-btn"
+                        onClick={() => handleViewChange("settings")}
+                        aria-label="Settings"
+                        title="Open Settings"
+                    >
+                        <Settings size={18} />
+                    </button>
+                )}
             </div>
 
             {activeView === "schedule" && (

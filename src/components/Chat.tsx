@@ -13,11 +13,23 @@ import { audioRecorder } from "../lib/audioRecorder.ts";
 import { speechManager } from "../lib/speechManager.ts";
 import { AudioRecorderError, type VoiceModeState } from "../types/audio.ts";
 
-interface ChatProps {
+export interface VoiceHeaderState {
+  voiceModeState: VoiceModeState;
+  modelLoadingText: string;
+  voiceModeError: string | null;
+  voiceModeAudioLevel: number;
+  isVoiceMuted: boolean;
+  isAnimatingIn?: boolean;
+  isLogoCentered: boolean;
+  onRetry: () => void;
+}
+
+export interface ChatProps {
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
   onNewChat?: () => void;
   isActiveView?: boolean;
+  onVoiceStateChange?: (state: VoiceHeaderState) => void;
 }
 
 function VoiceSpinner({ size = 15 }: { size?: number }) {
@@ -39,7 +51,7 @@ function VoiceSpinner({ size = 15 }: { size?: number }) {
   );
 }
 
-function VoiceModeHeaderIndicator({
+export function VoiceModeHeaderIndicator({
   voiceModeState,
   modelLoadingText,
   voiceModeError,
@@ -198,6 +210,7 @@ export default function Chat({
   onToggleCollapse,
   onNewChat,
   isActiveView = true,
+  onVoiceStateChange,
 }: ChatProps) {
   const { session, loginWithGoogle, logout } = useAuth();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -669,6 +682,41 @@ export default function Chat({
     }
   };
 
+  const handleRetryVoiceMode = useCallback(() => {
+    setVoiceModeError(null);
+    voiceModeActiveRef.current = true;
+    const newSessionId = ++voiceSessionIdRef.current;
+    setVoiceModeState("starting");
+    void runVoiceModeLoop(newSessionId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (onVoiceStateChange) {
+      onVoiceStateChange({
+        voiceModeState,
+        modelLoadingText,
+        voiceModeError,
+        voiceModeAudioLevel,
+        isVoiceMuted,
+        isAnimatingIn: isLogoAnimatingToHeader,
+        isLogoCentered,
+        onRetry: handleRetryVoiceMode,
+      });
+    }
+  }, [
+    voiceModeState,
+    modelLoadingText,
+    voiceModeError,
+    voiceModeAudioLevel,
+    isVoiceMuted,
+    isLogoAnimatingToHeader,
+    isLogoCentered,
+    handleRetryVoiceMode,
+    handleToggleVoiceMode,
+    onVoiceStateChange,
+  ]);
+
   const handleRetry = () => {
     if (!failedPrompt || isLoading) return;
     void handleSendMessageRef.current(failedPrompt);
@@ -796,13 +844,7 @@ export default function Chat({
               voiceModeAudioLevel={voiceModeAudioLevel}
               isMuted={isVoiceMuted}
               isAnimatingIn={isLogoAnimatingToHeader}
-              onRetry={() => {
-                setVoiceModeError(null);
-                voiceModeActiveRef.current = true;
-                const newSessionId = ++voiceSessionIdRef.current;
-                setVoiceModeState("starting");
-                void runVoiceModeLoop(newSessionId);
-              }}
+              onRetry={handleRetryVoiceMode}
             />
           ) : (
             <div className="chat-brand-normal-wrap">
@@ -827,13 +869,7 @@ export default function Chat({
               voiceModeAudioLevel={voiceModeAudioLevel}
               isMuted={isVoiceMuted}
               isAnimatingToHeader={isLogoAnimatingToHeader}
-              onRetry={() => {
-                setVoiceModeError(null);
-                voiceModeActiveRef.current = true;
-                const newSessionId = ++voiceSessionIdRef.current;
-                setVoiceModeState("starting");
-                void runVoiceModeLoop(newSessionId);
-              }}
+              onRetry={handleRetryVoiceMode}
             />
             <div className="chat-active-composer" style={{ marginTop: "auto", width: "100%" }}>
               <div className="chat-composer-voice-row">

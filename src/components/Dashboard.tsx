@@ -12,6 +12,7 @@ import { UpcomingView } from "./dashboard/UpcomingView.tsx";
 import { ScheduleTimelineView } from "./dashboard/ScheduleTimelineView.tsx";
 import { TodoView } from "./dashboard/TodoView.tsx";
 import { NotesView } from "./dashboard/NotesView.tsx";
+import { SettingsView } from "./dashboard/SettingsView.tsx";
 import { CalendarDialog } from "./dashboard/CalendarDialog.tsx";
 import { TaskDialog } from "./dashboard/TaskDialog.tsx";
 import { ScheduleDialog } from "./dashboard/ScheduleDialog.tsx";
@@ -248,7 +249,7 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
                         </button>
                     </div>
 
-                    <div className={`dashboard-main-card ${isAbsorbing ? "is-absorbing" : isExpanding ? "is-expanding" : ""}`}>
+                    <div className={`dashboard-main-card is-view-${activeView} ${isAbsorbing ? "is-absorbing" : isExpanding ? "is-expanding" : ""}`}>
                 <div className="dashboard-content-area">
                     <DashboardHeader
                         activeView={activeView}
@@ -316,6 +317,8 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
                             onBackToList={() => setActiveNote(null)}
                         />
                     )}
+
+                    {activeView === "settings" && <SettingsView />}
                 </div>
 
                 <div className="dashboard-nav-divider" aria-hidden="true" />

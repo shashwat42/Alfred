@@ -1,24 +1,32 @@
 import { useState, useEffect, useRef } from "react";
-import Chat from "./components/Chat";
+import Chat, { VoiceModeHeaderIndicator, type VoiceHeaderState } from "./components/Chat";
 import Dashboard from "./components/Dashboard";
 import type { DashboardView } from "./types/dashboard.ts";
 import Header from "./components/Header";
+import { MobileBottomNav, type MobileNavDestination } from "./components/MobileBottomNav";
 import { useAuth } from "./auth/authContext.ts";
 import { audioRecorder } from "./lib/audioRecorder";
+import Logo from "./assets/Alfred_Logo.svg";
 
 type MobileTab = "assistant" | "dashboard";
+const mobileNavOrder = ["assistant", "dashboard", "schedule", "tasks", "notes"] as const;
+type SwipeDestination = (typeof mobileNavOrder)[number];
 
 const App = () => {
+  const isAndroidDevice = typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent);
   const { loading, error, retry } = useAuth();
   const [currentView, setCurrentView] = useState<DashboardView>("home");
   const [mobileTab, setMobileTab] = useState<MobileTab>("assistant");
+  const [voiceHeaderState, setVoiceHeaderState] = useState<VoiceHeaderState | null>(null);
+  const [swipeDirection, setSwipeDirection] = useState<"next" | "previous" | null>(null);
+  const swipeAnimationTimerRef = useRef<number | null>(null);
 
-  // Release microphone if user navigates away from assistant tab on mobile
+  // Release microphone if user navigates away from assistant tab on mobile, but preserve active voice mode
   useEffect(() => {
-    if (mobileTab === "dashboard") {
+    if (mobileTab === "dashboard" && (!voiceHeaderState || voiceHeaderState.voiceModeState === "off")) {
       audioRecorder.cancel();
     }
-  }, [mobileTab]);
+  }, [mobileTab, voiceHeaderState]);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
     try {
       return localStorage.getItem("alfred_sidebar_collapsed") === "true";
@@ -69,7 +77,22 @@ const App = () => {
     setMobileTab("dashboard");
   };
 
+  const handleMobileNavigate = (destination: MobileNavDestination) => {
+    if (destination === "assistant") {
+      setMobileTab("assistant");
+    } else {
+      setMobileTab("dashboard");
+      setCurrentView(destination === "dashboard" ? "home" : destination);
+    }
+  };
+
   const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
+
+  useEffect(() => () => {
+    if (swipeAnimationTimerRef.current !== null) {
+      window.clearTimeout(swipeAnimationTimerRef.current);
+    }
+  }, []);
 
   const isInteractiveOrScrollable = (target: HTMLElement | null): boolean => {
     if (!target) return false;
@@ -128,10 +151,30 @@ const App = () => {
 
     const minDistance = 50;
     if (elapsed < 500 && Math.abs(deltaX) >= minDistance && Math.abs(deltaX) > Math.abs(deltaY) * 1.5) {
-      if (mobileTab === "assistant") {
-        setMobileTab("dashboard");
-      } else if (mobileTab === "dashboard") {
-        setMobileTab("assistant");
+      const activeDestination: SwipeDestination = mobileTab === "assistant"
+        ? "assistant"
+        : currentView === "home" || currentView === "settings"
+        ? "dashboard"
+        : currentView === "schedule"
+        ? "schedule"
+        : currentView === "tasks" || currentView === "todo"
+        ? "tasks"
+        : "notes";
+      const currentIndex = mobileNavOrder.indexOf(activeDestination);
+      const nextIndex = Math.max(0, Math.min(mobileNavOrder.length - 1, currentIndex + (deltaX < 0 ? 1 : -1)));
+      const nextDestination = mobileNavOrder[nextIndex];
+
+      if (nextDestination !== activeDestination) {
+        const direction = deltaX < 0 ? "next" : "previous";
+        setSwipeDirection(direction);
+        if (swipeAnimationTimerRef.current !== null) {
+          window.clearTimeout(swipeAnimationTimerRef.current);
+        }
+        swipeAnimationTimerRef.current = window.setTimeout(() => {
+          setSwipeDirection(null);
+          swipeAnimationTimerRef.current = null;
+        }, 360);
+        handleMobileNavigate(nextDestination);
       }
     }
   };
@@ -142,66 +185,32 @@ const App = () => {
 
   return (
     <div
-      className="App"
+      className={`App ${isAndroidDevice ? "is-android" : ""}`}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
       onTouchCancel={handleTouchCancel}
     >
       <Header onGoHome={handleGoHome} />
 
-      {/* Mobile view segmented switch bar (hidden on desktop via CSS) */}
-      <nav className="mobile-view-nav" role="tablist" aria-label="Mobile navigation">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={mobileTab === "assistant"}
-          className={`mobile-view-tab ${mobileTab === "assistant" ? "active" : ""}`}
-          onClick={() => setMobileTab("assistant")}
-        >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
-            <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-            <line x1="12" x2="12" y1="19" y2="22" />
-          </svg>
-          <span>Assistant</span>
-        </button>
-
-        <button
-          type="button"
-          role="tab"
-          aria-selected={mobileTab === "dashboard"}
-          className={`mobile-view-tab ${mobileTab === "dashboard" ? "active" : ""}`}
-          onClick={() => setMobileTab("dashboard")}
-        >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <rect width="18" height="18" x="3" y="4" rx="2" ry="2" />
-            <line x1="16" y1="2" x2="16" y2="6" />
-            <line x1="8" y1="2" x2="8" y2="6" />
-            <line x1="3" y1="10" x2="21" y2="10" />
-          </svg>
-          <span>Dashboard</span>
-        </button>
-      </nav>
+      {/* Top Black Header with Alfred Branding (Android/Mobile only, consistent across all 6 destinations) */}
+      <header className="mobile-top-header" role="banner">
+        {voiceHeaderState && voiceHeaderState.voiceModeState !== "off" && !voiceHeaderState.isLogoCentered ? (
+          <VoiceModeHeaderIndicator
+            voiceModeState={voiceHeaderState.voiceModeState}
+            modelLoadingText={voiceHeaderState.modelLoadingText}
+            voiceModeError={voiceHeaderState.voiceModeError}
+            voiceModeAudioLevel={voiceHeaderState.voiceModeAudioLevel}
+            isMuted={voiceHeaderState.isVoiceMuted}
+            isAnimatingIn={voiceHeaderState.isAnimatingIn}
+            onRetry={voiceHeaderState.onRetry}
+          />
+        ) : (
+          <div className="mobile-top-header-brand" onClick={handleGoHome} role="button" tabIndex={0}>
+            <img src={Logo} alt="Alfred Logo" className="mobile-top-logo" />
+            <span className="mobile-top-title">ALFRED</span>
+          </div>
+        )}
+      </header>
 
       {error && (
         <div
@@ -247,16 +256,35 @@ const App = () => {
           Initializing session...
         </div>
       ) : (
-        <main className={`Main mobile-tab-${mobileTab} ${isSidebarCollapsed ? "sidebar-collapsed" : ""}`}>
-          <Chat
-            key={chatResetSignal}
-            isCollapsed={isSidebarCollapsed}
-            onToggleCollapse={handleToggleSidebar}
-            onNewChat={handleNewChat}
-            isActiveView={mobileTab === "assistant"}
+        <>
+          <main className={`Main mobile-tab-${mobileTab} ${swipeDirection ? `mobile-swipe-${swipeDirection}` : ""} ${isSidebarCollapsed ? "sidebar-collapsed" : ""}`}>
+            <Chat
+              key={chatResetSignal}
+              isCollapsed={isSidebarCollapsed}
+              onToggleCollapse={handleToggleSidebar}
+              onNewChat={handleNewChat}
+              isActiveView={mobileTab === "assistant"}
+              onVoiceStateChange={setVoiceHeaderState}
+            />
+            <Dashboard currentView={currentView} onViewChange={setCurrentView} />
+          </main>
+          <MobileBottomNav
+            activeDestination={
+              mobileTab === "assistant"
+                ? "assistant"
+                : currentView === "home"
+                ? "dashboard"
+                : currentView === "schedule"
+                ? "schedule"
+                : currentView === "tasks" || currentView === "todo"
+                ? "tasks"
+                : currentView === "notes" || currentView === "mails"
+                ? "notes"
+                : "other"
+            }
+            onNavigate={handleMobileNavigate}
           />
-          <Dashboard currentView={currentView} onViewChange={setCurrentView} />
-        </main>
+        </>
       )}
     </div>
   );

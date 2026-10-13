@@ -5,6 +5,7 @@ import scheduleRouter from "./src/modules/schedule/route.ts";
 import taskRouter from "./src/modules/tasks/route.ts";
 import notesRouter from "./src/modules/notes/route.ts";
 import aiRouter from "./src/modules/ai/route.ts";
+import { initializeAiService } from "./src/modules/ai/service.ts";
 import { connectDatabase } from "./src/config/database.ts";
 import { env } from "./src/config/env.ts";
 import { apiRateLimiter } from "./src/middleware/rateLimit.middleware.ts";
@@ -29,6 +30,7 @@ app.get("/health", (_req, res) => {
 async function startServer(): Promise<void> {
     try {
         await connectDatabase();
+        void initializeAiService();
         app.listen(env.port, () => {
             console.log(`Server listening on port ${env.port}`);
         });

@@ -79,11 +79,18 @@ const llmBaseUrl = getOptionalEnv(
 );
 const rawLlmApiKey = process.env.LLM_API_KEY;
 const llmApiKey = rawLlmApiKey ? rawLlmApiKey.trim() : "";
-const llmModel = getOptionalEnv("LLM_MODEL", "gemini-3.5-flash-lite");
+const llmModel = getOptionalEnv("LLM_MODEL", "gemini-3.1-flash-lite");
+const rawFallbackModels = process.env.LLM_FALLBACK_MODELS;
+const fallbackModels = rawFallbackModels
+    ? rawFallbackModels
+          .split(",")
+          .map((m) => m.trim())
+          .filter((m) => m.length > 0 && m !== llmModel)
+    : ["gemini-3.8-flash", "gemini-3.5-flash-lite"];
 const llmSiteUrl = getOptionalEnv("LLM_SITE_URL", frontendUrl);
 const llmSiteName = getOptionalEnv("LLM_SITE_NAME", "Alfred");
 const llmMaxOutputTokens = parsePositiveIntEnv("LLM_MAX_OUTPUT_TOKENS", 1024);
-const llmTimeoutMs = parsePositiveIntEnv("LLM_TIMEOUT_MS", 30000);
+const llmTimeoutMs = parsePositiveIntEnv("LLM_TIMEOUT_MS", 60000);
 
 export const env = {
     port,
@@ -111,6 +118,7 @@ export const env = {
         baseUrl: llmBaseUrl,
         apiKey: llmApiKey,
         model: llmModel,
+        fallbackModels,
         siteUrl: llmSiteUrl,
         siteName: llmSiteName,
         maxOutputTokens: llmMaxOutputTokens,

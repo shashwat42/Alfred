@@ -63,9 +63,11 @@ body {
     flex-direction: column;
 }
 
-/* Mobile Segmented View Switcher (Desktop hidden) */
-.mobile-view-nav {
-    display: none;
+/* Mobile Navigation Bars & Headers (Desktop hidden) */
+.mobile-view-nav,
+.mobile-bottom-nav,
+.mobile-top-header {
+    display: none !important;
 }
 
 .Header {
@@ -1564,13 +1566,14 @@ body {
 /* 3-Element Bottom Voice Controls Row reusing red-bordered input */
 .chat-composer-voice-row {
     display: flex;
-    align-items: flex-end;
+    align-items: center;
     justify-content: space-between;
     gap: 8px;
     width: 100%;
     max-width: 100%;
     box-sizing: border-box;
     padding: 0 2px;
+    min-height: 44px;
 }
 
 .chat-composer-voice-row .chat-prompt-input-wrapper {
@@ -2766,6 +2769,38 @@ body {
     overflow: hidden;
 }
 
+/* Dashboard Home View: Remove large outer card background and border while preserving desktop 2-panel & dock layout */
+.dashboard-main-card.is-view-home {
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    padding: 0 var(--spacing-container) 0 0;
+}
+
+/* Dashboard Settings shortcut - mobile only */
+.dashboard-settings-btn {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #a1a1aa;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    margin-left: auto;
+}
+
+.dashboard-settings-btn:hover,
+.dashboard-settings-btn:active {
+    background: rgba(255, 255, 255, 0.12);
+    color: #ffffff;
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
 .dashboard-content-area {
     display: flex;
     flex-direction: column;
@@ -3942,6 +3977,8 @@ body {
     padding: 2px 6px;
     border-radius: 6px;
     transition: all 0.2s ease;
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .timeline-date-picker-trigger:hover {
@@ -4031,7 +4068,7 @@ body {
     right: 0;
     height: 2px;
     background: #ef4444;
-    z-index: 10;
+    z-index: 1;
     pointer-events: none;
 }
 
@@ -4053,6 +4090,8 @@ body {
 }
 
 .timeline-event-chip {
+    position: relative;
+    z-index: 2;
     display: flex;
     align-items: center;
     gap: 8px;
@@ -4119,6 +4158,8 @@ body {
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .section-clear-btn:hover {
@@ -4945,60 +4986,167 @@ body {
         display: none !important;
     }
 
-    /* Mobile view segmented switch bar - increased size for touch */
-    .mobile-view-nav {
+    /* Mobile Top Black Header with Alfred Branding (Android/Mobile only, consistent across all 6 screens) */
+    .mobile-top-header {
+        display: flex !important;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        height: calc(58px + max(18px, env(safe-area-inset-top, 28px)));
+        min-height: calc(58px + max(18px, env(safe-area-inset-top, 28px)));
+        padding-top: max(18px, env(safe-area-inset-top, 28px));
+        padding-bottom: 8px;
+        padding-left: 16px;
+        padding-right: 16px;
+        background: #0d0c0c;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        box-sizing: border-box;
+        flex: 0 0 auto;
+        z-index: 50;
+        user-select: none;
+    }
+
+    .mobile-top-header-brand {
         display: flex;
         align-items: center;
         justify-content: center;
         gap: 12px;
-        padding: 10px 18px;
-        padding-top: max(12px, env(safe-area-inset-top, 28px));
-        padding-left: max(18px, env(safe-area-inset-left));
-        padding-right: max(18px, env(safe-area-inset-right));
-        background: #141212;
-        border-bottom: 1px solid #222020;
-        position: sticky;
-        top: 0;
-        z-index: 15;
-        box-sizing: border-box;
-        flex-shrink: 0;
-    }
-
-    .mobile-view-tab {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 10px;
-        padding: 10px 20px;
-        border-radius: 9999px;
-        border: 1px solid #332f2f;
-        background: #1a1818;
-        color: #a1a1aa;
-        font-size: 15px;
-        font-weight: 600;
         cursor: pointer;
-        transition: all 0.2s ease;
-        flex: 1;
-        max-width: 180px;
         -webkit-tap-highlight-color: transparent;
     }
 
-    .mobile-view-tab:hover {
-        color: #ffffff;
-        background: #252323;
+    .mobile-top-logo {
+        width: 32px;
+        height: 32px;
+        object-fit: contain;
+        filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.2));
     }
 
-    .mobile-view-tab.active {
+    .mobile-top-title {
+        font-size: 16px;
+        font-weight: 700;
+        letter-spacing: 2.5px;
         color: #ffffff;
-        background: #2b2828;
-        border-color: #524e4e;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+        text-transform: uppercase;
     }
 
-    .mobile-view-tab svg {
-        width: 18px;
-        height: 18px;
-        flex-shrink: 0;
+    /* Voice Mode Pill in Shared Mobile Header */
+    .mobile-top-header .chat-voice-header-indicator {
+        margin: 0 auto;
+        max-width: 320px;
+        height: 48px;
+        padding: 3px 18px 3px 3px;
+    }
+
+    .mobile-top-header .chat-voice-header-logo-wrap {
+        width: 42px;
+        height: 42px;
+        min-width: 42px;
+        min-height: 42px;
+    }
+
+    .mobile-top-header .chat-voice-header-logo {
+        width: 36px;
+        height: 36px;
+    }
+
+    .mobile-top-header .chat-voice-header-title {
+        font-size: 13px;
+    }
+
+    .mobile-top-header .chat-voice-header-sub {
+        font-size: 11px;
+    }
+
+    /* WhatsApp-Inspired Bottom Navigation on mobile (5 destinations) */
+    .mobile-bottom-nav {
+        display: flex !important;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        z-index: 100;
+        background: rgba(18, 17, 17, 0.94);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+        box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.55);
+        box-sizing: border-box;
+        padding-bottom: max(6px, env(safe-area-inset-bottom, 12px));
+        pointer-events: auto;
+    }
+
+    .mobile-bottom-nav-inner {
+        display: flex;
+        align-items: center;
+        justify-content: space-around;
+        width: 100%;
+        max-width: 560px;
+        margin: 0 auto;
+        padding: 4px 6px 2px;
+        box-sizing: border-box;
+    }
+
+    .mobile-bottom-nav-btn {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 2px;
+        background: transparent;
+        border: none;
+        padding: 2px 1px;
+        cursor: pointer;
+        flex: 1 1 0;
+        min-width: 0;
+        max-width: 72px;
+        -webkit-tap-highlight-color: transparent;
+        user-select: none;
+        transition: transform 0.15s ease;
+    }
+
+    .mobile-bottom-nav-btn:active {
+        transform: scale(0.94);
+    }
+
+    .mobile-nav-pill {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 44px;
+        height: 26px;
+        border-radius: 9999px;
+        background: transparent;
+        color: #9ca3af;
+        transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
+    }
+
+    .mobile-bottom-nav-btn.active .mobile-nav-pill {
+        background: #ffffff;
+        color: #141212;
+        box-shadow: 0 0 14px rgba(255, 255, 255, 0.22);
+    }
+
+    .mobile-nav-icon {
+        transition: transform 0.18s ease;
+    }
+
+    .mobile-bottom-nav-btn.active .mobile-nav-icon {
+        transform: scale(1.05);
+    }
+
+    .mobile-nav-label {
+        font-size: 9.5px;
+        font-weight: 500;
+        letter-spacing: -0.1px;
+        color: #9ca3af;
+        transition: color 0.18s ease, font-weight 0.18s ease;
+        white-space: nowrap;
+    }
+
+    .mobile-bottom-nav-btn.active .mobile-nav-label {
+        color: #ffffff;
+        font-weight: 600;
     }
 
     /* Main container & Smooth Continuous Slide Carousel */
@@ -5065,7 +5213,7 @@ body {
         width: 50% !important;
         min-width: 50% !important;
         max-width: 50% !important;
-        padding: 14px var(--spacing-mobile-edge) var(--spacing-compact) !important;
+        padding: 12px clamp(20px, 5.5vw, 24px) calc(76px + env(safe-area-inset-bottom, 12px)) !important;
         min-height: 0;
         height: 100%;
         display: flex;
@@ -5079,21 +5227,162 @@ body {
         display: flex !important;
     }
 
+    /* Hide duplicate branding in Chat on mobile since shared mobile-top-header is always displayed */
+    .Chat .chat-top-brand-title-wrap,
     .Chat.is-collapsed .chat-top-brand-title-wrap {
-        display: flex !important;
+        display: none !important;
     }
 
-    .Chat.is-collapsed .chat-brand-title {
-        display: block !important;
-    }
-
+    .Chat .chat-header-spacer,
     .Chat.is-collapsed .chat-header-spacer {
-        display: block !important;
+        display: none !important;
     }
 
-    .Chat.is-collapsed .chat-actions-group {
-        flex-direction: row !important;
+    /* On mobile empty state / initial centered voice presentation, keep top header zero-height */
+    .Chat:not(.has-active-conversation) .chat-top-header,
+    .Chat:not(.has-active-conversation) .chat-actions-group {
+        display: none !important;
+        height: 0 !important;
+        min-height: 0 !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+
+    /* Keep the mobile chat action toolbar space stable */
+    .Chat.has-active-conversation .chat-top-header {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: flex-start !important;
+        width: 100% !important;
+        min-height: 82px !important;
+        height: 82px !important;
+        padding: 6px 14px 4px !important;
+        margin-bottom: 2px !important;
+        position: static !important;
+        flex-shrink: 0 !important;
+        box-sizing: border-box !important;
+        background: transparent !important;
+        border: none !important;
+    }
+
+    .Chat.has-active-conversation .chat-body-content {
+        flex: 1 1 0 !important;
+        min-height: 0 !important;
+        justify-content: flex-start !important;
+        align-items: stretch !important;
+    }
+
+    .chat-conversation-area {
+        flex: 1 1 0;
+        min-height: 0;
+        margin: 0;
+    }
+
+    .chat-active-composer {
+        flex: 0 0 auto;
+    }
+
+    .chat-composer-voice-row {
+        align-items: center;
+        min-height: 44px;
+    }
+
+    .chat-composer-voice-row .chat-prompt-input-wrapper {
+        height: 44px;
+        min-height: 44px;
+        align-items: center;
+    }
+
+    .Chat.has-active-conversation .chat-actions-group {
+        position: static !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        justify-content: center !important;
+        gap: 8px !important;
         width: auto !important;
+        z-index: 10 !important;
+    }
+
+    @keyframes mobile-section-slide-next {
+        from { opacity: 0.72; transform: translateX(28px); }
+        to { opacity: 1; transform: translateX(0); }
+    }
+
+    @keyframes mobile-section-slide-previous {
+        from { opacity: 0.72; transform: translateX(-28px); }
+        to { opacity: 1; transform: translateX(0); }
+    }
+
+    .Main.mobile-tab-dashboard.mobile-swipe-next > .Dashboard,
+    .Main.mobile-tab-assistant.mobile-swipe-next > .Chat {
+        animation: mobile-section-slide-next 0.32s cubic-bezier(0.2, 0, 0, 1) both;
+    }
+
+    .Main.mobile-tab-dashboard.mobile-swipe-previous > .Dashboard,
+    .Main.mobile-tab-assistant.mobile-swipe-previous > .Chat {
+        animation: mobile-section-slide-previous 0.32s cubic-bezier(0.2, 0, 0, 1) both;
+    }
+
+    /* Use the same incoming-page slide for Assistant/Dashboard as for dashboard sections. */
+    .Main.mobile-swipe-next,
+    .Main.mobile-swipe-previous {
+        transition: none;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .Main.mobile-swipe-next > .Dashboard,
+        .Main.mobile-swipe-previous > .Dashboard,
+        .Main.mobile-swipe-next > .Chat,
+        .Main.mobile-swipe-previous > .Chat {
+            animation: none !important;
+        }
+    }
+
+    /* Android assistant actions float above the composer; desktop and other platforms keep the toolbar layout */
+    .App.is-android .Chat.has-active-conversation .chat-top-header {
+        min-height: 0 !important;
+        height: 0 !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        overflow: visible !important;
+    }
+
+    .App.is-android .Chat.has-active-conversation .chat-actions-group {
+        position: absolute !important;
+        top: auto !important;
+        right: 20px !important;
+        bottom: calc(76px + env(safe-area-inset-bottom, 12px) + 60px) !important;
+        left: auto !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: flex-end !important;
+        gap: 12px !important;
+        z-index: 10 !important;
+    }
+
+    .App.is-android .Chat.has-active-conversation .chat-new-conversation-btn,
+    .App.is-android .Chat.has-active-conversation .chat-voice-mode-action-btn {
+        width: 56px !important;
+        height: 56px !important;
+        border-radius: 50% !important;
+    }
+
+    .App.is-android .Chat.has-active-conversation .chat-new-conversation-btn {
+        background: rgba(20, 20, 20, 0.96) !important;
+        border: 1px solid rgba(255, 255, 255, 0.4) !important;
+    }
+
+    .App.is-android .Chat.has-active-conversation .chat-voice-mode-action-btn {
+        background: #ffffff !important;
+        border: 1px solid #ffffff !important;
+        color: #141212 !important;
+    }
+
+    .App.is-android .Chat.has-active-conversation .chat-voice-mode-action-btn.active {
+        background: #dc2626 !important;
+        border-color: #ef4444 !important;
+        color: #ffffff !important;
     }
 
     .chat-main-content {
@@ -5132,17 +5421,13 @@ body {
     }
 
     .chat-bottom-bar {
-        padding: var(--spacing-compact) var(--spacing-compact);
-        padding-bottom: max(8px, env(safe-area-inset-bottom, 12px));
-        margin-top: auto;
-        border-top: 1px solid #232121;
-        flex-shrink: 0;
+        display: none !important;
     }
 
-    /* Dashboard & Card on mobile - Static container height */
+    /* Dashboard & Card on mobile - Spacing refined with WhatsApp-inspired bottom bar clearance */
     .Dashboard {
-        padding: 10px var(--spacing-mobile-edge) 6px;
-        gap: 10px;
+        padding: 10px 16px calc(76px + env(safe-area-inset-bottom, 12px)) !important;
+        gap: 12px;
         width: 100%;
         height: 100%;
         min-height: 0;
@@ -5201,10 +5486,25 @@ body {
         flex: 1;
         min-height: 0;
         height: auto;
-        padding: 14px 14px 6px;
-        border-radius: 18px;
+        padding: 16px 16px 14px;
+        border-radius: 20px;
+        background: #191818;
+        border: 1px solid #2d2a2a;
         box-sizing: border-box;
         overflow: hidden;
+    }
+
+    /* On mobile, remove decorative outer card on Dashboard Home view */
+    .dashboard-main-card.is-view-home {
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        border-radius: 0 !important;
+        padding: 0 !important;
+    }
+
+    .dashboard-settings-btn {
+        display: flex !important;
     }
 
     .dashboard-content-area {
@@ -5221,61 +5521,46 @@ body {
     }
 
     .dashboard-content-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
         margin-bottom: var(--spacing-standard);
-        gap: var(--spacing-compact);
-        flex-wrap: wrap;
+        gap: 10px;
         flex-shrink: 0;
+        width: 100%;
+    }
+
+    /* On Schedule screen: separate title row and date toolbar onto two clean rows */
+    .dashboard-content-header.is-schedule-header {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 10px !important;
+        margin-bottom: 12px !important;
+    }
+
+    .content-header-title-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+        flex-shrink: 1;
     }
 
     .dashboard-section-title {
-        font-size: 17px;
+        font-size: 16px;
+        font-weight: 700;
+        letter-spacing: 1px;
+        white-space: nowrap;
+        margin: 0;
     }
 
-    /* Pinned Static Horizontal Nav Bar on mobile */
-    .dashboard-nav-divider {
-        width: 100%;
-        height: 1px;
-        margin: 8px 0 4px;
-        background: #2d2a2a;
-        flex-shrink: 0;
-    }
-
+    /* Hide internal dock on mobile since persistent bottom nav provides 1-tap navigation */
+    .dashboard-nav-divider,
     .dashboard-nav-strip {
-        display: flex;
-        flex-direction: row;
-        justify-content: space-around;
-        align-items: center;
-        width: 100%;
-        gap: 4px;
-        padding: 2px 0;
-        padding-bottom: max(6px, env(safe-area-inset-bottom, 10px));
-        flex-shrink: 0;
+        display: none !important;
     }
 
-    .nav-strip-btn {
-        flex-direction: column;
-        width: auto;
-        flex: 1;
-        max-width: 85px;
-        padding: 4px 2px;
-        gap: 3px;
-    }
-
-    .nav-strip-icon-box {
-        width: 26px;
-        height: 26px;
-    }
-
-    .nav-strip-icon {
-        width: 22px;
-        height: 22px;
-    }
-
-    .nav-strip-label {
-        font-size: 10.5px;
-    }
-
-    /* Upcoming View Mobile Styling & Floating Quick Note */
+    /* Upcoming View Mobile Styling & Distinct Visual Breathing Room */
     .upcoming-view-container {
         display: flex;
         flex-direction: column;
@@ -5291,22 +5576,92 @@ body {
         flex-direction: column;
         flex: 1;
         min-height: 0;
-        gap: 14px;
-        padding-top: 2px;
-        padding-bottom: 8px;
+        gap: 24px;
+        padding-top: 4px;
+        padding-bottom: 44px;
         overflow-y: auto;
         overscroll-behavior: contain;
     }
 
     .upcoming-columns-grid {
-        display: grid;
-        grid-template-columns: 1fr;
-        gap: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 28px;
         flex: 0 0 auto;
     }
 
     .upcoming-col {
-        gap: 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .upcoming-col-header {
+        font-size: 13.5px;
+        font-weight: 600;
+        color: #a1a1aa;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+        margin: 0 0 2px;
+    }
+
+    .upcoming-col-list {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+    }
+
+    .upcoming-schedule-card {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 16px 18px;
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.07);
+        box-sizing: border-box;
+    }
+
+    .upcoming-schedule-card.is-next-up {
+        padding: 18px 18px;
+        border-radius: 14px;
+        background: #f4f4f6;
+        border: 1px solid rgba(255, 255, 255, 0.95);
+    }
+
+    .upcoming-schedule-card-left {
+        gap: 12px;
+    }
+
+    .upcoming-schedule-card-time {
+        font-size: 12px;
+        padding: 3px 8px;
+    }
+
+    .upcoming-schedule-card-topic {
+        font-size: 14px;
+        font-weight: 500;
+    }
+
+    .upcoming-task-card {
+        padding: 16px 18px;
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.07);
+        gap: 14px;
+        box-sizing: border-box;
+    }
+
+    .upcoming-task-text {
+        font-size: 14px;
+        font-weight: 500;
+    }
+
+    .upcoming-priority-tag {
+        font-size: 11px;
+        padding: 3px 8px;
+        border-radius: 6px;
     }
 
     .upcoming-recent-notes-container {
@@ -5314,27 +5669,90 @@ body {
         flex: 0 0 auto;
         margin-top: 4px;
         margin-bottom: 6px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .upcoming-recent-notes-heading {
+        font-size: 13.5px;
+        font-weight: 600;
+        color: #a1a1aa;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+        margin: 0 0 2px;
     }
 
     .upcoming-recent-notes-grid {
         display: grid;
         grid-template-columns: repeat(2, 1fr);
-        gap: 10px;
+        gap: 14px;
     }
 
-    /* Pinned Quick Note input field above bottom navigation */
+    .upcoming-recent-note-card {
+        padding: 14px 16px;
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.07);
+        min-height: 105px;
+        gap: 10px;
+        box-sizing: border-box;
+    }
+
+    .upcoming-recent-note-card .recent-note-preview-box {
+        border: none;
+        background: transparent;
+        padding: 0;
+        margin-bottom: 4px;
+    }
+
+    .upcoming-recent-note-card .recent-note-preview-text {
+        font-size: 13px;
+        line-height: 1.45;
+        color: #d4d4d8;
+    }
+
+    .upcoming-recent-note-card .recent-note-card-meta {
+        padding-top: 6px;
+        border-top: 1px solid rgba(255, 255, 255, 0.06);
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 8px;
+    }
+
+    .upcoming-recent-note-card .recent-note-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: #ffffff;
+    }
+
+    .upcoming-recent-note-card .recent-note-date {
+        font-size: 11px;
+        color: #71717a;
+        white-space: nowrap;
+    }
+
+    /* Distinct Quick Note input field */
     .upcoming-notes-bar {
         position: relative;
         flex-shrink: 0;
-        margin-top: 6px;
-        margin-bottom: 2px;
-        background: #171717;
-        border: 1px solid rgba(255, 255, 255, 0.14);
+        margin-top: 14px;
+        margin-bottom: 4px;
+        background: #1e1e20;
+        border: 1px solid rgba(255, 255, 255, 0.08);
         border-radius: 12px;
-        padding: 9px 14px;
+        padding: 10px 16px;
         gap: 12px;
-        box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.4);
+        box-shadow: none !important;
         box-sizing: border-box;
+        display: flex;
+        align-items: center;
+    }
+
+    .upcoming-notes-bar:focus-within {
+        background: #252427;
+        border-color: rgba(255, 255, 255, 0.2);
     }
 
     /* Schedule Timeline on mobile - Fills available card height and scrolls internally */
@@ -5364,6 +5782,7 @@ body {
 
     .timeline-now-line {
         left: -50px;
+        z-index: 1;
     }
 
     .timeline-now-dot {
@@ -5371,6 +5790,8 @@ body {
     }
 
     .timeline-event-chip {
+        position: relative;
+        z-index: 2;
         padding: 5px 8px;
         font-size: 12px;
         border-radius: 6px;
@@ -5469,6 +5890,238 @@ body {
         font-size: 12px;
         padding: 4px 6px;
     }
+
+    /* Settings View on mobile */
+    .settings-view-container {
+        display: flex;
+        flex-direction: column;
+        flex: 1 1 0%;
+        min-height: 0;
+        height: 100%;
+        width: 100%;
+        overflow: hidden;
+    }
+
+    .settings-view-scrollable {
+        flex: 1 1 0%;
+        min-height: 0;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+        padding-top: 4px;
+        padding-bottom: 24px;
+        box-sizing: border-box;
+    }
+
+    .settings-card-group {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .settings-group-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12.5px;
+        font-weight: 600;
+        letter-spacing: 1px;
+        color: #9ca3af;
+        text-transform: uppercase;
+        margin: 0 4px;
+    }
+
+    .settings-group-icon {
+        color: #34d399;
+        flex-shrink: 0;
+    }
+
+    .settings-profile-card,
+    .settings-feature-card,
+    .settings-info-card {
+        background: #171616;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 14px;
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        box-sizing: border-box;
+    }
+
+    .settings-profile-top {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+    }
+
+    .settings-profile-avatar-img {
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 2px solid #34d399;
+    }
+
+    .settings-profile-avatar-circle {
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        background: #232222;
+        color: #f4f4f5;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 17px;
+        font-weight: 600;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .settings-profile-meta {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+        overflow: hidden;
+    }
+
+    .settings-profile-name {
+        font-size: 15px;
+        font-weight: 600;
+        color: #ffffff;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .settings-profile-email {
+        font-size: 12.5px;
+        color: #9ca3af;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .settings-profile-actions {
+        display: flex;
+        gap: 10px;
+        padding-top: 10px;
+        border-top: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .settings-action-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 9px 14px;
+        border-radius: 10px;
+        font-size: 13.5px;
+        font-weight: 500;
+        cursor: pointer;
+        border: none;
+        flex: 1;
+        transition: transform 0.15s ease, opacity 0.15s ease;
+    }
+
+    .settings-action-btn:active {
+        transform: scale(0.97);
+    }
+
+    .settings-action-btn.is-login {
+        background: #2563eb;
+        color: #ffffff;
+    }
+
+    .settings-action-btn.is-logout {
+        background: rgba(239, 68, 68, 0.12);
+        color: #f87171;
+        border: 1px solid rgba(239, 68, 68, 0.25);
+    }
+
+    .settings-feature-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 6px 0;
+    }
+
+    .settings-feature-row:not(:last-child) {
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        padding-bottom: 10px;
+    }
+
+    .settings-feature-info {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        flex: 1;
+        min-width: 0;
+    }
+
+    .settings-feature-title {
+        font-size: 13.5px;
+        font-weight: 600;
+        color: #f4f4f5;
+    }
+
+    .settings-feature-desc {
+        font-size: 11.5px;
+        color: #71717a;
+        line-height: 1.4;
+    }
+
+    .settings-status-badge {
+        font-size: 11px;
+        font-weight: 600;
+        padding: 3px 8px;
+        border-radius: 9999px;
+        background: rgba(255, 255, 255, 0.08);
+        color: #a1a1aa;
+        white-space: nowrap;
+    }
+
+    .settings-status-badge.is-active {
+        background: rgba(16, 185, 129, 0.15);
+        color: #34d399;
+        border: 1px solid rgba(16, 185, 129, 0.25);
+    }
+
+    .settings-info-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 12.5px;
+        padding: 4px 0;
+    }
+
+    .settings-info-row:not(:last-child) {
+        border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+        padding-bottom: 8px;
+    }
+
+    .settings-info-label {
+        color: #71717a;
+    }
+
+    .settings-info-val {
+        color: #d4d4d8;
+        font-weight: 500;
+    }
+
+    .settings-select-input {
+        background: #232222;
+        color: #f4f4f5;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 8px;
+        padding: 5px 8px;
+        font-size: 12.5px;
+        font-weight: 500;
+        cursor: pointer;
+        outline: none;
+    }
 }
 
 @media (max-width: 480px) {
@@ -5483,11 +6136,14 @@ body {
 
     .section-header-actions {
         gap: 8px;
+        flex-shrink: 0;
     }
 
     .section-clear-btn {
         font-size: 12px;
         padding: 4px 10px;
+        white-space: nowrap !important;
+        flex-shrink: 0 !important;
     }
 
     .section-add-trigger {
@@ -5499,6 +6155,7 @@ body {
 
     .timeline-date-picker-trigger span {
         font-size: 12px;
+        white-space: nowrap !important;
     }
 
     .timeline-today-btn {

@@ -135,7 +135,7 @@ async function sendUpstreamRequest(
         }
         if (status === 404) {
             throw new AiServiceError(
-                502,
+                404,
                 "The configured AI model is unavailable or discontinued by the provider."
             );
         }
@@ -147,7 +147,7 @@ async function sendUpstreamRequest(
         }
         if (status === 503) {
             throw new AiServiceError(
-                502,
+                503,
                 "AI provider is temporarily unavailable due to high demand. Please try again shortly."
             );
         }
@@ -189,6 +189,136 @@ async function sendUpstreamRequest(
     return data as RawUpstreamResponse;
 }
 
+let currentActiveModel = env.llm.model;
+
+export function getActiveModel(): string {
+    return currentActiveModel;
+}
+
+export function getAllCandidateModels(): string[] {
+    const list = [env.llm.model, ...(env.llm.fallbackModels || [])];
+    return Array.from(new Set(list.filter((m): m is string => Boolean(m) && m.trim().length > 0)));
+}
+
+/**
+ * Probes a specific model with a short deadline to test responsiveness on app startup.
+ */
+export async function probeModelHealth(
+    model: string,
+    timeoutMs = 6000
+): Promise<{ ok: boolean; latencyMs: number; error?: string }> {
+    const apiKey = env.llm.apiKey;
+    if (!apiKey) return { ok: false, latencyMs: 0, error: "Missing API key" };
+
+    const targetUrl = `${env.llm.baseUrl.replace(/\/+$/, "")}/chat/completions`;
+    const start = Date.now();
+    try {
+        const response = await fetch(targetUrl, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify({
+                model,
+                messages: [{ role: "user", content: "ping" }],
+                max_tokens: 5,
+            }),
+            signal: AbortSignal.timeout(timeoutMs),
+        });
+
+        const latencyMs = Date.now() - start;
+        if (!response.ok) {
+            return { ok: false, latencyMs, error: `HTTP ${response.status}` };
+        }
+        return { ok: true, latencyMs };
+    } catch (err: unknown) {
+        const latencyMs = Date.now() - start;
+        return {
+            ok: false,
+            latencyMs,
+            error: err instanceof Error ? err.name : "Probe failed",
+        };
+    }
+}
+
+/**
+ * Initializes and checks AI model availability on app startup.
+ * Automatically tests candidate models to select the most responsive model.
+ */
+export async function initializeAiService(): Promise<void> {
+    const candidates = getAllCandidateModels();
+    console.log(`[AI Init] Verifying model availability across: ${candidates.join(", ")}`);
+
+    for (const model of candidates) {
+        const result = await probeModelHealth(model, 6000);
+        if (result.ok) {
+            currentActiveModel = model;
+            console.log(`[AI Init] Selected active model "${model}" (probe latency: ${result.latencyMs}ms)`);
+            return;
+        }
+        console.warn(`[AI Init] Model "${model}" failed health probe (${result.error}, ${result.latencyMs}ms). Checking next...`);
+    }
+
+    console.warn(`[AI Init] All model probes failed. Falling back to primary "${env.llm.model}".`);
+    currentActiveModel = env.llm.model;
+}
+
+/**
+ * Sends upstream request with automatic failover to backup models if primary times out or fails.
+ */
+async function sendUpstreamRequestWithFallback(
+    payload: Record<string, unknown>,
+    apiKey: string
+): Promise<RawUpstreamResponse> {
+    const candidates = [
+        currentActiveModel,
+        ...getAllCandidateModels().filter((m) => m !== currentActiveModel),
+    ];
+
+    let lastError: unknown = null;
+
+    for (let i = 0; i < candidates.length; i++) {
+        const candidateModel = candidates[i]!;
+        payload.model = candidateModel;
+
+        try {
+            const data = await sendUpstreamRequest(payload, apiKey);
+            if (candidateModel !== currentActiveModel) {
+                console.log(`[AI Failover] Switched active model to "${candidateModel}"`);
+                currentActiveModel = candidateModel;
+            }
+            return data;
+        } catch (err: unknown) {
+            lastError = err;
+            const isRetriable =
+                err instanceof AiServiceError &&
+                (err.statusCode === 504 ||
+                    err.statusCode === 503 ||
+                    err.statusCode === 502 ||
+                    err.statusCode === 429 ||
+                    err.statusCode === 404);
+
+            const hasNextCandidate = i + 1 < candidates.length;
+            if (isRetriable && hasNextCandidate) {
+                const nextModel = candidates[i + 1]!;
+                console.warn(
+                    `[AI Failover] Model "${candidateModel}" failed with status ${
+                        (err as AiServiceError).statusCode
+                    } (${(err as AiServiceError).publicMessage}). Failing over to "${nextModel}"...`
+                );
+                continue;
+            }
+            throw err;
+        }
+    }
+
+    if (lastError instanceof AiServiceError) {
+        throw lastError;
+    }
+    throw new AiServiceError(502, "All candidate AI models failed to respond.");
+}
+
 /**
  * Calls the configured upstream LLM provider with function calling support.
  * Guarantees identity isolation by strictly routing tool calls through the authenticated accountId.
@@ -224,7 +354,7 @@ export async function generateChatCompletion(
     const MAX_TOOL_ITERATIONS = 5;
     let iteration = 0;
     let finalContent = "";
-    let finalModel = env.llm.model;
+    let finalModel = currentActiveModel;
     let finalFinishReason: string | null = null;
     let aggregateUsage: { promptTokens?: number; completionTokens?: number; totalTokens?: number } | undefined;
 
@@ -232,7 +362,7 @@ export async function generateChatCompletion(
         iteration++;
 
         const upstreamPayload: Record<string, unknown> = {
-            model: env.llm.model,
+            model: currentActiveModel,
             messages: conversationMessages,
             max_tokens: env.llm.maxOutputTokens,
         };
@@ -243,7 +373,7 @@ export async function generateChatCompletion(
             upstreamPayload.tool_choice = "auto";
         }
 
-        const data = await sendUpstreamRequest(upstreamPayload, apiKey);
+        const data = await sendUpstreamRequestWithFallback(upstreamPayload, apiKey);
         if (data.model) finalModel = data.model;
         if (data.usage) {
             aggregateUsage = {
