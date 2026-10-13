@@ -71,11 +71,13 @@ export function buildSafeChatContext(
  * Reuses existing apiFetch with auto-Bearer token injection and sanitized error mapping.
  */
 export async function sendChatMessage(
-  messages: Array<{ role: "user" | "assistant"; content: string }>
+  messages: Array<{ role: "user" | "assistant"; content: string }>,
+  signal?: AbortSignal
 ): Promise<ChatCompletionResponse> {
   const response = await apiFetch("/api/ai/chat", {
     method: "POST",
     body: JSON.stringify({ messages }),
+    signal,
   });
 
   if (!response.ok) {

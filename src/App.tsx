@@ -4,6 +4,7 @@ import Dashboard from "./components/Dashboard";
 import type { DashboardView } from "./types/dashboard.ts";
 import Header from "./components/Header";
 import { useAuth } from "./auth/authContext.ts";
+import { audioRecorder } from "./lib/audioRecorder";
 
 type MobileTab = "assistant" | "dashboard";
 
@@ -11,6 +12,13 @@ const App = () => {
   const { loading, error, retry } = useAuth();
   const [currentView, setCurrentView] = useState<DashboardView>("home");
   const [mobileTab, setMobileTab] = useState<MobileTab>("assistant");
+
+  // Release microphone if user navigates away from assistant tab on mobile
+  useEffect(() => {
+    if (mobileTab === "dashboard") {
+      audioRecorder.cancel();
+    }
+  }, [mobileTab]);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
     try {
       return localStorage.getItem("alfred_sidebar_collapsed") === "true";
@@ -245,6 +253,7 @@ const App = () => {
             isCollapsed={isSidebarCollapsed}
             onToggleCollapse={handleToggleSidebar}
             onNewChat={handleNewChat}
+            isActiveView={mobileTab === "assistant"}
           />
           <Dashboard currentView={currentView} onViewChange={setCurrentView} />
         </main>

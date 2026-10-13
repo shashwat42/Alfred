@@ -79,7 +79,7 @@ const llmBaseUrl = getOptionalEnv(
 );
 const rawLlmApiKey = process.env.LLM_API_KEY;
 const llmApiKey = rawLlmApiKey ? rawLlmApiKey.trim() : "";
-const llmModel = getOptionalEnv("LLM_MODEL", "gemini-3.5-flash");
+const llmModel = getOptionalEnv("LLM_MODEL", "gemini-3.5-flash-lite");
 const llmSiteUrl = getOptionalEnv("LLM_SITE_URL", frontendUrl);
 const llmSiteName = getOptionalEnv("LLM_SITE_NAME", "Alfred");
 const llmMaxOutputTokens = parsePositiveIntEnv("LLM_MAX_OUTPUT_TOKENS", 1024);
