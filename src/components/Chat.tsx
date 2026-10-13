@@ -209,6 +209,12 @@ export default function Chat({
 
   // In-memory conversation state (ephemeral; cleared on reload)
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const messagesRef = useRef<ChatMessage[]>([]);
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  const handleSendMessageRef = useRef<(textToSend?: string, voiceSessionId?: number) => Promise<boolean>>(() => Promise.resolve(false));
   const [inputPrompt, setInputPrompt] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [failedPrompt, setFailedPrompt] = useState<string | null>(null);
@@ -345,15 +351,15 @@ export default function Chat({
     isNearBottomRef.current = distanceFromBottom <= threshold;
   };
 
+  const adjustTextareaHeight = (el: HTMLTextAreaElement | null) => {
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
+  };
+
   // Adjust textarea height dynamically up to 120px
   useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto";
-      textareaRef.current.style.height = `${Math.min(
-        textareaRef.current.scrollHeight,
-        120
-      )}px`;
-    }
+    adjustTextareaHeight(textareaRef.current);
   }, [inputPrompt]);
 
   const handleSendMessage = async (textToSend?: string, voiceSessionId?: number): Promise<boolean> => {
@@ -368,14 +374,14 @@ export default function Chat({
     justSentMessageRef.current = true;
 
     if (isRetry) {
-      setMessages((prev) =>
-        prev.map((m, idx) => {
-          if (idx === prev.length - 1 && m.role === "user" && m.error) {
-            return { ...m, error: undefined };
-          }
-          return m;
-        })
-      );
+      const updated = messagesRef.current.map((m, idx) => {
+        if (idx === messagesRef.current.length - 1 && m.role === "user" && m.error) {
+          return { ...m, error: undefined };
+        }
+        return m;
+      });
+      messagesRef.current = updated;
+      setMessages(updated);
     } else {
       const userMessage: ChatMessage = {
         id: `user-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -383,7 +389,9 @@ export default function Chat({
         content: trimmed,
         timestamp: Date.now(),
       };
-      setMessages((prev) => [...prev, userMessage]);
+      const updated = [...messagesRef.current, userMessage];
+      messagesRef.current = updated;
+      setMessages(updated);
     }
 
     setInputPrompt("");
@@ -394,14 +402,26 @@ export default function Chat({
     currentAbortControllerRef.current = abortController;
 
     try {
-      const priorHistory = isRetry ? messages.slice(0, -1) : messages;
-      const context = buildSafeChatContext(priorHistory, trimmed);
+      const context = buildSafeChatContext(messagesRef.current, trimmed);
 
       const response = await sendChatMessage(context, abortController.signal);
 
       // Check if user reset chat or cancelled voice session while waiting
       if (activeRequestIdRef.current !== currentReqId) return false;
       if (voiceSessionId !== undefined && voiceSessionIdRef.current !== voiceSessionId) return false;
+
+      // Dispatch confirmed actions so Dashboard synchronizes immediately
+      if (
+        response.actionsExecuted &&
+        response.actionsExecuted.length > 0 &&
+        typeof window !== "undefined"
+      ) {
+        window.dispatchEvent(
+          new CustomEvent("alfred:action_executed", {
+            detail: { actions: response.actionsExecuted },
+          })
+        );
+      }
 
       const assistantMessage: ChatMessage = {
         id: `asst-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -410,7 +430,9 @@ export default function Chat({
         timestamp: Date.now(),
       };
 
-      setMessages((prev) => [...prev, assistantMessage]);
+      const updatedWithAsst = [...messagesRef.current, assistantMessage];
+      messagesRef.current = updatedWithAsst;
+      setMessages(updatedWithAsst);
 
       // If voice mode started in empty state, animate centered logo into header upon first completed AI response
       if (voiceModeActiveRef.current && isLogoCenteredRef.current) {
@@ -452,14 +474,14 @@ export default function Chat({
           : "Failed to receive a response from Alfred.";
 
       // Mark error on user message and preserve prompt for retry
-      setMessages((prev) =>
-        prev.map((m, idx) => {
-          if (idx === prev.length - 1 && m.role === "user") {
-            return { ...m, error: errorMessage };
-          }
-          return m;
-        })
-      );
+      const updatedWithError = messagesRef.current.map((m, idx) => {
+        if (idx === messagesRef.current.length - 1 && m.role === "user") {
+          return { ...m, error: errorMessage };
+        }
+        return m;
+      });
+      messagesRef.current = updatedWithError;
+      setMessages(updatedWithError);
       setFailedPrompt(trimmed);
       return false;
     } finally {
@@ -471,6 +493,10 @@ export default function Chat({
       }
     }
   };
+
+  useEffect(() => {
+    handleSendMessageRef.current = handleSendMessage;
+  });
 
   // Push-to-Talk Manual Dictation (Never auto-submits, inserts into editable input)
   const handleTogglePushToTalk = async () => {
@@ -563,7 +589,7 @@ export default function Chat({
         }
 
         setVoiceModeState("thinking");
-        const success = await handleSendMessage(recognizedText, sessionId);
+        const success = await handleSendMessageRef.current(recognizedText, sessionId);
 
         if (!voiceModeActiveRef.current || voiceSessionIdRef.current !== sessionId) break;
 
@@ -613,7 +639,7 @@ export default function Chat({
       setVoiceModeState("thinking");
     }
     const currentSessionId = voiceSessionIdRef.current;
-    await handleSendMessage(textToSend, currentSessionId);
+    await handleSendMessageRef.current(textToSend, currentSessionId);
     if (
       voiceModeActiveRef.current &&
       voiceSessionIdRef.current === currentSessionId &&
@@ -635,7 +661,7 @@ export default function Chat({
       setVoiceModeError(null);
       voiceModeActiveRef.current = true;
       const newSessionId = ++voiceSessionIdRef.current;
-      const startingEmpty = messages.length === 0;
+      const startingEmpty = messagesRef.current.length === 0;
       setIsLogoCentered(startingEmpty);
       setIsLogoAnimatingToHeader(false);
       setVoiceModeState("starting");
@@ -645,7 +671,7 @@ export default function Chat({
 
   const handleRetry = () => {
     if (!failedPrompt || isLoading) return;
-    void handleSendMessage(failedPrompt);
+    void handleSendMessageRef.current(failedPrompt);
   };
 
   const handleNewChat = () => {
@@ -660,6 +686,7 @@ export default function Chat({
     activeRequestIdRef.current++;
     setIsLogoCentered(false);
     setIsLogoAnimatingToHeader(false);
+    messagesRef.current = [];
     setMessages([]);
     setIsLoading(false);
     setFailedPrompt(null);
@@ -672,7 +699,19 @@ export default function Chat({
     if ((e.key === "Enter" || e.keyCode === 13 || e.which === 13) && !e.shiftKey) {
       e.preventDefault();
       e.stopPropagation();
-      void handleSendMessage();
+      if (inputPrompt.trim() && !isLoading) {
+        void handleSendMessage();
+      }
+    }
+  };
+
+  const handleVoiceKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if ((e.key === "Enter" || e.keyCode === 13 || e.which === 13) && !e.shiftKey) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (inputPrompt.trim() && !isLoading) {
+        void handleSendVoiceModeText();
+      }
     }
   };
 
@@ -808,8 +847,12 @@ export default function Chat({
                     }
                   }}
                 >
-                  <input
-                    type="text"
+                  <textarea
+                    ref={(el) => {
+                      textareaRef.current = el;
+                      adjustTextareaHeight(el);
+                    }}
+                    rows={1}
                     className="chat-prompt-input"
                     aria-label="Ask Alfred while in Voice Mode"
                     placeholder="Ask Alfred..."
@@ -820,15 +863,7 @@ export default function Chat({
                         audioRecorder.cancel();
                       }
                     }}
-                    onKeyDown={(e) => {
-                      if ((e.key === "Enter" || e.keyCode === 13 || e.which === 13) && !e.shiftKey) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        if (inputPrompt.trim() && !isLoading) {
-                          void handleSendVoiceModeText();
-                        }
-                      }
-                    }}
+                    onKeyDown={handleVoiceKeyDown}
                     enterKeyHint="send"
                     disabled={isLoading}
                   />
@@ -921,8 +956,12 @@ export default function Chat({
                 }
               }}
             >
-              <input
-                type="text"
+              <textarea
+                ref={(el) => {
+                  textareaRef.current = el;
+                  adjustTextareaHeight(el);
+                }}
+                rows={1}
                 className="chat-prompt-input"
                 aria-label="Ask Alfred"
                 placeholder={
@@ -934,13 +973,7 @@ export default function Chat({
                 }
                 value={inputPrompt}
                 onChange={(e) => setInputPrompt(e.target.value)}
-                onKeyDown={(e) => {
-                  if ((e.key === "Enter" || e.keyCode === 13 || e.which === 13) && !e.shiftKey) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    void handleSendMessage();
-                  }
-                }}
+                onKeyDown={handleKeyDown}
                 enterKeyHint="send"
                 disabled={isLoading}
               />
@@ -1063,8 +1096,12 @@ export default function Chat({
                       }
                     }}
                   >
-                    <input
-                      type="text"
+                    <textarea
+                      ref={(el) => {
+                        textareaRef.current = el;
+                        adjustTextareaHeight(el);
+                      }}
+                      rows={1}
                       className="chat-prompt-input"
                       aria-label="Ask Alfred while in Voice Mode"
                       placeholder="Ask Alfred..."
@@ -1075,15 +1112,7 @@ export default function Chat({
                           audioRecorder.cancel();
                         }
                       }}
-                      onKeyDown={(e) => {
-                        if ((e.key === "Enter" || e.keyCode === 13 || e.which === 13) && !e.shiftKey) {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          if (inputPrompt.trim() && !isLoading) {
-                            void handleSendVoiceModeText();
-                          }
-                        }
-                      }}
+                      onKeyDown={handleVoiceKeyDown}
                       enterKeyHint="send"
                       disabled={isLoading}
                     />
@@ -1157,7 +1186,10 @@ export default function Chat({
                   }}
                 >
                   <textarea
-                    ref={textareaRef}
+                    ref={(el) => {
+                      textareaRef.current = el;
+                      adjustTextareaHeight(el);
+                    }}
                     className="chat-composer-textarea"
                     placeholder={
                       isRecordingPushToTalk

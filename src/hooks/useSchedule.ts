@@ -1,7 +1,7 @@
 import type { FormEvent } from "react";
 import { apiFetch } from "../lib/api.ts";
 import type { ScheduleItem } from "../types/dashboard.ts";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 
 interface ScheduleCacheEntry {
     promise?: Promise<ScheduleItem[]>;
@@ -69,43 +69,105 @@ export function useSchedule(accountId: string | undefined, todayDateStr: string)
     
     const currentHourRef = useRef<HTMLDivElement | null>(null);
 
+    const loadTodaySchedule = useCallback(async () => {
+        if (!accountId) return;
+        try {
+            const data = await fetchSchedule(`/api/schedule?date=${todayDateStr}`);
+            setTodaySchedule(data);
+        } catch (error) {
+            console.error("Could not load today's schedule:", error);
+        }
+    }, [accountId, todayDateStr]);
+
+    const loadTimelineSchedule = useCallback(async () => {
+        if (!accountId) return;
+        try {
+            const data = await fetchSchedule(`/api/schedule?date=${scheduleDate}`);
+            setTimelineSchedule(data);
+        } catch (error) {
+            console.error("Could not load timeline schedule:", error);
+        }
+    }, [accountId, scheduleDate]);
+
+    // Initial and dependency-driven fetch for today's schedule
     useEffect(() => {
         if (!accountId) return;
         let isMounted = true;
-        async function loadTodaySchedule() {
+        async function fetchToday() {
             try {
                 const data = await fetchSchedule(`/api/schedule?date=${todayDateStr}`);
-                if (isMounted) {
-                    setTodaySchedule(data);
-                }
+                if (isMounted) setTodaySchedule(data);
             } catch (error) {
                 console.error("Could not load today's schedule:", error);
             }
         }
-        void loadTodaySchedule();
+        void fetchToday();
         return () => {
             isMounted = false;
         };
     }, [accountId, todayDateStr]);
 
+    // Initial and dependency-driven fetch for timeline schedule
     useEffect(() => {
         if (!accountId) return;
         let isMounted = true;
-        async function loadTimelineSchedule() {
+        async function fetchTimeline() {
             try {
                 const data = await fetchSchedule(`/api/schedule?date=${scheduleDate}`);
-                if (isMounted) {
-                    setTimelineSchedule(data);
-                }
+                if (isMounted) setTimelineSchedule(data);
             } catch (error) {
                 console.error("Could not load timeline schedule:", error);
             }
         }
-        void loadTimelineSchedule();
+        void fetchTimeline();
         return () => {
             isMounted = false;
         };
-    }, [scheduleDate, accountId]);
+    }, [accountId, scheduleDate]);
+
+    // Keep latest references for the dedicated action listener to avoid stale closures
+    const todayDateStrRef = useRef(todayDateStr);
+    const scheduleDateRef = useRef(scheduleDate);
+    const loadTodayRef = useRef(loadTodaySchedule);
+    const loadTimelineRef = useRef(loadTimelineSchedule);
+
+    useEffect(() => {
+        todayDateStrRef.current = todayDateStr;
+        scheduleDateRef.current = scheduleDate;
+        loadTodayRef.current = loadTodaySchedule;
+        loadTimelineRef.current = loadTimelineSchedule;
+    });
+
+    // Consolidated single listener for schedule mutations
+    useEffect(() => {
+        const handleActionExecuted = (event: Event) => {
+            const customEvt = event as CustomEvent<{ actions?: Array<{ type?: string }> }>;
+            const actions = customEvt.detail?.actions;
+            if (
+                Array.isArray(actions) &&
+                actions.some(
+                    (a) =>
+                        a.type === "schedule_created" ||
+                        a.type === "schedule_updated" ||
+                        a.type === "schedule_deleted"
+                )
+            ) {
+                const today = todayDateStrRef.current;
+                const timeline = scheduleDateRef.current;
+                invalidateScheduleCache(today);
+                if (timeline && timeline !== today) {
+                    invalidateScheduleCache(timeline);
+                }
+                void loadTodayRef.current();
+                void loadTimelineRef.current();
+            }
+        };
+
+        window.addEventListener("alfred:action_executed", handleActionExecuted);
+        return () => {
+            window.removeEventListener("alfred:action_executed", handleActionExecuted);
+        };
+    }, []);
 
     async function handleAddSchedule(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();

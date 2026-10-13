@@ -1,5 +1,7 @@
 import { env } from "../../config/env.ts";
 import type { ChatMessageInput } from "./ai.schema.ts";
+import { buildAlfredSystemPrompt, ALFRED_SYSTEM_PROMPT } from "./prompt.ts";
+import { AI_TOOLS, executeAiTool, type ConfirmedAction } from "./tools.ts";
 
 export class AiServiceError extends Error {
     public readonly statusCode: number;
@@ -19,6 +21,7 @@ export interface ChatCompletionResult {
         role: "assistant";
         content: string;
     };
+    actionsExecuted?: ConfirmedAction[];
     model: string;
     finishReason: string | null;
     usage?: {
@@ -34,21 +37,7 @@ export const UNSUPPORTED_TOOL_PROTOCOL_REGEX =
 export const SAFETY_EVALUATION_TEMPLATE_REGEX =
     /^\s*(?:User Safety:\s*(?:safe|unsafe)|Response Safety:\s*(?:safe|unsafe))/i;
 
-const ALFRED_SYSTEM_PROMPT =
-    "You are Alfred, an intelligent, natural, and friendly AI personal productivity assistant embedded in a dashboard.\n" +
-    "Guidelines:\n" +
-    "1. Conversational Style: Respond naturally and warmly to greetings (e.g., 'Hey Alfred', 'hi'), casual remarks, slang, and informal language without canned introductions or robotic disclaimers.\n" +
-    "2. Direct & Concise: Provide concise, direct answers to simple queries. Expand only when detailed explanation is requested.\n" +
-    "3. Capabilities & Scope: When asked what you can do or how you can help, provide a concise, structured overview covering:\n" +
-    "   - Tasks: Organize to-dos, prioritize work, and break projects into steps.\n" +
-    "   - Schedules: Plan daily routines, time blocks, and meeting agendas.\n" +
-    "   - Notes: Capture ideas and organize information.\n" +
-    "   - Focus: Structure focus sessions and suggest productivity techniques.\n" +
-    "   Finish by asking what the user would like help with first. Accurately describe current capabilities: you assist through conversation, brainstorming, and advice; only claim an action was completed when an integrated tool execution confirms it.\n" +
-    "4. Boundaries & Unsupported Features: You do not manage, read, draft, or send emails (or check inboxes); if asked about email, politely explain that email management is not currently supported. Never claim to have inspected device hardware, local files, or external tool state. Do not output tool pseudo-protocol tags such as <invoke> or <dots_function_call>.\n" +
-    "5. Ambiguity Resolution: When a prompt is ambiguous or incomplete (e.g., 'check', 'status', 'update'), ask a single focused clarifying question (e.g., 'What would you like me to check?').\n" +
-    "6. Context Continuity: Actively use conversation history to interpret follow-up questions (e.g., 'what does that mean', 'why').\n" +
-    "7. Safety & Formatting: Never output safety classification templates (such as 'User Safety: safe' or 'Response Safety: safe'). Communicate exclusively in human-friendly conversational language and clean Markdown.";
+export { ALFRED_SYSTEM_PROMPT };
 
 /**
  * Normalizes input messages from either an array or an optional prompt parameter.
@@ -59,48 +48,52 @@ export function normalizeMessages(
 ): ChatMessageInput[] {
     const list: ChatMessageInput[] = messages ? [...messages] : [];
     if (singleMessage !== undefined && singleMessage.trim().length > 0) {
-        list.push({
-            role: "user",
-            content: singleMessage.trim(),
-        });
+        const trimmedSingle = singleMessage.trim();
+        const lastMsg = list[list.length - 1];
+        if (
+            !lastMsg ||
+            lastMsg.role !== "user" ||
+            lastMsg.content.trim() !== trimmedSingle
+        ) {
+            list.push({
+                role: "user",
+                content: trimmedSingle,
+            });
+        }
     }
     return list;
 }
 
-/**
- * Calls the configured upstream LLM provider endpoint.
- * Strictly uses the configured LLM_MODEL with no paid-model fallback.
- * Isolates upstream headers, handles timeouts, and guarantees sensitive error details
- * and provider credentials are never leaked.
- */
-export async function generateChatCompletion(
-    clientMessages: ChatMessageInput[]
-): Promise<ChatCompletionResult> {
-    const apiKey = env.llm.apiKey;
-    if (!apiKey || apiKey.trim().length === 0) {
-        throw new AiServiceError(
-            503,
-            "AI service is not configured. Please contact the administrator."
-        );
-    }
-
-    const systemMessage = {
-        role: "system",
-        content: ALFRED_SYSTEM_PROMPT,
+interface RawUpstreamChoice {
+    message?: {
+        role?: string;
+        content?: string | null;
+        tool_calls?: Array<{
+            id: string;
+            type: string;
+            function: {
+                name: string;
+                arguments: string;
+            };
+        }>;
     };
+    finish_reason?: string | null;
+}
 
-    const upstreamPayload = {
-        model: env.llm.model,
-        messages: [
-            systemMessage,
-            ...clientMessages.map((msg) => ({
-                role: msg.role,
-                content: msg.content,
-            })),
-        ],
-        max_tokens: env.llm.maxOutputTokens,
+interface RawUpstreamResponse {
+    choices?: RawUpstreamChoice[];
+    model?: string;
+    usage?: {
+        prompt_tokens?: number;
+        completion_tokens?: number;
+        total_tokens?: number;
     };
+}
 
+async function sendUpstreamRequest(
+    payload: Record<string, unknown>,
+    apiKey: string
+): Promise<RawUpstreamResponse> {
     const targetUrl = `${env.llm.baseUrl.replace(/\/+$/, "")}/chat/completions`;
 
     const headers: Record<string, string> = {
@@ -113,7 +106,7 @@ export async function generateChatCompletion(
         response = await fetch(targetUrl, {
             method: "POST",
             headers,
-            body: JSON.stringify(upstreamPayload),
+            body: JSON.stringify(payload),
             signal: AbortSignal.timeout(env.llm.timeoutMs),
         });
     } catch (err: unknown) {
@@ -123,7 +116,6 @@ export async function generateChatCompletion(
         ) {
             throw new AiServiceError(504, "AI request timed out. Please try again.");
         }
-        // Network or fetch failure without revealing URLs, keys, or stack details
         throw new AiServiceError(502, "Failed to connect to AI provider.");
     }
 
@@ -194,75 +186,161 @@ export async function generateChatCompletion(
         );
     }
 
-    const firstChoice = (data as { choices: Array<{ message?: unknown; finish_reason?: unknown }> }).choices[0];
-    if (
-        !firstChoice ||
-        typeof firstChoice !== "object" ||
-        !("message" in firstChoice) ||
-        typeof firstChoice.message !== "object" ||
-        firstChoice.message === null
-    ) {
+    return data as RawUpstreamResponse;
+}
+
+/**
+ * Calls the configured upstream LLM provider with function calling support.
+ * Guarantees identity isolation by strictly routing tool calls through the authenticated accountId.
+ * Executes a bounded multi-turn tool calling loop up to 5 iterations.
+ */
+export async function generateChatCompletion(
+    clientMessages: ChatMessageInput[],
+    accountId?: string
+): Promise<ChatCompletionResult> {
+    const apiKey = env.llm.apiKey;
+    if (!apiKey || apiKey.trim().length === 0) {
         throw new AiServiceError(
-            502,
-            "Malformed response: Missing message payload from AI provider."
+            503,
+            "AI service is not configured. Please contact the administrator."
         );
     }
 
-    const messageObj = firstChoice.message as { content?: unknown };
-    if (typeof messageObj.content !== "string") {
-        throw new AiServiceError(
-            502,
-            "Malformed response: Missing text content in AI message."
-        );
+    const systemPromptText = buildAlfredSystemPrompt();
+    const systemMessage = {
+        role: "system",
+        content: systemPromptText,
+    };
+
+    const conversationMessages: Array<Record<string, unknown>> = [
+        systemMessage,
+        ...clientMessages.map((msg) => ({
+            role: msg.role,
+            content: msg.content,
+        })),
+    ];
+
+    const actionsExecuted: ConfirmedAction[] = [];
+    const MAX_TOOL_ITERATIONS = 5;
+    let iteration = 0;
+    let finalContent = "";
+    let finalModel = env.llm.model;
+    let finalFinishReason: string | null = null;
+    let aggregateUsage: { promptTokens?: number; completionTokens?: number; totalTokens?: number } | undefined;
+
+    while (iteration < MAX_TOOL_ITERATIONS) {
+        iteration++;
+
+        const upstreamPayload: Record<string, unknown> = {
+            model: env.llm.model,
+            messages: conversationMessages,
+            max_tokens: env.llm.maxOutputTokens,
+        };
+
+        // Only provide tools if account context is available
+        if (accountId) {
+            upstreamPayload.tools = AI_TOOLS;
+            upstreamPayload.tool_choice = "auto";
+        }
+
+        const data = await sendUpstreamRequest(upstreamPayload, apiKey);
+        if (data.model) finalModel = data.model;
+        if (data.usage) {
+            aggregateUsage = {
+                promptTokens: (aggregateUsage?.promptTokens ?? 0) + (data.usage.prompt_tokens ?? 0),
+                completionTokens: (aggregateUsage?.completionTokens ?? 0) + (data.usage.completion_tokens ?? 0),
+                totalTokens: (aggregateUsage?.totalTokens ?? 0) + (data.usage.total_tokens ?? 0),
+            };
+        }
+
+        const choices = data.choices;
+        if (!choices || choices.length === 0 || !choices[0]) {
+            throw new AiServiceError(
+                502,
+                "Malformed response: Missing choices from AI provider."
+            );
+        }
+        const firstChoice = choices[0];
+        finalFinishReason = firstChoice.finish_reason ?? null;
+
+        const choiceMessage = firstChoice.message;
+        if (!choiceMessage) {
+            throw new AiServiceError(
+                502,
+                "Malformed response: Missing message payload from AI provider."
+            );
+        }
+
+        const toolCalls = choiceMessage.tool_calls;
+
+        if (Array.isArray(toolCalls) && toolCalls.length > 0 && accountId) {
+            // Append assistant tool call message to the ongoing conversation
+            conversationMessages.push({
+                role: "assistant",
+                content: choiceMessage.content ?? null,
+                tool_calls: toolCalls,
+            });
+
+            // Execute each tool call strictly with verified server accountId
+            for (const call of toolCalls) {
+                const toolName = call.function?.name || "";
+                const toolArgs = call.function?.arguments || "{}";
+
+                const executionResult = await executeAiTool(toolName, toolArgs, accountId);
+
+                if (executionResult.action) {
+                    const alreadyTracked = actionsExecuted.some(
+                        (a) => a.type === executionResult.action!.type && a.id === executionResult.action!.id
+                    );
+                    if (!alreadyTracked) {
+                        actionsExecuted.push(executionResult.action);
+                    }
+                }
+
+                // Add tool result message
+                conversationMessages.push({
+                    role: "tool",
+                    tool_call_id: call.id,
+                    content: JSON.stringify(executionResult),
+                });
+            }
+
+            // Continue the loop so the model sees tool results and generates a natural response
+            continue;
+        }
+
+        // No tool calls returned: model produced final textual response
+        finalContent = typeof choiceMessage.content === "string" ? choiceMessage.content : "";
+        break;
     }
 
-    if (UNSUPPORTED_TOOL_PROTOCOL_REGEX.test(messageObj.content)) {
+    // Safety checks on final response text
+    if (UNSUPPORTED_TOOL_PROTOCOL_REGEX.test(finalContent)) {
         throw new AiServiceError(
             502,
             "The AI provider returned an unsupported tool protocol message. Please ask your question directly."
         );
     }
 
-    if (SAFETY_EVALUATION_TEMPLATE_REGEX.test(messageObj.content)) {
+    if (SAFETY_EVALUATION_TEMPLATE_REGEX.test(finalContent)) {
         throw new AiServiceError(
             502,
             "The AI provider returned an evaluation output instead of a conversational message. Please try asking again."
         );
     }
 
-    const finishReason =
-        typeof firstChoice.finish_reason === "string"
-            ? firstChoice.finish_reason
-            : null;
-
-    const rawUsage = (data as { usage?: { prompt_tokens?: unknown; completion_tokens?: unknown; total_tokens?: unknown } }).usage;
-    const usage =
-        rawUsage && typeof rawUsage === "object"
-            ? {
-                  ...(typeof rawUsage.prompt_tokens === "number"
-                      ? { promptTokens: rawUsage.prompt_tokens }
-                      : {}),
-                  ...(typeof rawUsage.completion_tokens === "number"
-                      ? { completionTokens: rawUsage.completion_tokens }
-                      : {}),
-                  ...(typeof rawUsage.total_tokens === "number"
-                      ? { totalTokens: rawUsage.total_tokens }
-                      : {}),
-              }
-            : undefined;
-
-    const modelName =
-        typeof (data as unknown as { model?: unknown }).model === "string"
-            ? ((data as unknown as { model: string }).model)
-            : env.llm.model;
+    if (!finalContent && actionsExecuted.length > 0) {
+        finalContent = "I've completed the requested operations for you.";
+    }
 
     return {
         message: {
             role: "assistant",
-            content: messageObj.content,
+            content: finalContent,
         },
-        model: modelName,
-        finishReason,
-        ...(usage ? { usage } : {}),
+        ...(actionsExecuted.length > 0 ? { actionsExecuted } : {}),
+        model: finalModel,
+        finishReason: finalFinishReason,
+        ...(aggregateUsage ? { usage: aggregateUsage } : {}),
     };
 }

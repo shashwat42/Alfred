@@ -13,7 +13,7 @@ export function useNotes(accountId: string | undefined) {
     const [notes, setNotes] = useState<NoteItem[]>([]);
     const [recentNotes, setRecentNotes] = useState<NoteItem[]>([]);
     const [activeNote, setActiveNote] = useState<NoteItem | null>(null);
-    const [isLoading, setIsLoading] = useState(false);
+    const [isLoading, setIsLoading] = useState(() => Boolean(accountId));
     const [notesError, setNotesError] = useState("");
 
     const loadNotes = useCallback(async () => {
@@ -43,20 +43,45 @@ export function useNotes(accountId: string | undefined) {
     }, [accountId]);
 
     useEffect(() => {
-        if (!accountId) {
-            setNotes([]);
-            setRecentNotes([]);
-            return;
-        }
+        if (!accountId) return;
 
         let isMounted = true;
-        setIsLoading(true);
-        Promise.all([loadNotes(), loadRecentNotes()]).finally(() => {
-            if (isMounted) setIsLoading(false);
-        });
+        async function fetchInitialNotes() {
+            try {
+                const [notesRes, recentRes] = await Promise.all([
+                    apiFetch("/api/notes"),
+                    apiFetch("/api/notes/recent?limit=4"),
+                ]);
+                if (notesRes.ok && isMounted) {
+                    const data: NoteItem[] = await notesRes.json();
+                    if (isMounted) setNotes(data.filter(isValidNote));
+                }
+                if (recentRes.ok && isMounted) {
+                    const data: NoteItem[] = await recentRes.json();
+                    if (isMounted) setRecentNotes(data.filter(isValidNote));
+                }
+            } catch (err) {
+                console.error("Failed to load notes:", err);
+            } finally {
+                if (isMounted) setIsLoading(false);
+            }
+        }
+
+        void fetchInitialNotes();
+
+        const handleActionExecuted = (event: Event) => {
+            const customEvt = event as CustomEvent<{ actions?: Array<{ type?: string }> }>;
+            const actions = customEvt.detail?.actions;
+            if (Array.isArray(actions) && actions.some((a) => a.type && a.type.startsWith("note_"))) {
+                void Promise.all([loadNotes(), loadRecentNotes()]);
+            }
+        };
+
+        window.addEventListener("alfred:action_executed", handleActionExecuted);
 
         return () => {
             isMounted = false;
+            window.removeEventListener("alfred:action_executed", handleActionExecuted);
         };
     }, [accountId, loadNotes, loadRecentNotes]);
 

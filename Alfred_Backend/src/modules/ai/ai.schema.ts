@@ -49,11 +49,19 @@ export const chatRequestSchema = z
     .superRefine((data, ctx) => {
         const assembledMessages: ChatMessageInput[] = [...(data.messages ?? [])];
 
-        if (data.message !== undefined) {
-            assembledMessages.push({
-                role: "user",
-                content: data.message,
-            });
+        if (data.message !== undefined && data.message.trim().length > 0) {
+            const trimmedSingle = data.message.trim();
+            const lastMsg = assembledMessages[assembledMessages.length - 1];
+            if (
+                !lastMsg ||
+                lastMsg.role !== "user" ||
+                lastMsg.content.trim() !== trimmedSingle
+            ) {
+                assembledMessages.push({
+                    role: "user",
+                    content: trimmedSingle,
+                });
+            }
         }
 
         if (assembledMessages.length === 0) {

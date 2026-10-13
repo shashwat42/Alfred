@@ -8,11 +8,25 @@ export interface ChatMessage {
   error?: string;
 }
 
+export interface ActionExecutionResult {
+  type:
+    | "task_created"
+    | "task_completed"
+    | "task_updated"
+    | "note_created"
+    | "note_updated"
+    | "schedule_created"
+    | "schedule_updated";
+  id: string;
+  summary?: string;
+}
+
 export interface ChatCompletionResponse {
   message: {
     role: "assistant";
     content: string;
   };
+  actionsExecuted?: ActionExecutionResult[];
   model: string;
   finishReason: string | null;
   usage?: {
@@ -39,12 +53,24 @@ export function buildSafeChatContext(
   const trimmedLatest = latestUserText.trim().slice(0, MAX_MESSAGE_CHAR_LIMIT);
   const validHistory = history.filter((m) => !m.error && m.content.trim().length > 0);
 
+  // If the last item of validHistory is an optimistic copy of the latest user prompt,
+  // exclude it from prior candidates so it is not duplicated at the end.
+  const lastIndex = validHistory.length - 1;
+  const isOptimisticTail =
+    lastIndex >= 0 &&
+    validHistory[lastIndex].role === "user" &&
+    validHistory[lastIndex].content.trim() === trimmedLatest;
+
+  const priorCandidates = isOptimisticTail
+    ? validHistory.slice(0, lastIndex)
+    : validHistory;
+
   let remainingChars = MAX_TOTAL_CONTEXT_CHARS - trimmedLatest.length;
   const maxPrior = MAX_MESSAGES_CONTEXT - 1;
 
   const includedPrior: Array<{ role: "user" | "assistant"; content: string }> = [];
-  for (let i = validHistory.length - 1; i >= 0 && includedPrior.length < maxPrior; i--) {
-    const item = validHistory[i];
+  for (let i = priorCandidates.length - 1; i >= 0 && includedPrior.length < maxPrior; i--) {
+    const item = priorCandidates[i];
     if (!item) continue;
     const itemContent = item.content.trim().slice(0, MAX_MESSAGE_CHAR_LIMIT);
     if (itemContent.length <= remainingChars) {

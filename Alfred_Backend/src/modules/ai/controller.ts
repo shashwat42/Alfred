@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import type { ChatRequestBody } from "./ai.schema.ts";
+import { requireAccountId } from "../../utils/requireAccountId.ts";
 import {
     AiServiceError,
     generateChatCompletion,
@@ -11,12 +12,15 @@ export async function chatCompletionHandler(
     res: Response
 ): Promise<void> {
     try {
+        const accountId = requireAccountId(req, res);
+        if (!accountId) return;
+
         const clientMessages = normalizeMessages(
             req.body.messages,
             req.body.message
         );
 
-        const result = await generateChatCompletion(clientMessages);
+        const result = await generateChatCompletion(clientMessages, accountId);
         res.json(result);
     } catch (err: unknown) {
         if (err instanceof AiServiceError) {

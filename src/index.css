@@ -568,16 +568,17 @@ body {
 
 .chat-prompt-input-wrapper {
     display: flex;
-    align-items: center;
+    align-items: flex-end;
     width: 100%;
     max-width: 290px;
-    height: 42px;
+    min-height: 42px;
+    height: auto;
     box-sizing: border-box;
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 10px;
     background: #1e1e20;
     transition: background 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
-    padding: 0 4px 0 var(--spacing-mobile-edge);
+    padding: 5px 6px 5px var(--spacing-mobile-edge);
 }
 
 .chat-prompt-input-wrapper:focus-within {
@@ -589,14 +590,20 @@ body {
 .chat-prompt-input-wrapper .chat-prompt-input {
     flex: 1;
     min-width: 0;
-    height: 100%;
+    min-height: 24px;
+    max-height: 120px;
     border: none;
     background: transparent;
-    padding: 0;
+    padding: 3px 2px;
     color: #ffffff;
     font-size: 13px;
+    font-family: inherit;
+    line-height: 1.45;
     outline: none;
     box-shadow: none !important;
+    resize: none;
+    overflow-y: auto;
+    box-sizing: border-box;
 }
 
 .chat-prompt-input-wrapper .chat-prompt-input::placeholder {
@@ -891,16 +898,16 @@ body {
 
 .chat-composer-box {
     display: flex;
-    align-items: center;
+    align-items: flex-end;
     gap: 6px;
     width: 100%;
     min-height: 42px;
-    height: 42px;
+    height: auto;
     box-sizing: border-box;
     background: #1e1e20;
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 12px;
-    padding: 0 8px;
+    padding: 5px 8px;
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
@@ -1557,7 +1564,7 @@ body {
 /* 3-Element Bottom Voice Controls Row reusing red-bordered input */
 .chat-composer-voice-row {
     display: flex;
-    align-items: center;
+    align-items: flex-end;
     justify-content: space-between;
     gap: 8px;
     width: 100%;
@@ -1570,7 +1577,8 @@ body {
     flex: 1;
     min-width: 0;
     max-width: none;
-    height: 42px;
+    min-height: 42px;
+    height: auto;
 }
 
 .chat-voice-mute-btn {
@@ -5113,8 +5121,9 @@ body {
     .chat-prompt-input-wrapper {
         width: min(100%, 340px) !important;
         max-width: 340px !important;
-        height: 44px !important;
-        padding: 0 6px 0 14px !important;
+        min-height: 44px !important;
+        height: auto !important;
+        padding: 6px 6px 6px 14px !important;
     }
 
     .chat-prompt-send-btn {

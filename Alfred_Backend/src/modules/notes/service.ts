@@ -29,6 +29,21 @@ export async function getRecentNotes(accountId: string, limit = 4): Promise<INot
         .lean();
 }
 
+export async function searchNotes(accountId: string, query: string): Promise<INote[]> {
+    const cleanQuery = query.trim();
+    if (!cleanQuery) {
+        return getNotes(accountId);
+    }
+    const escaped = cleanQuery.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const regex = new RegExp(escaped, "i");
+    return Note.find({
+        accountId: new mongoose.Types.ObjectId(accountId),
+        $or: [{ title: regex }, { content: regex }],
+    })
+        .sort({ updatedAt: -1 })
+        .lean();
+}
+
 export async function createNote(
     accountId: string,
     title = "",

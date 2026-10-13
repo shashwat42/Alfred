@@ -35,8 +35,19 @@ export function useTasks(accountId: string | undefined) {
         }
         void loadTasks();
 
+        const handleActionExecuted = (event: Event) => {
+            const customEvt = event as CustomEvent<{ actions?: Array<{ type?: string }> }>;
+            const actions = customEvt.detail?.actions;
+            if (Array.isArray(actions) && actions.some((a) => a.type && a.type.startsWith("task_"))) {
+                void loadTasks();
+            }
+        };
+
+        window.addEventListener("alfred:action_executed", handleActionExecuted);
+
         return () => {
             isMounted = false;
+            window.removeEventListener("alfred:action_executed", handleActionExecuted);
         };
     }, [accountId]);
 
