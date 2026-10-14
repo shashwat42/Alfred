@@ -72,6 +72,36 @@ const App = () => {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  // Listen for tray navigation commands (e.g., Settings) and in-app settings events
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    const setupTauriListener = async () => {
+      try {
+        const { listen } = await import("@tauri-apps/api/event");
+        unlisten = await listen<string>("alfred:navigate", (event) => {
+          if (event.payload === "settings") {
+            setMobileTab("dashboard");
+            setCurrentView("settings");
+          }
+        });
+      } catch {
+        // Fallback for custom events in web environments
+      }
+    };
+    void setupTauriListener();
+
+    const handleLocalSettingsOpen = () => {
+      setMobileTab("dashboard");
+      setCurrentView("settings");
+    };
+    window.addEventListener("alfred:open_settings", handleLocalSettingsOpen);
+
+    return () => {
+      if (unlisten) unlisten();
+      window.removeEventListener("alfred:open_settings", handleLocalSettingsOpen);
+    };
+  }, []);
+
   const handleGoHome = () => {
     setCurrentView("home");
     setMobileTab("dashboard");
@@ -265,6 +295,10 @@ const App = () => {
               onNewChat={handleNewChat}
               isActiveView={mobileTab === "assistant"}
               onVoiceStateChange={setVoiceHeaderState}
+              onOpenSettings={() => {
+                setMobileTab("dashboard");
+                setCurrentView("settings");
+              }}
             />
             <Dashboard currentView={currentView} onViewChange={setCurrentView} />
           </main>

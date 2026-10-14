@@ -1,5 +1,5 @@
 import { memo, type Dispatch, type SetStateAction } from "react";
-import { Settings } from "lucide-react";
+import { Settings, RefreshCw } from "lucide-react";
 import type { DashboardView, TaskItem } from "../../types/dashboard.ts";
 
 function DashboardHeaderComponent({
@@ -21,6 +21,9 @@ function DashboardHeaderComponent({
     setIsTaskDialogOpen,
     isScheduleDialogOpen,
     isTaskDialogOpen,
+    onRefresh,
+    isRefreshing = false,
+    lastRefreshedAt,
 }: {
     activeView: DashboardView;
     handleViewChange: (view: DashboardView) => void;
@@ -40,7 +43,14 @@ function DashboardHeaderComponent({
     setIsTaskDialogOpen: Dispatch<SetStateAction<boolean>>;
     isScheduleDialogOpen: boolean;
     isTaskDialogOpen: boolean;
+    onRefresh?: () => void;
+    isRefreshing?: boolean;
+    lastRefreshedAt?: Date | null;
 }) {
+    const formattedLastRefresh = lastRefreshedAt
+        ? `Last updated: ${lastRefreshedAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`
+        : "Refresh dashboard";
+
     return (
         <div className={`dashboard-content-header ${activeView === "schedule" ? "is-schedule-header" : ""}`}>
             <div className="content-header-title-row">
@@ -61,6 +71,20 @@ function DashboardHeaderComponent({
                     {(activeView === "notes" || activeView === "mails") && "NOTES"}
                     {activeView === "settings" && "SETTINGS"}
                 </h2>
+
+                {onRefresh && (
+                    <button
+                        type="button"
+                        className={`dashboard-refresh-btn ${isRefreshing ? "is-refreshing" : ""}`}
+                        onClick={onRefresh}
+                        disabled={isRefreshing}
+                        aria-label="Refresh dashboard data"
+                        title={isRefreshing ? "Refreshing..." : formattedLastRefresh}
+                    >
+                        <RefreshCw size={15} className={isRefreshing ? "animate-spin text-red-500" : ""} />
+                    </button>
+                )}
+
                 {activeView === "home" && (
                     <button
                         type="button"

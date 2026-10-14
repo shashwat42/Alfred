@@ -54,6 +54,17 @@ body {
     font-family: Inter, sans-serif;
 }
 
+html.is-overlay,
+body.is-overlay,
+body.is-overlay #root,
+body.is-overlay .overlay-root {
+    background: transparent !important;
+    background-color: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    outline: none !important;
+}
+
 .App {
     height: 100%;
     max-height: 100vh;
@@ -2799,6 +2810,37 @@ body {
     background: rgba(255, 255, 255, 0.12);
     color: #ffffff;
     border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* Dashboard-wide manual refresh control */
+.dashboard-refresh-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #a1a1aa;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+    margin-left: 2px;
+}
+
+.dashboard-refresh-btn:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.12);
+    color: #ffffff;
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+.dashboard-refresh-btn:active:not(:disabled) {
+    transform: scale(0.95);
+}
+
+.dashboard-refresh-btn:disabled {
+    cursor: default;
+    opacity: 0.8;
 }
 
 .dashboard-content-area {

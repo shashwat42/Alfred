@@ -76,6 +76,7 @@ export function useSchedule(accountId: string | undefined, todayDateStr: string)
             setTodaySchedule(data);
         } catch (error) {
             console.error("Could not load today's schedule:", error);
+            throw error;
         }
     }, [accountId, todayDateStr]);
 
@@ -86,8 +87,18 @@ export function useSchedule(accountId: string | undefined, todayDateStr: string)
             setTimelineSchedule(data);
         } catch (error) {
             console.error("Could not load timeline schedule:", error);
+            throw error;
         }
     }, [accountId, scheduleDate]);
+
+    const refreshSchedule = useCallback(async () => {
+        if (!accountId) return;
+        invalidateScheduleCache(todayDateStr);
+        if (scheduleDate !== todayDateStr) {
+            invalidateScheduleCache(scheduleDate);
+        }
+        await Promise.all([loadTodaySchedule(), loadTimelineSchedule()]);
+    }, [accountId, todayDateStr, scheduleDate, loadTodaySchedule, loadTimelineSchedule]);
 
     // Initial and dependency-driven fetch for today's schedule
     useEffect(() => {
@@ -262,5 +273,6 @@ export function useSchedule(accountId: string | undefined, todayDateStr: string)
         handlePrevDay,
         handleNextDay,
         handleToday,
+        refreshSchedule,
     };
 }

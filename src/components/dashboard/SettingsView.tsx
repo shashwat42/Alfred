@@ -1,6 +1,11 @@
 import { memo, useState } from "react";
 import { useAuth } from "../../auth/authContext.ts";
 import { User, LogIn, LogOut, Mic, Shield, Smartphone } from "lucide-react";
+import {
+  type DesktopOverlayMode,
+  getSavedOverlayMode,
+  setSavedOverlayMode,
+} from "../../lib/overlayMode.ts";
 
 function SettingsViewComponent() {
   const { session, loginWithGoogle, logout } = useAuth();
@@ -18,6 +23,10 @@ function SettingsViewComponent() {
       return 1500;
     }
   });
+
+  const [overlayMode, setOverlayMode] = useState<DesktopOverlayMode>(() =>
+    getSavedOverlayMode()
+  );
 
   return (
     <div className="settings-view-container">
@@ -119,6 +128,27 @@ function SettingsViewComponent() {
                 <option value={1500}>1.5s (Default)</option>
                 <option value={2000}>2.0s (Relaxed)</option>
                 <option value={2500}>2.5s (Long pause)</option>
+              </select>
+            </div>
+            <div className="settings-feature-row">
+              <div className="settings-feature-info">
+                <span className="settings-feature-title">Desktop Overlay Mode</span>
+                <span className="settings-feature-desc">
+                  Default interaction mode when summoned via Alt+Space or system tray
+                </span>
+              </div>
+              <select
+                value={overlayMode}
+                onChange={(e) => {
+                  const val = e.target.value as "quick_input" | "voice";
+                  setOverlayMode(val);
+                  setSavedOverlayMode(val);
+                }}
+                className="settings-select-input"
+                aria-label="Desktop Overlay Mode"
+              >
+                <option value="quick_input">Quick Input (Default)</option>
+                <option value="voice">Voice Listening</option>
               </select>
             </div>
           </div>

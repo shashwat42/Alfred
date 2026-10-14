@@ -23,9 +23,12 @@ export function useNotes(accountId: string | undefined) {
             if (res.ok) {
                 const data: NoteItem[] = await res.json();
                 setNotes(data.filter(isValidNote));
+            } else {
+                throw new Error(`Failed to load notes: ${res.status}`);
             }
         } catch (err) {
             console.error("Failed to load notes:", err);
+            throw err;
         }
     }, [accountId]);
 
@@ -36,11 +39,19 @@ export function useNotes(accountId: string | undefined) {
             if (res.ok) {
                 const data: NoteItem[] = await res.json();
                 setRecentNotes(data.filter(isValidNote));
+            } else {
+                throw new Error(`Failed to load recent notes: ${res.status}`);
             }
         } catch (err) {
             console.error("Failed to load recent notes:", err);
+            throw err;
         }
     }, [accountId]);
+
+    const refreshNotes = useCallback(async () => {
+        if (!accountId) return;
+        await Promise.all([loadNotes(), loadRecentNotes()]);
+    }, [accountId, loadNotes, loadRecentNotes]);
 
     useEffect(() => {
         if (!accountId) return;
@@ -189,6 +200,7 @@ export function useNotes(accountId: string | undefined) {
         notesError,
         loadNotes,
         loadRecentNotes,
+        refreshNotes,
         saveNote,
         deleteNote,
         openNote,

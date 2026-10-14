@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { createPortal } from "react-dom";
 import Logo from "../assets/Alfred_Logo.svg";
 import { useAuth } from "../auth/authContext.ts";
 import { PanelLeftClose, PanelLeftOpen, Plus, Radio, Mic, MicOff, X } from "lucide-react";
@@ -30,6 +29,7 @@ export interface ChatProps {
   onNewChat?: () => void;
   isActiveView?: boolean;
   onVoiceStateChange?: (state: VoiceHeaderState) => void;
+  onOpenSettings?: () => void;
 }
 
 function VoiceSpinner({ size = 15 }: { size?: number }) {
@@ -211,9 +211,9 @@ export default function Chat({
   onNewChat,
   isActiveView = true,
   onVoiceStateChange,
+  onOpenSettings,
 }: ChatProps) {
-  const { session, loginWithGoogle, logout } = useAuth();
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const { session, loginWithGoogle } = useAuth();
   const isGoogleUser = session?.account?.type === "user";
   const displayName =
     session?.account?.name ||
@@ -240,7 +240,14 @@ export default function Chat({
   const [voiceModeState, setVoiceModeState] = useState<VoiceModeState>("off");
   const [voiceModeError, setVoiceModeError] = useState<string | null>(null);
   const [voiceModeAudioLevel, setVoiceModeAudioLevel] = useState(0);
-  const [silenceThresholdMs, setSilenceThresholdMs] = useState(1500); // 1.5s configurable
+  const silenceThresholdMs = (() => {
+    try {
+      const stored = localStorage.getItem("alfred_silence_threshold_ms");
+      return stored ? Number(stored) : 1500;
+    } catch {
+      return 1500;
+    }
+  })();
   const [isVoiceMuted, setIsVoiceMuted] = useState(false);
   const isVoiceMutedRef = useRef(false);
   useEffect(() => {
@@ -662,7 +669,7 @@ export default function Chat({
     }
   };
 
-  const handleToggleVoiceMode = async () => {
+  const handleToggleVoiceMode = useCallback(async () => {
     if (voiceModeActiveRef.current) {
       handleExitVoiceMode();
     } else {
@@ -680,7 +687,8 @@ export default function Chat({
       setVoiceModeState("starting");
       void runVoiceModeLoop(newSessionId);
     }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [handleExitVoiceMode, isRecordingPushToTalk]);
 
   const handleRetryVoiceMode = useCallback(() => {
     setVoiceModeError(null);
@@ -1323,7 +1331,13 @@ export default function Chat({
           className="user-bar-settings-btn"
           aria-label="Settings"
           title="Settings"
-          onClick={() => setIsSettingsOpen(true)}
+          onClick={() => {
+            if (onOpenSettings) {
+              onOpenSettings();
+            } else {
+              window.dispatchEvent(new CustomEvent("alfred:open_settings"));
+            }
+          }}
         >
           <svg
             width="20"
@@ -1341,127 +1355,6 @@ export default function Chat({
           </svg>
         </button>
       </div>
-
-      {isSettingsOpen &&
-        createPortal(
-          <div
-            className="task-dialog-backdrop"
-            onClick={(e) => {
-              if (e.target === e.currentTarget) setIsSettingsOpen(false);
-            }}
-          >
-            <section
-              className="settings-dialog"
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="settings-title"
-            >
-              <div className="task-dialog-heading">
-                <h2 id="settings-title">Settings</h2>
-                <button
-                  type="button"
-                  className="task-dialog-close"
-                  onClick={() => setIsSettingsOpen(false)}
-                  aria-label="Close settings"
-                >
-                  ×
-                </button>
-              </div>
-
-              <div className="settings-content">
-                <div className="settings-section">
-                  <h3 className="settings-section-title">Account</h3>
-                  <div className="settings-account-card">
-                    <div className="settings-account-info">
-                      {isGoogleUser && session.account.picture ? (
-                        <img
-                          src={session.account.picture}
-                          alt=""
-                          className="settings-avatar-img"
-                        />
-                      ) : (
-                        <div className="settings-avatar-circle">
-                          {isGoogleUser ? displayName[0].toUpperCase() : "G"}
-                        </div>
-                      )}
-                      <div className="settings-account-meta">
-                        <span className="settings-account-name">
-                          {displayName}
-                        </span>
-                        <span className="settings-account-email">
-                          {session?.account?.email ||
-                            (isGoogleUser ? "" : "Guest Account")}
-                        </span>
-                      </div>
-                    </div>
-
-                    {isGoogleUser ? (
-                      <button
-                        type="button"
-                        className="settings-logout-btn"
-                        onClick={() => {
-                          logout();
-                          setIsSettingsOpen(false);
-                        }}
-                      >
-                        Log out
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        className="settings-signin-btn"
-                        onClick={() => {
-                          loginWithGoogle(() => {
-                            setIsSettingsOpen(false);
-                          });
-                          setIsSettingsOpen(false);
-                        }}
-                      >
-                        Sign in with Google
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                <div className="settings-section">
-                  <h3 className="settings-section-title">Preferences</h3>
-                  <div className="settings-placeholder-box">
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-                      <div>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: "#f4f4f5" }}>
-                          Voice Mode Silence Timeout
-                        </div>
-                        <div style={{ fontSize: 12, color: "#9ca3af", marginTop: 2 }}>
-                          Pause duration before hands-free message is sent
-                        </div>
-                      </div>
-                      <select
-                        value={silenceThresholdMs}
-                        onChange={(e) => setSilenceThresholdMs(Number(e.target.value))}
-                        style={{
-                          background: "#27272a",
-                          color: "#ffffff",
-                          border: "1px solid #3f3f46",
-                          borderRadius: 6,
-                          padding: "6px 10px",
-                          fontSize: 13,
-                          cursor: "pointer",
-                        }}
-                        aria-label="Voice Mode Silence Timeout"
-                      >
-                        <option value={1000}>1.0s (Fast)</option>
-                        <option value={1500}>1.5s (Default)</option>
-                        <option value={2000}>2.0s (Relaxed)</option>
-                        <option value={2500}>2.5s (Long pause)</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </section>
-          </div>,
-          document.body
-        )}
     </section>
   );
 }

@@ -5,6 +5,7 @@ import type { NoteItem } from "../types/notes.ts";
 import { useTasks, ITEMS_PER_PAGE } from "../hooks/useTasks.ts";
 import { useSchedule } from "../hooks/useSchedule.ts";
 import { useNotes } from "../hooks/useNotes.ts";
+import { useDashboardAutoRefresh } from "../hooks/useDashboardAutoRefresh.ts";
 
 import { DashboardHeader } from "./dashboard/DashboardHeader.tsx";
 import { DashboardNav } from "./dashboard/DashboardNav.tsx";
@@ -80,6 +81,7 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
         handleToggleTaskComplete,
         handleDeleteTask,
         handleClearAllTasks,
+        refreshTasks,
     } = useTasks(accountId);
 
     const {
@@ -106,6 +108,7 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
         handlePrevDay,
         handleNextDay,
         handleToday,
+        refreshSchedule,
     } = useSchedule(accountId, todayDateStr);
 
     const {
@@ -116,7 +119,19 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
         saveNote,
         deleteNote,
         openNote,
+        refreshNotes,
     } = useNotes(accountId);
+
+    const {
+        isRefreshing,
+        lastRefreshedAt,
+        refreshAll,
+    } = useDashboardAutoRefresh({
+        accountId,
+        refreshTasks,
+        refreshSchedule,
+        refreshNotes,
+    });
 
     const activeTodaySchedule = accountId ? todaySchedule : EMPTY_ARRAY;
     const activeTimelineSchedule = accountId ? timelineSchedule : EMPTY_ARRAY;
@@ -270,6 +285,9 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
                         setIsTaskDialogOpen={setIsTaskDialogOpen}
                         isScheduleDialogOpen={isScheduleDialogOpen}
                         isTaskDialogOpen={isTaskDialogOpen}
+                        onRefresh={refreshAll}
+                        isRefreshing={isRefreshing}
+                        lastRefreshedAt={lastRefreshedAt}
                     />
 
                     {activeView === "home" && (

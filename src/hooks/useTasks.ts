@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import type { FormEvent } from "react";
 import { apiFetch } from "../lib/api.ts";
 import type { TaskItem, TaskPriority } from "../types/dashboard.ts";
@@ -14,42 +14,41 @@ export function useTasks(accountId: string | undefined) {
     const [taskError, setTaskError] = useState("");
     const [isTaskDialogOpen, setIsTaskDialogOpen] = useState(false);
 
+    const loadTasks = useCallback(async () => {
+        if (!accountId) return;
+        try {
+            const response = await apiFetch("/api/tasks");
+            if (!response.ok) {
+                throw new Error(`Request failed: ${response.status}`);
+            }
+            const data: TaskItem[] = await response.json();
+            setTask(data);
+            setTaskPage(0);
+        } catch (err) {
+            console.error("Could not load tasks:", err);
+            throw err;
+        }
+    }, [accountId]);
+
     useEffect(() => {
         if (!accountId) return;
 
-        let isMounted = true;
-        async function loadTasks() {
-            try {
-                const response = await apiFetch("/api/tasks");
-                if (!response.ok) {
-                    throw new Error(`Request failed: ${response.status}`);
-                }
-                const data: TaskItem[] = await response.json();
-                if (isMounted) {
-                    setTask(data);
-                    setTaskPage(0);
-                }
-            } catch (err) {
-                console.error("Could not load tasks:", err);
-            }
-        }
-        void loadTasks();
+        void loadTasks().catch(() => {});
 
         const handleActionExecuted = (event: Event) => {
             const customEvt = event as CustomEvent<{ actions?: Array<{ type?: string }> }>;
             const actions = customEvt.detail?.actions;
             if (Array.isArray(actions) && actions.some((a) => a.type && a.type.startsWith("task_"))) {
-                void loadTasks();
+                void loadTasks().catch(() => {});
             }
         };
 
         window.addEventListener("alfred:action_executed", handleActionExecuted);
 
         return () => {
-            isMounted = false;
             window.removeEventListener("alfred:action_executed", handleActionExecuted);
         };
-    }, [accountId]);
+    }, [accountId, loadTasks]);
 
     async function handleAddTask(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
@@ -160,5 +159,6 @@ export function useTasks(accountId: string | undefined) {
         handleToggleTaskComplete,
         handleDeleteTask,
         handleClearAllTasks,
+        refreshTasks: loadTasks,
     };
 }

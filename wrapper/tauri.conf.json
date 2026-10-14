@@ -12,6 +12,7 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "Alfred",
         "width": 1280,
         "height": 800,
@@ -19,6 +20,21 @@
         "minHeight": 600,
         "resizable": true,
         "decorations": false
+      },
+      {
+        "label": "overlay",
+        "title": "Alfred Overlay",
+        "url": "index.html?window=overlay",
+        "width": 640,
+        "height": 600,
+        "resizable": false,
+        "decorations": false,
+        "transparent": true,
+        "shadow": false,
+        "alwaysOnTop": true,
+        "visible": false,
+        "skipTaskbar": true,
+        "center": true
       }
     ],
     "security": {
