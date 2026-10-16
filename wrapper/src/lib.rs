@@ -49,10 +49,10 @@ pub fn run() {
 
                 app.deep_link().register("alfred")?;
 
-                if let (Some(window), Some(icon)) =
-                    (app.get_webview_window("main"), app.default_window_icon())
-                {
-                    let _ = window.set_icon(icon.clone());
+                if let Some(window) = app.get_webview_window("main") {
+                    // Supply the full-size artwork directly for the taskbar instead of
+                    // relying on the default icon loaded from Windows resources.
+                    window.set_icon(tauri::include_image!("icons/icon.png"))?;
                 }
 
                 if let Some(overlay) = app.get_webview_window("overlay") {
@@ -74,7 +74,8 @@ pub fn run() {
                     &[&open_i, &overlay_i, &settings_i, &separator, &quit_i],
                 )?;
 
-                let mut tray_builder = TrayIconBuilder::new()
+                let tray_builder = TrayIconBuilder::new()
+                    .icon(tauri::include_image!("icons/tray-icon.png"))
                     .menu(&tray_menu)
                     .tooltip("Alfred")
                     .on_menu_event(|app, event| match event.id().as_ref() {
@@ -132,10 +133,6 @@ pub fn run() {
                             }
                         }
                     });
-
-                if let Some(icon) = app.default_window_icon() {
-                    tray_builder = tray_builder.icon(icon.clone());
-                }
 
                 let _tray = tray_builder.build(app)?;
 
