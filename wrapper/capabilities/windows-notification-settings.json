@@ -1,0 +1,10 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "windows-notification-settings",
+  "description": "Open only the Windows Notifications settings page from the main window",
+  "windows": ["main"],
+  "platforms": ["windows"],
+  "permissions": [
+    { "identifier": "opener:allow-open-url", "allow": [{ "url": "ms-settings:notifications" }] }
+  ]
+}

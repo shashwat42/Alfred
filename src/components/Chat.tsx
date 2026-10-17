@@ -589,7 +589,6 @@ export default function Chat({
           const recResult = await audioRecorder.recordTurn({
           enableSilenceDetection: true,
           silenceDurationMs: getSilenceTimeout(),
-          minSpeechDurationMs: 500,
           maxDurationMs: 60000,
         });
 

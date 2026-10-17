@@ -7,6 +7,7 @@ import { MobileBottomNav, type MobileNavDestination } from "./components/MobileB
 import { useAuth } from "./auth/authContext.ts";
 import { audioRecorder } from "./lib/audioRecorder";
 import Logo from "./assets/Alfred_Logo.svg";
+import { NOTIFICATION_OPEN_EVENT } from "./lib/scheduleNotifications.ts";
 
 type MobileTab = "assistant" | "dashboard";
 const mobileNavOrder = ["assistant", "dashboard", "schedule", "tasks", "notes"] as const;
@@ -18,6 +19,11 @@ const App = () => {
   const [currentView, setCurrentView] = useState<DashboardView>("home");
   const [mobileTab, setMobileTab] = useState<MobileTab>("assistant");
   const [voiceHeaderState, setVoiceHeaderState] = useState<VoiceHeaderState | null>(null);
+  useEffect(() => {
+    const open = () => { setMobileTab("dashboard"); setCurrentView("schedule"); };
+    window.addEventListener(NOTIFICATION_OPEN_EVENT, open);
+    return () => window.removeEventListener(NOTIFICATION_OPEN_EVENT, open);
+  }, []);
   const [swipeDirection, setSwipeDirection] = useState<"next" | "previous" | null>(null);
   const swipeAnimationTimerRef = useRef<number | null>(null);
 

@@ -45,6 +45,7 @@ object AssistantBridge {
 
     fun installMain(activity: Activity, view: WebView) {
         mainView = WeakReference(view)
+        ScheduleNotifications.install(activity, view)
         install(view) { type, _ ->
             when (type) {
                 "status" -> AssistantAvailability.status(activity)

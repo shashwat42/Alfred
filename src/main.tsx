@@ -7,6 +7,7 @@ import { AuthProvider } from './auth/AuthContext.tsx'
 import AndroidAssistantApp from './android/AndroidAssistantApp.tsx'
 import { hasAndroidAssistantBridge, installAndroidAssistantSync } from './android/assistantBridge.ts'
 import { resolveWindowSurface } from './lib/windowSurface.ts'
+import { ScheduleNotificationRuntime } from './components/ScheduleNotificationRuntime.tsx'
 
 const surface = resolveWindowSurface(window.location.search, window.location.hash,
   hasAndroidAssistantBridge() || /Android/i.test(navigator.userAgent))
@@ -24,6 +25,7 @@ if (isOverlayWindow && typeof document !== 'undefined') {
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     {isAndroidAssistant ? <AndroidAssistantApp /> : <AuthProvider>
+      {!isOverlayWindow && <ScheduleNotificationRuntime />}
       {isOverlayWindow ? <OverlayApp /> : <App />}
     </AuthProvider>}
   </StrictMode>,

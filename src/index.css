@@ -7098,3 +7098,15 @@ body.is-overlay .overlay-root {
         overflow-wrap: anywhere;
     }
 }
+/* Account-level schedule delivery controls follow the existing settings cards. */
+.schedule-notification-fields { border: 0; padding: 0; margin: 0; min-width: 0; }
+.schedule-destination { border: 0; padding: 16px 20px; margin: 0; display: flex; flex-wrap: wrap; gap: 12px; }
+.schedule-destination legend { padding-top: 12px; font-size: 14px; font-weight: 600; }
+.schedule-destination label { display: flex; gap: 8px; align-items: center; border: 1px solid #444; border-radius: 8px; padding: 10px 14px; cursor: pointer; }
+.schedule-destination label:has(input:checked) { border-color: #e55; background: #351c1c; }
+.schedule-notification-settings input { accent-color: #ef4444; }
+.schedule-notification-settings select { max-width: min(240px, 50vw); }
+.schedule-permission-actions { display: flex; flex-wrap: wrap; gap: 10px; padding: 12px 20px; }
+.schedule-permission-actions .settings-action-btn:disabled { cursor: default; }
+.schedule-permission-actions .settings-action-btn[aria-busy="true"] { cursor: wait; }
+.timeline-event-chip:focus { outline: 2px solid #f87171; outline-offset: 3px; }

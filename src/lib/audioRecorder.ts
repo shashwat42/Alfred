@@ -7,12 +7,10 @@ import {
   type RecordingStateCallback,
 } from "../types/audio.ts";
 import { prepareRecording } from "./audio.ts";
+import { SpeechTurnDetector } from "./speechTurnDetector.ts";
 
 const DEFAULT_MAX_DURATION_MS = 60000; // 60 seconds
 const MIN_AUDIO_DURATION_MS = 250; // Minimum 250ms of audio
-const DEFAULT_SPEECH_THRESHOLD = 0.035; // RMS threshold to register speech
-const DEFAULT_SILENCE_DURATION_MS = 1500; // 1.5 seconds trailing silence
-const DEFAULT_MIN_SPEECH_MS = 500; // 500ms minimum speech duration
 
 export class AudioRecorder {
   private state: RecordingState = "inactive";
@@ -30,9 +28,6 @@ export class AudioRecorder {
   private activeConfig: AudioRecorderConfig = {};
 
   // Voice Activity / Turn Detection state
-  private hasDetectedSpeech = false;
-  private speechStartTime = 0;
-  private lastSpeechTime = 0;
   private turnAutoStopping = false;
 
   private onLevelCallbacks = new Set<AudioLevelCallback>();
@@ -106,9 +101,6 @@ export class AudioRecorder {
     this.isCancelled = false;
     const captureGeneration = ++this.captureGeneration;
     this.turnAutoStopping = false;
-    this.hasDetectedSpeech = false;
-    this.speechStartTime = 0;
-    this.lastSpeechTime = 0;
     this.recordedChunks = [];
     this.activeConfig = config;
     this.cleanupAudioNodes();
@@ -412,9 +404,7 @@ export class AudioRecorder {
     if (!this.analyserNode) return;
     const dataArray = new Uint8Array(this.analyserNode.frequencyBinCount);
 
-    const speechThreshold = this.activeConfig.speechThreshold ?? DEFAULT_SPEECH_THRESHOLD;
-    const silenceDurationMs = this.activeConfig.silenceDurationMs ?? DEFAULT_SILENCE_DURATION_MS;
-    const minSpeechDurationMs = this.activeConfig.minSpeechDurationMs ?? DEFAULT_MIN_SPEECH_MS;
+    const turnDetector = new SpeechTurnDetector(this.activeConfig);
     const enableVAD = Boolean(this.activeConfig.enableSilenceDetection);
 
     const update = () => {
@@ -437,32 +427,17 @@ export class AudioRecorder {
       this.emitLevel(level);
 
       // Voice Activity / Silence Turn Detection
-      if (enableVAD && !this.turnAutoStopping) {
-        const now = Date.now();
-        if (rms >= speechThreshold) {
-          if (!this.hasDetectedSpeech) {
-            this.hasDetectedSpeech = true;
-            this.speechStartTime = now;
-          }
-          this.lastSpeechTime = now;
-        } else if (this.hasDetectedSpeech) {
-          const silenceDuration = now - this.lastSpeechTime;
-          const totalSpeechDuration = this.lastSpeechTime - this.speechStartTime;
-
-          // If user spoke for at least minSpeechDurationMs and has paused for silenceDurationMs
-          if (silenceDuration >= silenceDurationMs && totalSpeechDuration >= minSpeechDurationMs) {
-            this.turnAutoStopping = true;
-            if (this.activeConfig.onTurnDetected) {
-              try {
-                this.activeConfig.onTurnDetected();
-              } catch (err) {
-                console.error("[AudioRecorder] Error in onTurnDetected callback:", err);
-              }
-            }
-            void this.stop().catch(() => {});
-            return;
+      if (enableVAD && !this.turnAutoStopping && turnDetector.update(rms, performance.now())) {
+        this.turnAutoStopping = true;
+        if (this.activeConfig.onTurnDetected) {
+          try {
+            this.activeConfig.onTurnDetected();
+          } catch (err) {
+            console.error("[AudioRecorder] Error in onTurnDetected callback:", err);
           }
         }
+        void this.stop().catch(() => {});
+        return;
       }
 
       this.animationFrameId = requestAnimationFrame(update);

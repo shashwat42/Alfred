@@ -12,5 +12,12 @@ class MainActivity : TauriActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     enableEdgeToEdge()
     super.onCreate(savedInstanceState)
+    com.alfred.assistant.ScheduleNotifications.openIntent(this, intent)
+  }
+
+  override fun onNewIntent(intent: android.content.Intent) {
+    super.onNewIntent(intent)
+    setIntent(intent)
+    com.alfred.assistant.ScheduleNotifications.openIntent(this, intent)
   }
 }

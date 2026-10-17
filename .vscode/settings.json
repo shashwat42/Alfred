@@ -1,0 +1,12 @@
+{
+  "css.lint.unknownAtRules": "ignore",
+  "gradle.nestedProjects": ["wrapper/gen/android"],
+  "java.import.exclusions": [
+    "**/node_modules/**",
+    "**/.metadata/**",
+    "**/archetype-resources/**",
+    "**/META-INF/maven/**",
+    "**/wrapper/android/assistant",
+    "**/wrapper/android/assistant/**"
+  ]
+}

@@ -21,6 +21,7 @@ pub fn run() {
         }));
 
         builder = builder.plugin(tauri_plugin_global_shortcut::Builder::new().build());
+        builder = builder.plugin(tauri_plugin_notification::init());
 
         builder = builder.on_window_event(|window, event| {
             if window.label() == "main"

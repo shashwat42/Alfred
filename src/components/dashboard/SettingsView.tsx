@@ -4,6 +4,7 @@ import { User, LogIn, LogOut, Mic, Shield, Smartphone } from "lucide-react";
 import { isTauri } from "../../auth/auth.ts";
 import { getSilenceTimeout, saveSilenceTimeout } from "../../lib/voicePreferences.ts";
 import { AndroidAssistantSetup } from "../../android/AndroidAssistantSetup.tsx";
+import { ScheduleNotificationSettings } from "./ScheduleNotificationSettings.tsx";
 import {
   type DesktopOverlayMode,
   getSavedOverlayMode,
@@ -44,7 +45,7 @@ function SettingsViewComponent() {
       <div className="settings-view-scrollable">
         <div className="settings-intro">
           <p>Manage your account and how Alfred responds to your voice.</p>
-          <span>Preferences save automatically on this device.</span>
+          <span>Voice and overlay preferences save on this device. Schedule notification settings save to your account.</span>
           <p className="settings-save-feedback" role="status">{feedback}</p>
           {(saveError || error) && <p className="settings-error" role="alert">{saveError || error}</p>}
         </div>
@@ -187,6 +188,7 @@ function SettingsViewComponent() {
         </section>
 
         {/* System & Privacy Section */}
+        <ScheduleNotificationSettings />
         <section className="settings-card-group">
           <h3 className="settings-group-header">
             <Shield size={16} className="settings-group-icon" />

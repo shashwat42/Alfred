@@ -9,6 +9,8 @@ import { initializeAiService } from "./src/modules/ai/service.ts";
 import { connectDatabase } from "./src/config/database.ts";
 import { env } from "./src/config/env.ts";
 import { apiRateLimiter } from "./src/middleware/rateLimit.middleware.ts";
+import notificationRouter from "./src/modules/schedule-notifications/route.ts";
+import { initializeNotificationIndexes } from "./src/modules/schedule-notifications/service.ts";
 
 const app = express();
 app.set("trust proxy", 1);
@@ -21,6 +23,7 @@ app.use("/api/schedule", scheduleRouter);
 app.use("/api/tasks", taskRouter);
 app.use("/api/notes", notesRouter);
 app.use("/api/ai", aiRouter);
+app.use("/api/schedule-notifications", notificationRouter);
 
 
 app.get("/health", (_req, res) => {
@@ -30,6 +33,7 @@ app.get("/health", (_req, res) => {
 async function startServer(): Promise<void> {
     try {
         await connectDatabase();
+        await initializeNotificationIndexes();
         void initializeAiService();
         app.listen(env.port, () => {
             console.log(`Server listening on port ${env.port}`);

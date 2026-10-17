@@ -68,6 +68,8 @@ export function ScheduleTimelineView({
                                             <div
                                                 key={eventItem._id || `${hour}-${evIdx}`}
                                                 className="timeline-event-chip"
+                                                id={eventItem._id ? `schedule-${eventItem._id}` : undefined}
+                                                tabIndex={-1}
                                                 style={{
                                                     backgroundColor: palette.bg,
                                                     borderColor: palette.border,

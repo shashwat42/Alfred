@@ -1,5 +1,17 @@
 # Alfred Android system assistant
 
+## Gradle project import
+
+Open `wrapper/gen/android` as the Android Gradle project. The source-controlled
+`wrapper/android/assistant` directory is its `:alfred-assistant` subproject; it
+inherits Android and Kotlin plugin versions from that root build. It is not a
+standalone Gradle project. The repository's VS Code settings point Gradle discovery
+at `wrapper/gen/android` and exclude the assistant folder from independent Java
+project discovery, while the Android root still includes it
+through `settings.gradle`. If VS Code previously imported it independently, run
+**Java: Clean Java Language Server Workspace** from the Command Palette and restart
+when prompted to clear the stale project and its plugin-resolution diagnostic.
+
 ## Architecture
 
 Android binds `AlfredVoiceService` and creates an `AlfredAssistantSession` through `AlfredSessionService`. The session owns a transparent Android voice-interaction window containing a full-screen **separate** WebView. The existing Tauri Activity/WebView is never moved, replaced or embedded in a service.

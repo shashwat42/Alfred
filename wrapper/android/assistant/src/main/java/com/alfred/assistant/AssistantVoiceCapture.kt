@@ -92,9 +92,13 @@ class AssistantVoiceCapture {
 internal class SpeechTurnDetector(private val silenceMs: Int) {
     private var speechMs = 0.0
     private var lastSpeechAt = 0L
-    val heardSpeech get() = speechMs >= 300
+    val heardSpeech get() = speechMs >= 120
     fun update(rms: Double, frameMs: Double, elapsedMs: Long): Boolean {
         if (rms >= 0.015) { speechMs += frameMs; lastSpeechAt = elapsedMs }
-        return heardSpeech && elapsedMs - lastSpeechAt >= silenceMs
+        if (speechMs > 0 && elapsedMs - lastSpeechAt >= silenceMs) {
+            if (heardSpeech) return true
+            speechMs = 0.0 // Discard isolated noise before listening for the next word.
+        }
+        return false
     }
 }

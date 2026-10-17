@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { Timer } from "lucide-react";
 import { useAuth } from "../auth/authContext.ts";
 import type { DashboardView } from "../types/dashboard.ts";
@@ -20,6 +20,7 @@ import { TaskDialog } from "./dashboard/TaskDialog.tsx";
 import { ScheduleDialog } from "./dashboard/ScheduleDialog.tsx";
 import { FocusSession } from "./focus/FocusSession.tsx";
 import { useFocusSession, formatTimeMMSS } from "../hooks/useFocusSession.ts";
+import { NOTIFICATION_OPEN_EVENT } from "../lib/scheduleNotifications.ts";
 
 const EMPTY_ARRAY: never[] = [];
 
@@ -111,6 +112,24 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
         handleToday,
         refreshSchedule,
     } = useSchedule(accountId, todayDateStr);
+
+    const [notificationTarget, setNotificationTarget] = useState<{ scheduleId: string } | null>(null);
+    const focusedNotification = useRef<typeof notificationTarget>(null);
+    useEffect(() => {
+        const open = (event: Event) => {
+            const target = (event as CustomEvent<{ date: string; scheduleId: string }>).detail;
+            const date = new Date(`${target.date}T12:00:00`);
+            if (!Number.isNaN(date.getTime())) setScheduleSelectedDate(date);
+            setNotificationTarget({ scheduleId: target.scheduleId });
+        };
+        window.addEventListener(NOTIFICATION_OPEN_EVENT, open);
+        return () => window.removeEventListener(NOTIFICATION_OPEN_EVENT, open);
+    }, [setScheduleSelectedDate]);
+    useEffect(() => {
+        if (!notificationTarget || notificationTarget === focusedNotification.current || activeView !== "schedule") return;
+        const element = document.getElementById(`schedule-${notificationTarget.scheduleId}`);
+        if (element) { focusedNotification.current = notificationTarget; element.scrollIntoView({ block: "center" }); element.focus({ preventScroll: true }); }
+    }, [notificationTarget, timelineSchedule, activeView]);
 
     const {
         notes,

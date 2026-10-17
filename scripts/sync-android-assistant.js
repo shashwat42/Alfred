@@ -29,3 +29,18 @@ patch("app/src/main/java/com/alfred/app/MainActivity.kt", (text) => {
 `);
 });
 console.log("Android assistant integration hooks are up to date.");
+patch("app/src/main/java/com/alfred/app/MainActivity.kt", (text) => {
+  if (!text.includes("ScheduleNotifications.openIntent(this, intent)")) {
+    text = text.replace("super.onCreate(savedInstanceState)", "super.onCreate(savedInstanceState)\n    com.alfred.assistant.ScheduleNotifications.openIntent(this, intent)");
+  }
+  if (!text.includes("override fun onNewIntent")) {
+    const end = text.lastIndexOf("}");
+    text = text.slice(0, end) + `\n  override fun onNewIntent(intent: android.content.Intent) {
+    super.onNewIntent(intent)
+    setIntent(intent)
+    com.alfred.assistant.ScheduleNotifications.openIntent(this, intent)
+  }
+` + text.slice(end);
+  }
+  return text;
+});

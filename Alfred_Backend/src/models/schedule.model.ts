@@ -41,5 +41,7 @@ const scheduleSchema = new Schema<ISchedule>(
 );
 
 scheduleSchema.index({ accountId: 1, date: 1 });
+// Bounded notification-plan pagination, including accounts with many events per day.
+scheduleSchema.index({ accountId: 1, date: 1, _id: 1 });
 
 export const Schedule = mongoose.model<ISchedule>("Schedule", scheduleSchema);

@@ -35,7 +35,7 @@ export interface AudioRecorderConfig {
   enableSilenceDetection?: boolean;
   speechThreshold?: number; // RMS threshold to register speech (default: 0.035)
   silenceDurationMs?: number; // Silence duration to conclude turn (default: 1500ms)
-  minSpeechDurationMs?: number; // Minimum speech duration before silence can trigger (default: 500ms)
+  minSpeechDurationMs?: number; // Audible speech before silence can trigger (default: 120ms)
   onTurnDetected?: () => void;
 }
 
