@@ -78,7 +78,7 @@ class SpeechManager {
     if (!this.worker) {
       this.worker = new Worker(
         new URL("../workers/speech.worker.ts", import.meta.url),
-        { type: "module" }
+        { type: "module", name: new URLSearchParams(window.location.search).get("window") === "android-assistant" ? "alfred-android-assistant" : "alfred-speech" }
       );
 
       this.worker.onmessage = (e: MessageEvent<WorkerOutgoingMessage>) => {
@@ -334,6 +334,9 @@ class SpeechManager {
   }
 
   public terminate() {
+    // Settle initialization listeners/timers before dropping their worker. This
+    // also lets an assistant voice toggle restart immediately after Stop.
+    if (this.initPromise) this.notifyStatus("error", undefined, "Speech initialization cancelled");
     if (this.worker) {
       this.worker.terminate();
       this.worker = null;

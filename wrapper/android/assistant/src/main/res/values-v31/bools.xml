@@ -1,0 +1,5 @@
+<resources>
+    <!-- Android 12+ decouples the assistant from the system speech recognizer.
+         The recognitionService metadata must still be present (empty is valid). -->
+    <bool name="alfred_system_assistant_supported">true</bool>
+</resources>

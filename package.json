@@ -13,6 +13,9 @@
     "tauri:build": "tauri build",
     "dev:pc": "node scripts/sync-ngrok-url.js && npm run tauri:dev",
     "dev:android": "node scripts/dev-android.js",
+    "android:sync-assistant": "node scripts/sync-android-assistant.js",
+    "test:android-assistant": "node --test scripts/tests/android-assistant.test.ts",
+    "android:build-assistant": "node scripts/build-android-assistant.js",
     "dev:ngrok": "concurrently -k --kill-others -n backend,ngrok -c magenta,cyan \"npm --prefix Alfred_Backend run dev\" \"node scripts/start-ngrok.js\"",
     "dev:all": "concurrently -k --kill-others -n backend,tauri -c magenta,blue \"npm --prefix Alfred_Backend run dev\" \"npm run tauri:dev\""
   },

@@ -20,6 +20,11 @@ if (env.backends?.onnx?.wasm) {
   env.backends.onnx.wasm.proxy = false;
   // Baseline reliability: set numThreads = 1 to prevent nested pthread deadlock inside worker
   env.backends.onnx.wasm.numThreads = 1;
+  // The isolated Android assistant forbids CDN scripts. Use the installed,
+  // version-matched runtime served from its APK; other app routes keep defaults.
+  if (self.name === "alfred-android-assistant") {
+    env.backends.onnx.wasm.wasmPaths = new URL("/speech-runtime/", self.location.origin).href;
+  }
 }
 
 let currentModelId: SpeechModelId = "onnx-community/whisper-tiny.en";

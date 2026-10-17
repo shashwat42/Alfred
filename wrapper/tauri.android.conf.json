@@ -4,5 +4,14 @@
   "build": {
     "devUrl": null,
     "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Alfred",
+        "url": "index.html"
+      }
+    ]
   }
 }

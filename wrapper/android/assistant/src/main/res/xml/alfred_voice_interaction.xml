@@ -1,0 +1,6 @@
+<voice-interaction-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:sessionService="com.alfred.assistant.AlfredSessionService"
+    android:recognitionService=""
+    android:settingsActivity="com.alfred.assistant.AssistantSetupActivity"
+    android:supportsAssist="true"
+    android:supportsLaunchVoiceAssistFromKeyguard="false" />

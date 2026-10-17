@@ -4,11 +4,17 @@ import './index.css'
 import App from './App.tsx'
 import OverlayApp from './overlay/OverlayApp.tsx'
 import { AuthProvider } from './auth/AuthContext.tsx'
+import AndroidAssistantApp from './android/AndroidAssistantApp.tsx'
+import { hasAndroidAssistantBridge, installAndroidAssistantSync } from './android/assistantBridge.ts'
+import { resolveWindowSurface } from './lib/windowSurface.ts'
 
-const isOverlayWindow =
-  typeof window !== 'undefined' &&
-  (window.location.search.includes('window=overlay') ||
-    window.location.hash.includes('window=overlay'))
+const surface = resolveWindowSurface(window.location.search, window.location.hash,
+  hasAndroidAssistantBridge() || /Android/i.test(navigator.userAgent))
+const isAndroidAssistant = surface === 'android-assistant'
+installAndroidAssistantSync()
+if (isAndroidAssistant) document.documentElement.classList.add('is-android-assistant')
+
+const isOverlayWindow = surface === 'desktop-overlay'
 
 if (isOverlayWindow && typeof document !== 'undefined') {
   document.documentElement.classList.add('is-overlay')
@@ -17,9 +23,9 @@ if (isOverlayWindow && typeof document !== 'undefined') {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <AuthProvider>
+    {isAndroidAssistant ? <AndroidAssistantApp /> : <AuthProvider>
       {isOverlayWindow ? <OverlayApp /> : <App />}
-    </AuthProvider>
+    </AuthProvider>}
   </StrictMode>,
 )
 

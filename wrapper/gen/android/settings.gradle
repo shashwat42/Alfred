@@ -1,3 +1,7 @@
 include ':app'
 
 apply from: 'tauri.settings.gradle'
+
+// Alfred's source-controlled assistant module (not generated Tauri bindings).
+include ':alfred-assistant'
+project(':alfred-assistant').projectDir = new File(settingsDir, '../../android/assistant')

@@ -8,7 +8,7 @@ export const OVERLAY_MODE_CHANGED_EVENT = "alfred:overlay_mode_changed";
  * Defaults strictly to "quick_input" if unset, invalid, or during storage access errors.
  */
 export function getSavedOverlayMode(): DesktopOverlayMode {
-  if (typeof window === "undefined" || !window.localStorage) {
+  if (typeof window === "undefined") {
     return "quick_input";
   }
   try {
@@ -25,12 +25,14 @@ export function getSavedOverlayMode(): DesktopOverlayMode {
 /**
  * Saves the desktop overlay mode preference to localStorage and broadcasts the change.
  */
-export function setSavedOverlayMode(mode: DesktopOverlayMode): void {
-  if (typeof window === "undefined" || !window.localStorage) return;
+export function setSavedOverlayMode(mode: DesktopOverlayMode): boolean {
+  if (typeof window === "undefined") return false;
   try {
     localStorage.setItem(OVERLAY_MODE_STORAGE_KEY, mode);
     window.dispatchEvent(new CustomEvent(OVERLAY_MODE_CHANGED_EVENT, { detail: { mode } }));
+    return true;
   } catch (err) {
     console.error("Failed to save overlay mode preference:", err);
+    return false;
   }
 }

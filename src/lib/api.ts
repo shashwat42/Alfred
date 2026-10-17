@@ -3,6 +3,7 @@ import {
   checkUrlAuthParameters,
   createGuestSession,
   getToken,
+  getSession,
   initAuthSession,
 } from "../auth/auth.ts";
 
@@ -53,12 +54,15 @@ function buildUrl(endpointOrUrl: string): string {
  */
 export async function apiFetch(
   input: string,
-  init: RequestInit & { _isRetry?: boolean } = {}
+  init: RequestInit & { _isRetry?: boolean; _preserveAccount?: boolean; _expectedAccountId?: string } = {}
 ): Promise<Response> {
   const url = buildUrl(input);
   const headers = new Headers(init.headers);
 
   const token = headers.get("Authorization")?.replace(/^Bearer\s+/i, "") || (await ensureToken());
+  if (init._expectedAccountId && getSession()?.account.id !== init._expectedAccountId) {
+    throw new Error("Your account changed. Please try again.");
+  }
   if (token && !headers.has("Authorization")) {
     headers.set("Authorization", `Bearer ${token}`);
   }
@@ -77,7 +81,7 @@ export async function apiFetch(
   });
 
   // If token is invalid or expired (401), automatically regenerate guest session and retry once
-  if (response.status === 401 && !init._isRetry) {
+  if (response.status === 401 && !init._isRetry && !init._preserveAccount) {
     try {
       const freshSession = await createGuestSession();
       headers.set("Authorization", `Bearer ${freshSession.token}`);

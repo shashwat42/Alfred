@@ -10,6 +10,7 @@ import {
 import { SafeMarkdown } from "./SafeMarkdown.tsx";
 import { audioRecorder } from "../lib/audioRecorder.ts";
 import { speechManager } from "../lib/speechManager.ts";
+import { getSilenceTimeout } from "../lib/voicePreferences.ts";
 import { AudioRecorderError, type VoiceModeState } from "../types/audio.ts";
 
 export interface VoiceHeaderState {
@@ -205,6 +206,14 @@ function VoiceModeHeroIndicator({
   );
 }
 
+function adjustTextareaHeight(el: HTMLTextAreaElement | null) {
+  if (!el || el.clientWidth === 0) return;
+  el.style.height = "auto";
+  // An empty composer stays one line, even if its placeholder wraps while
+  // the sidebar is narrow during the collapse/expand animation.
+  if (el.value) el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
+}
+
 export default function Chat({
   isCollapsed = false,
   onToggleCollapse,
@@ -240,14 +249,6 @@ export default function Chat({
   const [voiceModeState, setVoiceModeState] = useState<VoiceModeState>("off");
   const [voiceModeError, setVoiceModeError] = useState<string | null>(null);
   const [voiceModeAudioLevel, setVoiceModeAudioLevel] = useState(0);
-  const silenceThresholdMs = (() => {
-    try {
-      const stored = localStorage.getItem("alfred_silence_threshold_ms");
-      return stored ? Number(stored) : 1500;
-    } catch {
-      return 1500;
-    }
-  })();
   const [isVoiceMuted, setIsVoiceMuted] = useState(false);
   const isVoiceMutedRef = useRef(false);
   useEffect(() => {
@@ -268,6 +269,23 @@ export default function Chat({
   const activeRequestIdRef = useRef(0);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const textareaResizeObserverRef = useRef<ResizeObserver | null>(null);
+  const bindTextarea = useCallback((el: HTMLTextAreaElement | null) => {
+    textareaResizeObserverRef.current?.disconnect();
+    textareaResizeObserverRef.current = null;
+    textareaRef.current = el;
+    if (!el) return;
+    adjustTextareaHeight(el);
+    let previousWidth = el.clientWidth;
+    const observer = new ResizeObserver(() => {
+      const width = el.clientWidth;
+      if (width === previousWidth) return;
+      previousWidth = width;
+      adjustTextareaHeight(el);
+    });
+    observer.observe(el);
+    textareaResizeObserverRef.current = observer;
+  }, []);
   const isNearBottomRef = useRef(true);
   const justSentMessageRef = useRef(false);
 
@@ -295,6 +313,16 @@ export default function Chat({
   }, []);
 
   // Audio level, model progress, and unmount lifecycle management
+  useEffect(() => {
+    const stopForSystemAssistant = () => {
+      handleExitVoiceMode();
+      setIsRecordingPushToTalk(false);
+      setIsTranscribingAudio(false);
+    };
+    window.addEventListener("alfred:android_assistant_opened", stopForSystemAssistant);
+    return () => window.removeEventListener("alfred:android_assistant_opened", stopForSystemAssistant);
+  }, [handleExitVoiceMode]);
+
   const [modelLoadingText, setModelLoadingText] = useState<string>("Initializing voice...");
 
   useEffect(() => {
@@ -369,12 +397,6 @@ export default function Chat({
     const threshold = 80;
     const distanceFromBottom = target.scrollHeight - target.scrollTop - target.clientHeight;
     isNearBottomRef.current = distanceFromBottom <= threshold;
-  };
-
-  const adjustTextareaHeight = (el: HTMLTextAreaElement | null) => {
-    if (!el) return;
-    el.style.height = "auto";
-    el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
   };
 
   // Adjust textarea height dynamically up to 120px
@@ -560,7 +582,7 @@ export default function Chat({
 
 
   // Persistent Hands-Free Voice Mode Loop
-  const runVoiceModeLoop = async (sessionId: number) => {
+  const runVoiceModeLoop = async (sessionId: number, retryText?: string) => {
     // 1. Proactively ensure model is loaded before listening
     try {
       setVoiceModeState("starting");
@@ -581,16 +603,20 @@ export default function Chat({
     if (!voiceModeActiveRef.current || voiceSessionIdRef.current !== sessionId) return;
 
     // 2. Hands-free turn loop
+    let nextText = retryText;
     while (voiceModeActiveRef.current && voiceSessionIdRef.current === sessionId) {
       if (isVoiceMutedRef.current) {
         await new Promise((resolve) => setTimeout(resolve, 250));
         continue;
       }
       try {
-        setVoiceModeState("listening");
-        const recResult = await audioRecorder.recordTurn({
+        let recognizedText = nextText;
+        nextText = undefined;
+        if (!recognizedText) {
+          setVoiceModeState("listening");
+          const recResult = await audioRecorder.recordTurn({
           enableSilenceDetection: true,
-          silenceDurationMs: silenceThresholdMs,
+          silenceDurationMs: getSilenceTimeout(),
           minSpeechDurationMs: 500,
           maxDurationMs: 60000,
         });
@@ -603,7 +629,8 @@ export default function Chat({
 
         if (!voiceModeActiveRef.current || voiceSessionIdRef.current !== sessionId) break;
 
-        const recognizedText = transcription.text.trim();
+          recognizedText = transcription.text.trim();
+        }
         if (!recognizedText) {
           continue; // Silence or non-speech, keep listening
         }
@@ -614,7 +641,7 @@ export default function Chat({
         if (!voiceModeActiveRef.current || voiceSessionIdRef.current !== sessionId) break;
 
         if (!success) {
-          await new Promise((resolve) => setTimeout(resolve, 1000));
+          throw new Error(messagesRef.current.at(-1)?.error || "Alfred couldn't generate a response. Please retry.");
         } else {
           // Natural pause before resuming listening for next user turn
           await new Promise((resolve) => setTimeout(resolve, 400));
@@ -695,7 +722,8 @@ export default function Chat({
     voiceModeActiveRef.current = true;
     const newSessionId = ++voiceSessionIdRef.current;
     setVoiceModeState("starting");
-    void runVoiceModeLoop(newSessionId);
+    const last = messagesRef.current.at(-1);
+    void runVoiceModeLoop(newSessionId, last?.role === "user" && last.error ? last.content : undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -892,10 +920,7 @@ export default function Chat({
                   }}
                 >
                   <textarea
-                    ref={(el) => {
-                      textareaRef.current = el;
-                      adjustTextareaHeight(el);
-                    }}
+                    ref={bindTextarea}
                     rows={1}
                     className="chat-prompt-input"
                     aria-label="Ask Alfred while in Voice Mode"
@@ -1001,10 +1026,7 @@ export default function Chat({
               }}
             >
               <textarea
-                ref={(el) => {
-                  textareaRef.current = el;
-                  adjustTextareaHeight(el);
-                }}
+                ref={bindTextarea}
                 rows={1}
                 className="chat-prompt-input"
                 aria-label="Ask Alfred"
@@ -1141,10 +1163,7 @@ export default function Chat({
                     }}
                   >
                     <textarea
-                      ref={(el) => {
-                        textareaRef.current = el;
-                        adjustTextareaHeight(el);
-                      }}
+                      ref={bindTextarea}
                       rows={1}
                       className="chat-prompt-input"
                       aria-label="Ask Alfred while in Voice Mode"
@@ -1230,10 +1249,7 @@ export default function Chat({
                   }}
                 >
                   <textarea
-                    ref={(el) => {
-                      textareaRef.current = el;
-                      adjustTextareaHeight(el);
-                    }}
+                    ref={bindTextarea}
                     className="chat-composer-textarea"
                     placeholder={
                       isRecordingPushToTalk

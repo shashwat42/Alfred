@@ -637,7 +637,7 @@ export function NotesView({
             {/* Gallery Top Action Bar */}
             <div className="notes-gallery-top-bar">
                 <div className="notes-gallery-title-wrap">
-                    <h2 className="notes-gallery-title">Notes</h2>
+                    <h3 className="notes-gallery-title">All notes</h3>
                     <span className="notes-count-badge">{filteredNotes.length}</span>
                 </div>
 
@@ -684,6 +684,7 @@ export function NotesView({
                         title="Create New Note"
                     >
                         <Plus size={20} />
+                        <span>New note</span>
                     </button>
                 </div>
             </div>
@@ -716,6 +717,15 @@ export function NotesView({
                                         <div
                                             key={note._id}
                                             className="note-card-item"
+                                            role="button"
+                                            tabIndex={0}
+                                            aria-label={`Open note: ${displayTitle}`}
+                                            onKeyDown={(event) => {
+                                                if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
+                                                    event.preventDefault();
+                                                    onSelectNote(note);
+                                                }
+                                            }}
                                             onClick={() => onSelectNote(note)}
                                         >
                                             {/* Preview Card Box */}

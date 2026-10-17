@@ -5,8 +5,8 @@ import {
   type RecordingState,
   type AudioLevelCallback,
   type RecordingStateCallback,
-} from "../types/audio";
-import { decodeAndResampleAudio } from "./speechManager";
+} from "../types/audio.ts";
+import { decodeAndResampleAudio } from "./speechManager.ts";
 
 const DEFAULT_MAX_DURATION_MS = 60000; // 60 seconds
 const MIN_AUDIO_DURATION_MS = 250; // Minimum 250ms of audio
@@ -25,6 +25,7 @@ export class AudioRecorder {
   private startTime = 0;
   private recordedChunks: Blob[] = [];
   private isCancelled = false;
+  private captureGeneration = 0;
   private activeConfig: AudioRecorderConfig = {};
 
   // Voice Activity / Turn Detection state
@@ -101,6 +102,7 @@ export class AudioRecorder {
     }
 
     this.isCancelled = false;
+    const captureGeneration = ++this.captureGeneration;
     this.turnAutoStopping = false;
     this.hasDetectedSpeech = false;
     this.speechStartTime = 0;
@@ -120,6 +122,10 @@ export class AudioRecorder {
         },
       });
 
+      if (captureGeneration !== this.captureGeneration) {
+        stream.getTracks().forEach((track) => track.stop());
+        throw new AudioRecorderError("UNKNOWN", "Recording cancelled");
+      }
       this.stream = stream;
 
       // 2. Set up live volume metering with Web Audio AnalyserNode
@@ -130,6 +136,12 @@ export class AudioRecorder {
 
         const ctx = new AudioContextClass();
         this.audioContext = ctx;
+        // getUserMedia/model loading can outlast the original click. A suspended
+        // context reports only silence, so turn detection would never complete.
+        if (ctx.state === "suspended") await ctx.resume();
+        if (captureGeneration !== this.captureGeneration) {
+          throw new AudioRecorderError("UNKNOWN", "Recording cancelled");
+        }
         const source = ctx.createMediaStreamSource(stream);
         const analyser = ctx.createAnalyser();
         analyser.fftSize = 256;
@@ -139,6 +151,7 @@ export class AudioRecorder {
 
         this.startLevelMonitoring();
       } catch (analyserError) {
+        if (captureGeneration !== this.captureGeneration || config.enableSilenceDetection) throw analyserError;
         console.warn("[AudioRecorder] Live volume visualizer setup warning:", analyserError);
       }
 
@@ -197,6 +210,7 @@ export class AudioRecorder {
         }
       }, maxDuration);
     } catch (err: unknown) {
+      if (captureGeneration !== this.captureGeneration) throw err;
       this.cleanup();
       let recorderError: AudioRecorderError;
 
@@ -242,14 +256,15 @@ export class AudioRecorder {
    */
   public async recordTurn(config: AudioRecorderConfig = {}): Promise<RecordingResult> {
     return new Promise<RecordingResult>((resolve, reject) => {
-      this.turnResolver = { resolve, reject };
+      const turn = { resolve, reject };
+      this.turnResolver = turn;
       const turnConfig: AudioRecorderConfig = {
         ...config,
         enableSilenceDetection: true,
       };
 
       this.start(turnConfig).catch((err) => {
-        if (this.turnResolver) {
+        if (this.turnResolver === turn) {
           this.turnResolver.reject(err);
           this.turnResolver = null;
         }
@@ -390,8 +405,9 @@ export class AudioRecorder {
    * Cancels the active recording session and discards all buffers immediately.
    */
   public cancel(): void {
-    if (this.state === "inactive") return;
-
+    // Permission may still be pending while state is inactive. Invalidate that
+    // request too, and immediately stop any stream it later returns.
+    this.captureGeneration++;
     this.isCancelled = true;
     this.stopTimers();
     this.stopLevelMonitoring();

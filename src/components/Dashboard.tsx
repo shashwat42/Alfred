@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
+import { Timer } from "lucide-react";
 import { useAuth } from "../auth/authContext.ts";
 import type { DashboardView } from "../types/dashboard.ts";
 import type { NoteItem } from "../types/notes.ts";
@@ -247,12 +248,14 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
                                 <span className="date-banner-day">{todayMonthDayLabel}</span>
                             </div>
                         </div>
+                        <span className="desktop-focus-divider" aria-hidden="true" />
                         <button
                             type="button"
                             className={`focus-session-btn ${focusSession.isRunning ? "is-running-badge" : ""}`}
                             onClick={handleOpenFocusSession}
                             title="Open Focus Session"
                         >
+                            <Timer className="desktop-focus-icon" size={18} aria-hidden="true" />
                             {focusSession.isRunning ? (
                                 <span className="focus-btn-running-content">
                                     <span className="focus-btn-pulse-dot" />
@@ -264,7 +267,7 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
                         </button>
                     </div>
 
-                    <div className={`dashboard-main-card is-view-${activeView} ${isAbsorbing ? "is-absorbing" : isExpanding ? "is-expanding" : ""}`}>
+                    <div className={`dashboard-main-card is-view-${activeView} ${["schedule", "notes", "mails", "tasks", "todo", "settings"].includes(activeView) ? "is-section-workspace" : ""} ${isAbsorbing ? "is-absorbing" : isExpanding ? "is-expanding" : ""}`}>
                 <div className="dashboard-content-area">
                     <DashboardHeader
                         activeView={activeView}
@@ -290,6 +293,7 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
                         lastRefreshedAt={lastRefreshedAt}
                     />
 
+                    <div className="dashboard-section-body">
                     {activeView === "home" && (
                         <UpcomingView
                             scheduleItems={activeTodaySchedule}
@@ -337,6 +341,7 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
                     )}
 
                     {activeView === "settings" && <SettingsView />}
+                    </div>
                 </div>
 
                 <div className="dashboard-nav-divider" aria-hidden="true" />

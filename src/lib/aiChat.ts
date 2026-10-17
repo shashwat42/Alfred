@@ -98,12 +98,15 @@ export function buildSafeChatContext(
  */
 export async function sendChatMessage(
   messages: Array<{ role: "user" | "assistant"; content: string }>,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  options?: { preserveAccount?: boolean; expectedAccountId?: string }
 ): Promise<ChatCompletionResponse> {
   const response = await apiFetch("/api/ai/chat", {
     method: "POST",
     body: JSON.stringify({ messages }),
     signal,
+    _preserveAccount: options?.preserveAccount,
+    _expectedAccountId: options?.expectedAccountId,
   });
 
   if (!response.ok) {
@@ -132,5 +135,9 @@ export async function sendChatMessage(
     throw error;
   }
 
-  return (await response.json()) as ChatCompletionResponse;
+  const result = (await response.json()) as ChatCompletionResponse;
+  if (typeof result.message?.content !== "string" || !result.message.content.trim()) {
+    throw new Error("Alfred returned an empty response. Please retry your question.");
+  }
+  return result;
 }

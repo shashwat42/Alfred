@@ -17,7 +17,7 @@ function DashboardNavComponent({
             <button
                 type="button"
                 className={`nav-strip-btn ${isScheduleActive ? "active" : ""}`}
-                onClick={() => handleViewChange(isScheduleActive ? "home" : "schedule")}
+                onClick={() => handleViewChange("schedule")}
                 aria-label="Schedule"
                 aria-current={isScheduleActive ? "page" : undefined}
                 title="Schedule"
@@ -58,7 +58,7 @@ function DashboardNavComponent({
             <button
                 type="button"
                 className={`nav-strip-btn ${isNotesActive ? "active" : ""}`}
-                onClick={() => handleViewChange(isNotesActive ? "home" : "notes")}
+                onClick={() => handleViewChange("notes")}
                 aria-label="Notes"
                 aria-current={isNotesActive ? "page" : undefined}
                 title="Notes"
@@ -103,7 +103,7 @@ function DashboardNavComponent({
             <button
                 type="button"
                 className={`nav-strip-btn ${isTasksActive ? "active" : ""}`}
-                onClick={() => handleViewChange(isTasksActive ? "home" : "tasks")}
+                onClick={() => handleViewChange("tasks")}
                 aria-label="Tasks"
                 aria-current={isTasksActive ? "page" : undefined}
                 title="Tasks"

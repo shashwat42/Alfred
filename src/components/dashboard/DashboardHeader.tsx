@@ -1,5 +1,6 @@
 import { memo, type Dispatch, type SetStateAction } from "react";
-import { Settings, RefreshCw } from "lucide-react";
+import { Settings, RefreshCw, Plus, ArrowLeft } from "lucide-react";
+import { DashboardNav } from "./DashboardNav.tsx";
 import type { DashboardView, TaskItem } from "../../types/dashboard.ts";
 
 function DashboardHeaderComponent({
@@ -54,14 +55,14 @@ function DashboardHeaderComponent({
     return (
         <div className={`dashboard-content-header ${activeView === "schedule" ? "is-schedule-header" : ""}`}>
             <div className="content-header-title-row">
-                {activeView !== "home" && (
+                {activeView === "home" ? <span className="dashboard-back-placeholder" aria-hidden="true" /> : (
                     <button
                         type="button"
                         className="dashboard-back-btn"
                         onClick={() => handleViewChange("home")}
                         aria-label="Back to Homepage"
                     >
-                        &lt;
+                        <ArrowLeft size={18} aria-hidden="true" />
                     </button>
                 )}
                 <h2 className="dashboard-section-title">
@@ -96,6 +97,10 @@ function DashboardHeaderComponent({
                         <Settings size={18} />
                     </button>
                 )}
+            </div>
+
+            <div className="desktop-dashboard-navigation">
+                <DashboardNav activeView={activeView} handleViewChange={handleViewChange} />
             </div>
 
             {activeView === "schedule" && (
@@ -171,24 +176,28 @@ function DashboardHeaderComponent({
                             setIsScheduleDialogOpen(true);
                         }}
                     >
-                        +
+                        <Plus size={18} aria-hidden="true" />
+                        <span>Add event</span>
                     </button>
                 </div>
             )}
 
             {(activeView === "tasks" || activeView === "todo") && (
                 <div className="section-header-actions">
-                    {activeTasks.length > 0 && (
+                    <span className="task-list-summary">
+                        {activeTasks.filter((task) => !task.completed).length} remaining
+                        <span aria-hidden="true"> · </span>{activeTasks.length} total
+                    </span>
                         <button
                             className="section-clear-btn"
                             type="button"
                             aria-label="Clear all tasks"
                             title="Clear all tasks"
                             onClick={handleClearAllTasks}
+                            disabled={activeTasks.length === 0}
                         >
                             Clear all
                         </button>
-                    )}
                     <button
                         className="section-add-trigger"
                         type="button"
@@ -200,7 +209,8 @@ function DashboardHeaderComponent({
                             setIsTaskDialogOpen(true);
                         }}
                     >
-                        +
+                        <Plus size={18} aria-hidden="true" />
+                        <span>Add task</span>
                     </button>
                 </div>
             )}

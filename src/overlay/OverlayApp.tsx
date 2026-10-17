@@ -8,6 +8,7 @@ import {
 } from "../lib/aiChat.ts";
 import { audioRecorder } from "../lib/audioRecorder.ts";
 import { speechManager } from "../lib/speechManager.ts";
+import { getSilenceTimeout } from "../lib/voicePreferences.ts";
 import { AudioRecorderError, type VoiceModeState } from "../types/audio.ts";
 import {
   type DesktopOverlayMode,
@@ -572,7 +573,7 @@ export function VoiceOverlay({
           setVoiceState("listening");
           const recResult = await audioRecorder.recordTurn({
             enableSilenceDetection: true,
-            silenceDurationMs: 1500,
+            silenceDurationMs: getSilenceTimeout(),
             minSpeechDurationMs: 500,
             maxDurationMs: 60000,
           });

@@ -1,0 +1,5 @@
+<resources>
+    <!-- Android 11 and earlier require an actual system-wide RecognitionService.
+         Alfred uses its own local Whisper pipeline, not a system recognizer. -->
+    <bool name="alfred_system_assistant_supported">false</bool>
+</resources>

@@ -52,12 +52,14 @@ export function TodoView({
                                         </svg>
                                     ) : null}
                                 </button>
+                                <div className="todo-item-main">
                                 <span className="todo-item-text">{item.task}</span>
                                 {item.priority && item.priority !== "normal" && (
                                     <span className={`todo-item-priority priority-${item.priority}`}>
                                         {item.priority}
                                     </span>
                                 )}
+                                </div>
                                 <button
                                     type="button"
                                     className="todo-item-del-btn"
@@ -85,7 +87,7 @@ export function TodoView({
                 </ol>
             ) : (
                 <div className="dashboard-empty-state">
-                    <p>No to-dos yet. Click + to add one.</p>
+                    <p>No tasks yet. Use Add task to get started.</p>
                 </div>
             )}
 

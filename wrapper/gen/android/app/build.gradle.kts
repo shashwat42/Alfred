@@ -18,6 +18,7 @@ android {
     compileSdk = 37
     namespace = "com.alfred.app"
     defaultConfig {
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         manifestPlaceholders["usesCleartextTraffic"] = "false"
         applicationId = "com.alfred.app"
         minSdk = 24
@@ -70,6 +71,8 @@ rust {
 }
 
 dependencies {
+    androidTestImplementation("androidx.test:runner:1.5.0")
+    implementation(project(":alfred-assistant"))
     implementation("androidx.webkit:webkit:1.14.0")
     implementation("androidx.appcompat:appcompat:1.7.1")
     implementation("androidx.activity:activity-ktx:1.10.1")

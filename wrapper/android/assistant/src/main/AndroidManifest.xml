@@ -1,0 +1,29 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
+    <queries>
+        <intent><action android:name="android.settings.VOICE_INPUT_SETTINGS" /></intent>
+        <intent><action android:name="android.settings.MANAGE_DEFAULT_APPS_SETTINGS" /></intent>
+    </queries>
+    <application>
+        <service android:name="com.alfred.assistant.AlfredVoiceService"
+            android:process=":assistant"
+            android:enabled="@bool/alfred_system_assistant_supported"
+            android:label="@string/alfred_assistant_name"
+            android:permission="android.permission.BIND_VOICE_INTERACTION"
+            android:exported="true">
+            <intent-filter><action android:name="android.service.voice.VoiceInteractionService" /></intent-filter>
+            <meta-data android:name="android.voice_interaction" android:resource="@xml/alfred_voice_interaction" />
+        </service>
+        <service android:name="com.alfred.assistant.AlfredSessionService"
+            android:permission="android.permission.BIND_VOICE_INTERACTION"
+            android:exported="true" />
+        <activity android:name="com.alfred.assistant.AssistantSetupActivity"
+            android:label="@string/alfred_assistant_name" android:exported="true"
+            android:theme="@android:style/Theme.Material.NoActionBar" />
+        <activity android:name="com.alfred.assistant.MicrophonePermissionActivity"
+            android:exported="false" android:excludeFromRecents="true"
+            android:theme="@style/AlfredAssistantSession" />
+    </application>
+</manifest>

@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { syncNgrokUrl } from "./sync-ngrok-url.js";
+import { readAndroidRuntimeConfig } from "./android-runtime-config.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -109,6 +110,7 @@ async function main() {
   // Step 1: Toolchain and Device Verification
   console.log("[1/6] Verifying build toolchain and connected devices...");
   checkToolchain();
+  runCommand("node", ["scripts/sync-android-assistant.js"]);
   const deviceId = getConnectedDevice();
   console.log(`[1/6] Target device identified: ${deviceId}`);
 
@@ -158,19 +160,10 @@ async function main() {
 
   // Step 5b: Sync Android asset tauri.conf.json with devUrl: null for standalone runtime
   const androidAssetConfigPath = path.join(ANDROID_DIR, "app", "src", "main", "assets", "tauri.conf.json");
-  const baseTauriConfigPath = path.join(WRAPPER_DIR, "tauri.conf.json");
-  if (fs.existsSync(baseTauriConfigPath)) {
-    try {
-      const baseConfig = JSON.parse(fs.readFileSync(baseTauriConfigPath, "utf-8"));
-      baseConfig.build = baseConfig.build || {};
-      baseConfig.build.devUrl = null;
-      fs.mkdirSync(path.dirname(androidAssetConfigPath), { recursive: true });
-      fs.writeFileSync(androidAssetConfigPath, JSON.stringify(baseConfig, null, 2), "utf-8");
-      console.log("[5/6] Standalone Android asset configuration synced (devUrl: null).");
-    } catch (err) {
-      console.warn("[5/6] Warning: Failed to sync android asset configuration:", err.message);
-    }
-  }
+  const androidConfig = readAndroidRuntimeConfig(WRAPPER_DIR);
+  fs.mkdirSync(path.dirname(androidAssetConfigPath), { recursive: true });
+  fs.writeFileSync(androidAssetConfigPath, JSON.stringify(androidConfig, null, 2), "utf-8");
+  console.log("[5/6] Standalone Android main-app configuration synced.");
 
   // Clear intermediate Gradle native lib caches and previous APK
   const cachedJni = path.join(ANDROID_DIR, "app", "build", "intermediates", "merged_native_libs");
