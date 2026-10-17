@@ -3,11 +3,12 @@ import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { isTauri } from "../auth/auth.ts";
 import {
   type ChatMessage,
+  boundVoiceResources,
   buildSafeChatContext,
   sendChatMessage,
 } from "../lib/aiChat.ts";
 import { audioRecorder } from "../lib/audioRecorder.ts";
-import { speechManager } from "../lib/speechManager.ts";
+import { VoiceNote } from "../components/VoiceNote.tsx";
 import { getSilenceTimeout } from "../lib/voicePreferences.ts";
 import { AudioRecorderError, type VoiceModeState } from "../types/audio.ts";
 import {
@@ -161,7 +162,7 @@ export function OverlayConversationList({
             {msg.role === "assistant" ? (
               <SafeMarkdown content={msg.content} />
             ) : (
-              <span className="whitespace-pre-wrap">{msg.content}</span>
+              <span className="whitespace-pre-wrap">{msg.recording ? <VoiceNote recording={msg.recording} /> : msg.content}</span>
             )}
           </div>
         </div>
@@ -493,7 +494,7 @@ export function VoiceOverlay({
   const [audioLevel, setAudioLevel] = useState<number>(0);
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [isMuted, setIsMuted] = useState(false);
-  const [lastTranscript, setLastTranscript] = useState<string | null>(null);
+  const voiceAbort = useRef<AbortController | null>(null);
   const isListeningRef = useRef(true);
   const sessionIdRef = useRef(0);
   const messagesRef = useRef<ChatMessage[]>(messages);
@@ -504,8 +505,8 @@ export function VoiceOverlay({
 
   const stopVoice = useCallback(() => {
     isListeningRef.current = false;
+    voiceAbort.current?.abort();
     audioRecorder.cancel();
-    speechManager.cancelAllPendingRequests("Overlay voice stopped");
   }, []);
 
   const handleDismiss = useCallback(() => {
@@ -552,7 +553,7 @@ export function VoiceOverlay({
     async function runLoop() {
       try {
         setVoiceState("starting");
-        await speechManager.ensureModelLoaded();
+
       } catch (err: unknown) {
         if (!isListeningRef.current || sessionIdRef.current !== currentSession) return;
         const msg = err instanceof Error ? err.message : String(err);
@@ -581,31 +582,27 @@ export function VoiceOverlay({
           if (!isListeningRef.current || sessionIdRef.current !== currentSession) break;
           if (isMuted) continue;
 
-          setVoiceState("transcribing");
-          const transcription = await speechManager.transcribe(recResult.audio);
-
-          if (!isListeningRef.current || sessionIdRef.current !== currentSession) break;
-
-          const text = transcription.text.trim();
-          if (!text) continue; // Keep listening on silence
-
+          const text = "Voice message";
           onUserActivity();
-          setLastTranscript(text);
 
           const userMessage: ChatMessage = {
             id: `overlay-voice-user-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
             role: "user",
             content: text,
+            recording: recResult,
             timestamp: Date.now(),
           };
 
-          const currentHistory = [...messagesRef.current, userMessage];
+          const currentHistory = boundVoiceResources([...messagesRef.current, userMessage]);
           setMessages(currentHistory);
           messagesRef.current = currentHistory;
 
           setVoiceState("thinking");
           const context = buildSafeChatContext(currentHistory, text);
-          const response = await sendChatMessage(context);
+          const controller = new AbortController();
+          voiceAbort.current = controller;
+          const response = await sendChatMessage(context, controller.signal, { recording: recResult });
+          if (!isListeningRef.current || sessionIdRef.current !== currentSession) break;
 
           const assistantMessage: ChatMessage = {
             id: `overlay-voice-asst-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -700,7 +697,7 @@ export function VoiceOverlay({
             <span className="capitalize text-[11px] font-medium tracking-wide">
               {voiceState === "starting" && "Connecting..."}
               {voiceState === "listening" && (isMuted ? "Muted" : "Listening")}
-              {voiceState === "transcribing" && "Transcribing..."}
+              {voiceState === "transcribing" && "Preparing audio..."}
               {voiceState === "thinking" && "Thinking..."}
               {voiceState === "error" && "Error"}
             </span>
@@ -782,18 +779,11 @@ export function VoiceOverlay({
         </div>
       </div>
 
-      {/* Real-time speech transcript pill if active */}
-      {lastTranscript && voiceState !== "thinking" && (
-        <div className="self-center mt-2 text-xs text-zinc-300 text-center line-clamp-2 max-w-125 italic bg-[#18181b]/90 px-3 py-1 rounded-full border border-white/10 backdrop-blur-sm shadow-sm">
-          "{lastTranscript}"
-        </div>
-      )}
-
       {/* 2. Unified Conversation Display */}
       <OverlayConversationList
         messages={messages}
         isLoading={isThinkingOrTranscribing}
-        statusLabel={voiceState === "transcribing" ? "Transcribing speech..." : "Alfred is thinking..."}
+        statusLabel={voiceState === "transcribing" ? "Preparing audio..." : "Alfred is thinking..."}
         errorMessage={voiceError}
         onUserActivity={onUserActivity}
       />
@@ -822,7 +812,6 @@ export default function OverlayApp() {
   const resetSession = useCallback(() => {
     setMessages([]);
     audioRecorder.cancel();
-    speechManager.cancelAllPendingRequests("Overlay session reset");
     lastActivityTimeRef.current = Date.now();
   }, []);
 

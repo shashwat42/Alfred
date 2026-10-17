@@ -24,18 +24,10 @@ dependencies {
 val frontendDist = rootProject.projectDir.resolve("../../../dist")
 val syncAssistantAssets by tasks.registering(Sync::class) {
     val requiredIndex = frontendDist.resolve("index.html")
-    val runtimeDist = rootProject.projectDir.resolve("../../../node_modules/@huggingface/transformers/dist")
-    val runtimeNames = listOf("ort-wasm-simd-threaded.jsep.mjs", "ort-wasm-simd-threaded.jsep.wasm")
-    val requiredRuntime = runtimeNames.map { runtimeDist.resolve(it) }
     from(frontendDist)
-    from(runtimeDist) {
-        include(runtimeNames)
-        into("speech-runtime")
-    }
     into(layout.projectDirectory.dir("src/main/assets/assistant"))
     doFirst {
         check(requiredIndex.isFile) { "Run npm run build before packaging the Android assistant." }
-        check(requiredRuntime.all { it.isFile }) { "Install the locked frontend dependencies before packaging the assistant speech runtime." }
     }
 }
 tasks.named("preBuild") { dependsOn(syncAssistantAssets) }

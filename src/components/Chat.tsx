@@ -4,12 +4,14 @@ import { useAuth } from "../auth/authContext.ts";
 import { PanelLeftClose, PanelLeftOpen, Plus, Radio, Mic, MicOff, X } from "lucide-react";
 import {
   type ChatMessage,
+  boundVoiceResources,
   buildSafeChatContext,
   sendChatMessage,
 } from "../lib/aiChat.ts";
 import { SafeMarkdown } from "./SafeMarkdown.tsx";
 import { audioRecorder } from "../lib/audioRecorder.ts";
-import { speechManager } from "../lib/speechManager.ts";
+import { VoiceNote } from "./VoiceNote.tsx";
+import type { RecordingResult } from "../types/audio.ts";
 import { getSilenceTimeout } from "../lib/voicePreferences.ts";
 import { AudioRecorderError, type VoiceModeState } from "../types/audio.ts";
 
@@ -98,14 +100,14 @@ export function VoiceModeHeaderIndicator({
         <span className="chat-voice-header-title">
           {voiceModeState === "starting" && "Initializing…"}
           {voiceModeState === "listening" && (isMuted ? "Microphone Muted" : "Listening…")}
-          {voiceModeState === "transcribing" && "Transcribing…"}
+          {voiceModeState === "transcribing" && "Preparing audio…"}
           {voiceModeState === "thinking" && "Alfred is thinking…"}
           {voiceModeState === "error" && "Voice Error"}
         </span>
         <span className="chat-voice-header-sub">
           {voiceModeState === "starting" && modelLoadingText}
           {voiceModeState === "listening" && (isMuted ? "Tap mic to unmute" : "Speak when ready")}
-          {voiceModeState === "transcribing" && "Processing speech locally"}
+          {voiceModeState === "transcribing" && "Preparing recording"}
           {voiceModeState === "thinking" && "Generating answer…"}
           {voiceModeState === "error" && (voiceModeError || "Voice error")}
         </span>
@@ -178,14 +180,14 @@ function VoiceModeHeroIndicator({
         <h2 className="chat-voice-hero-title">
           {voiceModeState === "starting" && "Initializing…"}
           {voiceModeState === "listening" && (isMuted ? "Microphone Muted" : "Listening…")}
-          {voiceModeState === "transcribing" && "Transcribing…"}
+          {voiceModeState === "transcribing" && "Preparing audio…"}
           {voiceModeState === "thinking" && "Alfred is thinking…"}
           {voiceModeState === "error" && "Voice Error"}
         </h2>
         <p className="chat-voice-hero-sub">
           {voiceModeState === "starting" && modelLoadingText}
           {voiceModeState === "listening" && (isMuted ? "Tap mic to unmute" : "Speak when ready")}
-          {voiceModeState === "transcribing" && "Processing speech locally"}
+          {voiceModeState === "transcribing" && "Preparing recording"}
           {voiceModeState === "thinking" && "Generating answer…"}
           {voiceModeState === "error" && (voiceModeError || "Voice error occurred")}
         </p>
@@ -236,8 +238,16 @@ export default function Chat({
     messagesRef.current = messages;
   }, [messages]);
 
-  const handleSendMessageRef = useRef<(textToSend?: string, voiceSessionId?: number) => Promise<boolean>>(() => Promise.resolve(false));
+  const handleSendMessageRef = useRef<(textToSend?: string, voiceSessionId?: number, recording?: RecordingResult) => Promise<boolean>>(() => Promise.resolve(false));
   const [inputPrompt, setInputPrompt] = useState("");
+  const pendingRecordingRef = useRef<RecordingResult | undefined>(undefined);
+  const [pendingRecording, setPendingRecordingState] = useState<RecordingResult | undefined>(undefined);
+  const setPendingRecording = useCallback((recording: RecordingResult | undefined) => {
+    pendingRecordingRef.current = recording;
+    setPendingRecordingState(recording);
+  }, []);
+  const hasComposerContent = Boolean(pendingRecording || inputPrompt.trim());
+  const sendingRef = useRef(false);
   const [isLoading, setIsLoading] = useState(false);
   const [failedPrompt, setFailedPrompt] = useState<string | null>(null);
 
@@ -299,7 +309,6 @@ export default function Chat({
     setIsLogoCentered(false);
     setIsLogoAnimatingToHeader(false);
     audioRecorder.cancel();
-    speechManager.cancelAllPendingRequests("Exit voice mode");
     if (currentAbortControllerRef.current) {
       try {
         currentAbortControllerRef.current.abort();
@@ -323,23 +332,11 @@ export default function Chat({
     return () => window.removeEventListener("alfred:android_assistant_opened", stopForSystemAssistant);
   }, [handleExitVoiceMode]);
 
-  const [modelLoadingText, setModelLoadingText] = useState<string>("Initializing voice...");
+  const modelLoadingText = "Preparing microphone…";
 
   useEffect(() => {
     const unsubLevel = audioRecorder.addLevelListener((level) => {
       setVoiceModeAudioLevel(level);
-    });
-
-    const unsubStatus = speechManager.addStatusListener((status) => {
-      if (status === "downloading") setModelLoadingText("Downloading speech model...");
-      else if (status === "compiling") setModelLoadingText("Compiling speech model...");
-      else if (status === "ready") setModelLoadingText("Model ready");
-    });
-
-    const unsubProgress = speechManager.addProgressListener((info) => {
-      if (info.progress !== undefined) {
-        setModelLoadingText(`Downloading model (${Math.round(info.progress)}%)...`);
-      }
     });
 
     const sessionIdRef = voiceSessionIdRef;
@@ -348,12 +345,9 @@ export default function Chat({
 
     return () => {
       unsubLevel();
-      unsubStatus();
-      unsubProgress();
       sessionIdRef.current++;
       modeActiveRef.current = false;
       audioRecorder.cancel();
-      speechManager.cancelAllPendingRequests("Component unmounted");
       if (abortCtrlRef.current) {
         abortCtrlRef.current.abort();
         abortCtrlRef.current = null;
@@ -371,7 +365,6 @@ export default function Chat({
       }
       if (isRecordingPushToTalk) {
         audioRecorder.cancel();
-        speechManager.cancelAllPendingRequests("View inactive");
         queueMicrotask(() => {
           setIsRecordingPushToTalk(false);
         });
@@ -404,15 +397,18 @@ export default function Chat({
     adjustTextareaHeight(textareaRef.current);
   }, [inputPrompt]);
 
-  const handleSendMessage = async (textToSend?: string, voiceSessionId?: number): Promise<boolean> => {
-    if (isLoading) return false;
+  const handleSendMessage = async (textToSend?: string, voiceSessionId?: number, recording?: RecordingResult): Promise<boolean> => {
+    if (sendingRef.current) return false;
 
     const rawText = textToSend !== undefined ? textToSend : inputPrompt;
-    const trimmed = rawText.trim();
+    recording ??= pendingRecordingRef.current ?? (failedPrompt === rawText.trim() ? messagesRef.current.at(-1)?.recording : undefined);
+    const trimmed = rawText.trim() || (recording ? "Voice message" : "");
     if (!trimmed) return false;
 
+    sendingRef.current = true;
+    setPendingRecording(undefined);
     const currentReqId = ++activeRequestIdRef.current;
-    const isRetry = textToSend !== undefined && failedPrompt !== null;
+    const isRetry = textToSend !== undefined && failedPrompt === trimmed && messagesRef.current.at(-1)?.recording === recording;
     justSentMessageRef.current = true;
 
     if (isRetry) {
@@ -429,9 +425,10 @@ export default function Chat({
         id: `user-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
         role: "user",
         content: trimmed,
+        recording,
         timestamp: Date.now(),
       };
-      const updated = [...messagesRef.current, userMessage];
+      const updated = boundVoiceResources([...messagesRef.current, userMessage]);
       messagesRef.current = updated;
       setMessages(updated);
     }
@@ -446,7 +443,7 @@ export default function Chat({
     try {
       const context = buildSafeChatContext(messagesRef.current, trimmed);
 
-      const response = await sendChatMessage(context, abortController.signal);
+      const response = await sendChatMessage(context, abortController.signal, { recording });
 
       // Check if user reset chat or cancelled voice session while waiting
       if (activeRequestIdRef.current !== currentReqId) return false;
@@ -531,6 +528,7 @@ export default function Chat({
         currentAbortControllerRef.current = null;
       }
       if (activeRequestIdRef.current === currentReqId) {
+        sendingRef.current = false;
         setIsLoading(false);
       }
     }
@@ -540,41 +538,30 @@ export default function Chat({
     handleSendMessageRef.current = handleSendMessage;
   });
 
-  // Push-to-Talk Manual Dictation (Never auto-submits, inserts into editable input)
+  // Push-to-talk stages the finalized recording until the existing Send action.
   const handleTogglePushToTalk = async () => {
     if (voiceModeActiveRef.current) {
       handleExitVoiceMode();
     }
 
     if (isRecordingPushToTalk) {
-      setIsRecordingPushToTalk(false);
       setIsTranscribingAudio(true);
-      try {
-        const result = await audioRecorder.stop();
-        const transcription = await speechManager.transcribe(result.audio);
-        const text = transcription.text.trim();
-        if (text) {
-          setInputPrompt((prev) => (prev ? `${prev} ${text}` : text));
-          setTimeout(() => {
-            textareaRef.current?.focus();
-          }, 50);
-        }
-      } catch (err: unknown) {
-        if (!(err instanceof AudioRecorderError && err.code === "EMPTY_AUDIO")) {
-          console.warn("[PushToTalk] Transcription error:", err);
-        }
-      } finally {
-        setIsTranscribingAudio(false);
-      }
+      setIsRecordingPushToTalk(false);
+      try { await audioRecorder.stop(); } catch { /* The capture promise below reports errors. */ }
     } else {
       try {
         setIsRecordingPushToTalk(true);
-        // Pre-warm model in background
-        void speechManager.ensureModelLoaded();
-        await audioRecorder.start({ maxDurationMs: 60000 });
+        const captureSession = voiceSessionIdRef.current;
+        const result = await audioRecorder.record({ maxDurationMs: 60000 });
+        if (captureSession !== voiceSessionIdRef.current) return;
+        setPendingRecording(result);
+        setInputPrompt("");
       } catch (err: unknown) {
         setIsRecordingPushToTalk(false);
-        console.error("[PushToTalk] Mic start error:", err);
+        setVoiceModeError(err instanceof Error ? err.message : "Recording failed.");
+      } finally {
+        setIsRecordingPushToTalk(false);
+        setIsTranscribingAudio(false);
       }
     }
   };
@@ -583,23 +570,7 @@ export default function Chat({
 
   // Persistent Hands-Free Voice Mode Loop
   const runVoiceModeLoop = async (sessionId: number, retryText?: string) => {
-    // 1. Proactively ensure model is loaded before listening
-    try {
-      setVoiceModeState("starting");
-      await speechManager.ensureModelLoaded();
-    } catch (err: unknown) {
-      if (!voiceModeActiveRef.current || voiceSessionIdRef.current !== sessionId) return;
-      const errorMsg = err instanceof Error ? err.message : String(err);
-      if (errorMsg.toLowerCase().includes("cancel")) {
-        handleExitVoiceMode();
-        return;
-      }
-      setVoiceModeError(`Model load error: ${errorMsg}`);
-      setVoiceModeState("error");
-      voiceModeActiveRef.current = false;
-      return;
-    }
-
+    setVoiceModeState("starting");
     if (!voiceModeActiveRef.current || voiceSessionIdRef.current !== sessionId) return;
 
     // 2. Hands-free turn loop
@@ -610,6 +581,7 @@ export default function Chat({
         continue;
       }
       try {
+        let recording: RecordingResult | undefined = nextText ? messagesRef.current.at(-1)?.recording : undefined;
         let recognizedText = nextText;
         nextText = undefined;
         if (!recognizedText) {
@@ -624,19 +596,15 @@ export default function Chat({
         if (!voiceModeActiveRef.current || voiceSessionIdRef.current !== sessionId) break;
         if (isVoiceMutedRef.current) continue;
 
-        setVoiceModeState("transcribing");
-        const transcription = await speechManager.transcribe(recResult.audio);
-
-        if (!voiceModeActiveRef.current || voiceSessionIdRef.current !== sessionId) break;
-
-          recognizedText = transcription.text.trim();
+          recording = recResult;
+          recognizedText = "Voice message";
         }
         if (!recognizedText) {
           continue; // Silence or non-speech, keep listening
         }
 
         setVoiceModeState("thinking");
-        const success = await handleSendMessageRef.current(recognizedText, sessionId);
+        const success = await handleSendMessageRef.current(recognizedText, sessionId, recording);
 
         if (!voiceModeActiveRef.current || voiceSessionIdRef.current !== sessionId) break;
 
@@ -660,7 +628,6 @@ export default function Chat({
         setVoiceModeState("error");
         voiceModeActiveRef.current = false;
         audioRecorder.cancel();
-        speechManager.cancelAllPendingRequests("Voice mode error");
         break;
       }
     }
@@ -678,7 +645,7 @@ export default function Chat({
   };
 
   const handleSendVoiceModeText = async () => {
-    if (!inputPrompt.trim() || isLoading) return;
+    if (!hasComposerContent || isLoading) return;
     const textToSend = inputPrompt;
     setInputPrompt("");
     audioRecorder.cancel();
@@ -702,7 +669,6 @@ export default function Chat({
     } else {
       if (isRecordingPushToTalk) {
         audioRecorder.cancel();
-        speechManager.cancelAllPendingRequests("Switching to Voice Mode");
         setIsRecordingPushToTalk(false);
       }
       setVoiceModeError(null);
@@ -764,12 +730,15 @@ export default function Chat({
     }
     if (isRecordingPushToTalk) {
       audioRecorder.cancel();
-      speechManager.cancelAllPendingRequests("New chat started");
       setIsRecordingPushToTalk(false);
     }
     activeRequestIdRef.current++;
     setIsLogoCentered(false);
     setIsLogoAnimatingToHeader(false);
+    voiceSessionIdRef.current++;
+    setPendingRecording(undefined);
+    sendingRef.current = false;
+    currentAbortControllerRef.current?.abort();
     messagesRef.current = [];
     setMessages([]);
     setIsLoading(false);
@@ -783,7 +752,7 @@ export default function Chat({
     if ((e.key === "Enter" || e.keyCode === 13 || e.which === 13) && !e.shiftKey) {
       e.preventDefault();
       e.stopPropagation();
-      if (inputPrompt.trim() && !isLoading) {
+      if (hasComposerContent && !isLoading) {
         void handleSendMessage();
       }
     }
@@ -793,7 +762,7 @@ export default function Chat({
     if ((e.key === "Enter" || e.keyCode === 13 || e.which === 13) && !e.shiftKey) {
       e.preventDefault();
       e.stopPropagation();
-      if (inputPrompt.trim() && !isLoading) {
+      if (hasComposerContent && !isLoading) {
         void handleSendVoiceModeText();
       }
     }
@@ -914,11 +883,19 @@ export default function Chat({
                   onSubmit={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    if (inputPrompt.trim() && !isLoading) {
+                    if (hasComposerContent && !isLoading) {
                       void handleSendVoiceModeText();
                     }
                   }}
                 >
+                  {pendingRecording ? (
+                    <div className="chat-pending-recording">
+                      <VoiceNote recording={pendingRecording} />
+                      <button type="button" className="chat-composer-btn" aria-label="Discard recording" title="Discard recording" onClick={() => setPendingRecording(undefined)}>
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ) : (
                   <textarea
                     ref={bindTextarea}
                     rows={1}
@@ -927,6 +904,7 @@ export default function Chat({
                     placeholder="Ask Alfred..."
                     value={inputPrompt}
                     onChange={(e) => {
+                      setPendingRecording(undefined);
                       setInputPrompt(e.target.value);
                       if (voiceModeActiveRef.current && voiceModeState === "listening") {
                         audioRecorder.cancel();
@@ -936,11 +914,12 @@ export default function Chat({
                     enterKeyHint="send"
                     disabled={isLoading}
                   />
+                  )}
                   <button
                     type="button"
                     className={`chat-composer-btn ${isRecordingPushToTalk ? "recording" : ""}`}
-                    title={isRecordingPushToTalk ? "Stop dictation" : "Voice dictation (speech-to-text)"}
-                    aria-label={isRecordingPushToTalk ? "Stop dictation" : "Voice dictation (speech-to-text)"}
+                    title={isRecordingPushToTalk ? "Stop recording" : "Record a voice message"}
+                    aria-label={isRecordingPushToTalk ? "Stop recording" : "Record a voice message"}
                     disabled={isLoading || isTranscribingAudio}
                     onClick={handleTogglePushToTalk}
                   >
@@ -949,7 +928,7 @@ export default function Chat({
                   <button
                     type="submit"
                     className="chat-prompt-send-btn"
-                    disabled={isLoading || !inputPrompt.trim()}
+                    disabled={isLoading || !hasComposerContent}
                     title="Send message"
                     aria-label="Send message"
                   >
@@ -1012,7 +991,7 @@ export default function Chat({
               {isRecordingPushToTalk
                 ? "Listening... click mic when done"
                 : isTranscribingAudio
-                ? "Transcribing voice..."
+                ? "Preparing audio..."
                 : "Ask anything / Schedule a meeting!"}
             </p>
             <form
@@ -1020,11 +999,19 @@ export default function Chat({
               onSubmit={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                if (inputPrompt.trim() && !isLoading) {
+                if (hasComposerContent && !isLoading) {
                   void handleSendMessage();
                 }
               }}
             >
+              {pendingRecording ? (
+                <div className="chat-pending-recording">
+                  <VoiceNote recording={pendingRecording} />
+                  <button type="button" className="chat-composer-btn" aria-label="Discard recording" title="Discard recording" onClick={() => setPendingRecording(undefined)}>
+                    <X size={14} />
+                  </button>
+                </div>
+              ) : (
               <textarea
                 ref={bindTextarea}
                 rows={1}
@@ -1034,7 +1021,7 @@ export default function Chat({
                   isRecordingPushToTalk
                     ? "Listening... click mic when done"
                     : isTranscribingAudio
-                    ? "Transcribing voice..."
+                    ? "Preparing audio..."
                     : "Ask Alfred anything..."
                 }
                 value={inputPrompt}
@@ -1043,11 +1030,12 @@ export default function Chat({
                 enterKeyHint="send"
                 disabled={isLoading}
               />
+              )}
               <button
                 type="button"
                 className={`chat-composer-btn ${isRecordingPushToTalk ? "recording" : ""}`}
-                title={isRecordingPushToTalk ? "Stop dictation" : "Voice dictation (speech-to-text)"}
-                aria-label={isRecordingPushToTalk ? "Stop dictation" : "Voice dictation (speech-to-text)"}
+                title={isRecordingPushToTalk ? "Stop recording" : "Record a voice message"}
+                aria-label={isRecordingPushToTalk ? "Stop recording" : "Record a voice message"}
                 disabled={isLoading || isTranscribingAudio}
                 onClick={handleTogglePushToTalk}
               >
@@ -1056,7 +1044,7 @@ export default function Chat({
               <button
                 type="submit"
                 className="chat-prompt-send-btn"
-                disabled={isLoading || !inputPrompt.trim()}
+                disabled={isLoading || !hasComposerContent}
                 title="Send message"
                 aria-label="Send message"
               >
@@ -1099,7 +1087,7 @@ export default function Chat({
                   {msg.role === "assistant" ? (
                     <SafeMarkdown content={msg.content} />
                   ) : (
-                    <div>{msg.content}</div>
+                    <div>{msg.recording ? <VoiceNote recording={msg.recording} /> : msg.content}</div>
                   )}
 
                   {msg.error && (
@@ -1157,11 +1145,19 @@ export default function Chat({
                     onSubmit={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
-                      if (inputPrompt.trim() && !isLoading) {
+                      if (hasComposerContent && !isLoading) {
                         void handleSendVoiceModeText();
                       }
                     }}
                   >
+                    {pendingRecording ? (
+                      <div className="chat-pending-recording">
+                        <VoiceNote recording={pendingRecording} />
+                        <button type="button" className="chat-composer-btn" aria-label="Discard recording" title="Discard recording" onClick={() => setPendingRecording(undefined)}>
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ) : (
                     <textarea
                       ref={bindTextarea}
                       rows={1}
@@ -1170,7 +1166,8 @@ export default function Chat({
                       placeholder="Ask Alfred..."
                       value={inputPrompt}
                       onChange={(e) => {
-                        setInputPrompt(e.target.value);
+                        setPendingRecording(undefined);
+                      setInputPrompt(e.target.value);
                         if (voiceModeActiveRef.current && voiceModeState === "listening") {
                           audioRecorder.cancel();
                         }
@@ -1179,11 +1176,12 @@ export default function Chat({
                       enterKeyHint="send"
                       disabled={isLoading}
                     />
+                    )}
                     <button
                       type="button"
                       className={`chat-composer-btn ${isRecordingPushToTalk ? "recording" : ""}`}
-                      title={isRecordingPushToTalk ? "Stop dictation" : "Voice dictation (speech-to-text)"}
-                      aria-label={isRecordingPushToTalk ? "Stop dictation" : "Voice dictation (speech-to-text)"}
+                      title={isRecordingPushToTalk ? "Stop recording" : "Record a voice message"}
+                      aria-label={isRecordingPushToTalk ? "Stop recording" : "Record a voice message"}
                       disabled={isLoading || isTranscribingAudio}
                       onClick={handleTogglePushToTalk}
                     >
@@ -1192,7 +1190,7 @@ export default function Chat({
                     <button
                       type="submit"
                       className="chat-prompt-send-btn"
-                      disabled={isLoading || !inputPrompt.trim()}
+                      disabled={isLoading || !hasComposerContent}
                       title="Send message"
                       aria-label="Send message"
                     >
@@ -1243,11 +1241,19 @@ export default function Chat({
                   onSubmit={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    if (inputPrompt.trim() && !isLoading) {
+                    if (hasComposerContent && !isLoading) {
                       void handleSendMessage();
                     }
                   }}
                 >
+                  {pendingRecording ? (
+                    <div className="chat-pending-recording">
+                      <VoiceNote recording={pendingRecording} />
+                      <button type="button" className="chat-composer-btn" aria-label="Discard recording" title="Discard recording" onClick={() => setPendingRecording(undefined)}>
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ) : (
                   <textarea
                     ref={bindTextarea}
                     className="chat-composer-textarea"
@@ -1255,7 +1261,7 @@ export default function Chat({
                       isRecordingPushToTalk
                         ? "Listening... click mic when done"
                         : isTranscribingAudio
-                        ? "Transcribing voice..."
+                        ? "Preparing audio..."
                         : "Ask Alfred..."
                     }
                     rows={1}
@@ -1266,12 +1272,13 @@ export default function Chat({
                     disabled={isLoading}
                     aria-label="Ask Alfred"
                   />
+                  )}
 
                   <button
                     type="button"
                     className={`chat-composer-btn ${isRecordingPushToTalk ? "recording" : ""}`}
-                    title={isRecordingPushToTalk ? "Stop dictation" : "Voice dictation (speech-to-text)"}
-                    aria-label={isRecordingPushToTalk ? "Stop dictation" : "Voice dictation (speech-to-text)"}
+                    title={isRecordingPushToTalk ? "Stop recording" : "Record a voice message"}
+                    aria-label={isRecordingPushToTalk ? "Stop recording" : "Record a voice message"}
                     disabled={isLoading || isTranscribingAudio}
                     onClick={handleTogglePushToTalk}
                   >
@@ -1281,7 +1288,7 @@ export default function Chat({
                   <button
                     type="submit"
                     className="chat-composer-btn chat-composer-send-btn"
-                    disabled={isLoading || !inputPrompt.trim()}
+                    disabled={isLoading || !hasComposerContent}
                     title="Send message"
                     aria-label="Send message"
                   >

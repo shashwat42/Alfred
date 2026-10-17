@@ -244,7 +244,7 @@ export async function probeModelHealth(
 
 /**
  * Initializes and checks AI model availability on app startup.
- * Automatically tests candidate models to select the most responsive model.
+ * Checks candidate models without changing configured request priority.
  */
 export async function initializeAiService(): Promise<void> {
     const candidates = getAllCandidateModels();
@@ -253,8 +253,8 @@ export async function initializeAiService(): Promise<void> {
     for (const model of candidates) {
         const result = await probeModelHealth(model, 6000);
         if (result.ok) {
-            currentActiveModel = model;
-            console.log(`[AI Init] Selected active model "${model}" (probe latency: ${result.latencyMs}ms)`);
+            // Health probes report availability; they do not reorder request priority.
+            console.log(`[AI Init] Responsive model "${model}" (probe latency: ${result.latencyMs}ms)`);
             return;
         }
         console.warn(`[AI Init] Model "${model}" failed health probe (${result.error}, ${result.latencyMs}ms). Checking next...`);
@@ -271,10 +271,7 @@ async function sendUpstreamRequestWithFallback(
     payload: Record<string, unknown>,
     apiKey: string
 ): Promise<RawUpstreamResponse> {
-    const candidates = [
-        currentActiveModel,
-        ...getAllCandidateModels().filter((m) => m !== currentActiveModel),
-    ];
+    const candidates = getAllCandidateModels();
 
     let lastError: unknown = null;
 
@@ -284,10 +281,8 @@ async function sendUpstreamRequestWithFallback(
 
         try {
             const data = await sendUpstreamRequest(payload, apiKey);
-            if (candidateModel !== currentActiveModel) {
-                console.log(`[AI Failover] Switched active model to "${candidateModel}"`);
-                currentActiveModel = candidateModel;
-            }
+            // Keep configured primary first on the next request, including after failover.
+            if (!data.model) data.model = candidateModel;
             return data;
         } catch (err: unknown) {
             lastError = err;
@@ -326,7 +321,9 @@ async function sendUpstreamRequestWithFallback(
  */
 export async function generateChatCompletion(
     clientMessages: ChatMessageInput[],
-    accountId?: string
+    accountId?: string,
+    audio?: { data: string; format: "wav" },
+    historyAudio: Array<{ index: number; data: string; format: "wav" }> = []
 ): Promise<ChatCompletionResult> {
     const apiKey = env.llm.apiKey;
     if (!apiKey || apiKey.trim().length === 0) {
@@ -349,6 +346,18 @@ export async function generateChatCompletion(
             content: msg.content,
         })),
     ];
+
+    if (audio) {
+        const latest = conversationMessages[conversationMessages.length - 1]!;
+        latest.content = [
+            { type: "text", text: latest.content },
+            { type: "input_audio", input_audio: audio },
+        ];
+    }
+    for (const { index, data, format } of historyAudio) {
+        const message = conversationMessages[index + 1]!;
+        message.content = [{ type: "text", text: message.content }, { type: "input_audio", input_audio: { data, format } }];
+    }
 
     const actionsExecuted: ConfirmedAction[] = [];
     const MAX_TOOL_ITERATIONS = 5;

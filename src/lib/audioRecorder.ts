@@ -6,7 +6,7 @@ import {
   type AudioLevelCallback,
   type RecordingStateCallback,
 } from "../types/audio.ts";
-import { decodeAndResampleAudio } from "./speechManager.ts";
+import { prepareRecording } from "./audio.ts";
 
 const DEFAULT_MAX_DURATION_MS = 60000; // 60 seconds
 const MIN_AUDIO_DURATION_MS = 250; // Minimum 250ms of audio
@@ -26,6 +26,7 @@ export class AudioRecorder {
   private recordedChunks: Blob[] = [];
   private isCancelled = false;
   private captureGeneration = 0;
+  private starting = false;
   private activeConfig: AudioRecorderConfig = {};
 
   // Voice Activity / Turn Detection state
@@ -88,7 +89,7 @@ export class AudioRecorder {
    * Prompts the user for microphone permissions if not already granted.
    */
   public async start(config: AudioRecorderConfig = {}): Promise<void> {
-    if (this.state === "recording") {
+    if (this.starting || this.state === "recording" || this.state === "processing" || this.stream) {
       throw new AudioRecorderError("BUSY", "A recording is already in progress.");
     }
 
@@ -101,6 +102,7 @@ export class AudioRecorder {
       throw err;
     }
 
+    this.starting = true;
     this.isCancelled = false;
     const captureGeneration = ++this.captureGeneration;
     this.turnAutoStopping = false;
@@ -112,6 +114,7 @@ export class AudioRecorder {
     this.cleanupAudioNodes();
 
     try {
+      window.dispatchEvent(new Event("alfred:pause-playback"));
       // 1. Request microphone permission on-demand
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -171,6 +174,7 @@ export class AudioRecorder {
         }
       }
 
+      if (!mimeType) throw new AudioRecorderError("UNSUPPORTED", "No supported recording format is available.");
       const recorderOptions: MediaRecorderOptions = {};
       if (mimeType) {
         recorderOptions.mimeType = mimeType;
@@ -199,6 +203,7 @@ export class AudioRecorder {
       // 4. Start recording with 100ms timeslices for smooth buffering
       mediaRecorder.start(100);
       this.startTime = performance.now();
+      this.starting = false;
       this.setState("recording");
 
       // 5. Enforce 60-second maximum duration limit
@@ -206,11 +211,12 @@ export class AudioRecorder {
       this.maxDurationTimer = setTimeout(() => {
         console.info(`[AudioRecorder] Maximum recording limit (${maxDuration / 1000}s) reached.`);
         if (this.state === "recording") {
-          void this.stop();
+          void this.stop().catch(() => {});
         }
       }, maxDuration);
     } catch (err: unknown) {
       if (captureGeneration !== this.captureGeneration) throw err;
+      this.starting = false;
       this.cleanup();
       let recorderError: AudioRecorderError;
 
@@ -254,13 +260,18 @@ export class AudioRecorder {
    * Continuous Turn-by-Turn helper: Starts recording with silence detection
    * and returns a promise that resolves when speech ceases or max duration is hit.
    */
-  public async recordTurn(config: AudioRecorderConfig = {}): Promise<RecordingResult> {
+  public recordTurn(config: AudioRecorderConfig = {}): Promise<RecordingResult> {
+    return this.record({ ...config, enableSilenceDetection: true });
+  }
+
+  public async record(config: AudioRecorderConfig = {}): Promise<RecordingResult> {
+    if (this.turnResolver) throw new AudioRecorderError("BUSY", "A recording is already in progress.");
     return new Promise<RecordingResult>((resolve, reject) => {
       const turn = { resolve, reject };
       this.turnResolver = turn;
       const turnConfig: AudioRecorderConfig = {
         ...config,
-        enableSilenceDetection: true,
+        enableSilenceDetection: config.enableSilenceDetection ?? false,
       };
 
       this.start(turnConfig).catch((err) => {
@@ -273,7 +284,7 @@ export class AudioRecorder {
   }
 
   /**
-   * Stops recording and processes captured audio into 16,000 Hz mono Float32Array PCM.
+   * Stops recording and prepares a playable WAV for the existing Gemini endpoint.
    */
   public async stop(): Promise<RecordingResult> {
     if (this.state !== "recording" || !this.mediaRecorder) {
@@ -285,6 +296,7 @@ export class AudioRecorder {
     this.stopLevelMonitoring();
 
     const durationMs = Math.round(performance.now() - this.startTime);
+    const generation = this.captureGeneration;
 
     return new Promise<RecordingResult>((resolve, reject) => {
       const mediaRecorder = this.mediaRecorder;
@@ -301,6 +313,7 @@ export class AudioRecorder {
 
       mediaRecorder.onstop = async () => {
         try {
+          if (generation !== this.captureGeneration) { reject(new Error("Recording cancelled")); return; }
           if (this.isCancelled) {
             this.cleanup();
             const err = new AudioRecorderError("UNKNOWN", "Recording was cancelled.");
@@ -327,47 +340,11 @@ export class AudioRecorder {
           // Combine memory chunks into a single Blob
           const mimeType = mediaRecorder.mimeType || "audio/webm";
           const audioBlob = new Blob(this.recordedChunks, { type: mimeType });
-          const arrayBuffer = await audioBlob.arrayBuffer();
-
-          // Release hardware tracks immediately
           this.releaseTracks();
-
-          // High-quality offline resampling to 16,000 Hz single-channel Float32Array
-          const float32Pcm = await decodeAndResampleAudio(arrayBuffer, 16000);
-
-          // Verify that audio is not completely silent (empty audio check)
-          let hasSignal = false;
-          const sampleCount = float32Pcm.length;
-          for (let i = 0; i < sampleCount; i++) {
-            if (Math.abs(float32Pcm[i]) > 0.003) {
-              hasSignal = true;
-              break;
-            }
-          }
-
-          if (!hasSignal) {
-            this.cleanup();
-            const err = new AudioRecorderError(
-              "EMPTY_AUDIO",
-              "Recorded audio contains no audible speech (silence)."
-            );
-            this.setState("error", err);
-            if (this.turnResolver) {
-              this.turnResolver.reject(err);
-              this.turnResolver = null;
-            }
-            reject(err);
-            return;
-          }
-
+          const result = await prepareRecording(audioBlob, durationMs);
+          if (this.isCancelled || generation !== this.captureGeneration) throw new Error("Recording cancelled");
           this.cleanup();
           this.setState("inactive");
-
-          const result: RecordingResult = {
-            audio: float32Pcm,
-            durationMs,
-            sampleRate: 16000,
-          };
 
           if (this.turnResolver) {
             this.turnResolver.resolve(result);
@@ -376,8 +353,9 @@ export class AudioRecorder {
 
           resolve(result);
         } catch (err) {
+          if (generation !== this.captureGeneration) { reject(new Error("Recording cancelled")); return; }
           this.cleanup();
-          const procError = new AudioRecorderError(
+          const procError = err instanceof AudioRecorderError ? err : new AudioRecorderError(
             "UNKNOWN",
             `Failed to decode recorded audio: ${err instanceof Error ? err.message : String(err)}`
           );
@@ -408,6 +386,7 @@ export class AudioRecorder {
     // Permission may still be pending while state is inactive. Invalidate that
     // request too, and immediately stop any stream it later returns.
     this.captureGeneration++;
+    this.starting = false;
     this.isCancelled = true;
     this.stopTimers();
     this.stopLevelMonitoring();
@@ -480,7 +459,7 @@ export class AudioRecorder {
                 console.error("[AudioRecorder] Error in onTurnDetected callback:", err);
               }
             }
-            void this.stop();
+            void this.stop().catch(() => {});
             return;
           }
         }

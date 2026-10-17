@@ -156,23 +156,6 @@ class AssistantDocumentTest {
             evaluate(assistant!!, "location.href = 'https://example.com/blocked'")
             instrumentation.waitForIdleSync()
             assertEquals("\"http://tauri.localhost\"", evaluate(assistant!!, "location.origin"))
-            if (InstrumentationRegistry.getArguments().getString("voiceModelSmoke") == "true") {
-                val worker = context.assets.list("assistant/assets")!!.single { it.startsWith("speech.worker-") && it.endsWith(".js") }
-                evaluate(assistant!!, """(() => {
-                    window.alfredModelProbe = {ready:false, error:null};
-                    const worker = new Worker('/assets/$worker', {type:'module', name:'alfred-android-assistant'});
-                    worker.onmessage = event => {
-                        if (event.data.type === 'MODEL_STATUS' && event.data.status === 'ready') { window.alfredModelProbe.ready = true; worker.terminate(); }
-                        if (event.data.type === 'MODEL_STATUS' && event.data.status === 'error') { window.alfredModelProbe.error = event.data.error; worker.terminate(); }
-                    };
-                    worker.onerror = event => { window.alfredModelProbe.error = event.message; worker.terminate(); };
-                    worker.postMessage({type:'LOAD_MODEL', model:'onnx-community/whisper-tiny.en', devicePreference:'wasm'});
-                    setTimeout(() => worker.terminate(), 180000);
-                })()""")
-                waitFor(assistant!!, "window.alfredModelProbe.ready || window.alfredModelProbe.error !== null", 180)
-                assertEquals("Local Whisper model/runtime initialization error", "null", evaluate(assistant!!, "window.alfredModelProbe.error"))
-                assertEquals("true", evaluate(assistant!!, "window.alfredModelProbe.ready"))
-            }
             if (InstrumentationRegistry.getArguments().getString("aiSmoke") == "true") {
                 evaluate(assistant!!, "(() => { const input = document.querySelector('.android-assistant-composer input'); const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; setter.call(input, 'Reply with ALFRED_ANDROID_SMOKE_OK. Do not create or modify any data.'); input.dispatchEvent(new Event('input', {bubbles:true})); })()")
                 waitFor(assistant!!, "document.querySelector('.android-assistant-composer button[type=submit]').disabled === false")

@@ -7,7 +7,10 @@
   "type": "module",
   "main": "server.js",
   "scripts": {
-    "dev": "node --watch server.ts"
+    "dev": "node --watch server.ts",
+    "test": "node --test src/modules/ai/*.test.ts",
+    "check": "tsc --noEmit",
+    "verify:audio-models": "node scripts/verify-audio-models.ts"
   },
   "dependencies": {
     "cors": "^2.8.6",

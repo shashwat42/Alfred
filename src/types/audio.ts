@@ -40,9 +40,8 @@ export interface AudioRecorderConfig {
 }
 
 export interface RecordingResult {
-  audio: Float32Array; // 16,000 Hz mono PCM
+  audio: Blob; // Final WAV used for both upload and playback
   durationMs: number;
-  sampleRate: number; // 16,000
 }
 
 export type AudioLevelCallback = (level: number) => void;

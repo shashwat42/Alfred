@@ -4,11 +4,13 @@ import { aiRateLimiter } from "../../middleware/rateLimit.middleware.ts";
 import { validate } from "../../middleware/validate.middleware.ts";
 import { chatRequestSchema } from "./ai.schema.ts";
 import { chatCompletionHandler } from "./controller.ts";
+import { audioBodyParser, audioBodyError, audioCompletionHandler } from "./audio.ts";
 
 const router = Router();
 
 // Authentication is strictly required for AI endpoints
 router.use(authMiddleware);
+router.post("/chat/audio", aiRateLimiter, audioBodyParser, audioCompletionHandler, audioBodyError);
 
 // Dedicated rate limiting and payload validation for AI chat
 router.post(

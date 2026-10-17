@@ -99,8 +99,8 @@ class AlfredAssistantSession(context: Context) : VoiceInteractionSession(context
             allowContentAccess = false
             javaScriptCanOpenWindowsAutomatically = false
             setSupportMultipleWindows(false)
-            // Voice is explicitly started/stopped by our UI. Model loading can
-            // outlast Chromium's gesture token; Web Audio must still run for VAD.
+            // Voice is explicitly started/stopped by our UI. Web Audio must
+            // continue across asynchronous capture and preparation for VAD.
             mediaPlaybackRequiresUserGesture = false
         }
         voiceCapture = AssistantVoiceCapture()
@@ -132,7 +132,7 @@ class AlfredAssistantSession(context: Context) : VoiceInteractionSession(context
         view.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(v: WebView, request: WebResourceRequest): Boolean = true
             override fun shouldInterceptRequest(v: WebView, request: WebResourceRequest): WebResourceResponse? {
-                if (!AssistantBridge.trusted(request.url)) return null // Fetch/Whisper downloads; CSP forbids remote documents/scripts.
+                if (!AssistantBridge.trusted(request.url)) return null // Authenticated backend fetches; CSP forbids remote documents/scripts.
                 val path = AssistantAssetPath.fromDecodedPath(request.url.path) ?: return blocked()
                 return try {
                     val mime = when {
@@ -270,6 +270,6 @@ class AlfredAssistantSession(context: Context) : VoiceInteractionSession(context
         browser = null
     }
     companion object {
-        private const val CSP = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https: http://localhost:8000 http://127.0.0.1:8000; worker-src 'self' blob:; media-src 'self' blob:; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"
+        private const val CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https: http://localhost:8000 http://127.0.0.1:8000; worker-src 'self' blob:; media-src 'self' blob:; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"
     }
 }

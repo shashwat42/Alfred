@@ -3,16 +3,17 @@ import { ArrowUp, ArrowLeftRight, ExternalLink, MoreHorizontal, RotateCcw, Squar
 import Logo from "../assets/Alfred_Logo.svg";
 import { AUTH_CHANGE_EVENT, AUTH_STORAGE_KEY, getSession } from "../auth/auth.ts";
 import { SafeMarkdown } from "../components/SafeMarkdown.tsx";
-import { buildSafeChatContext, MAX_MESSAGE_CHAR_LIMIT, sendChatMessage, type ChatMessage } from "../lib/aiChat.ts";
+import { boundVoiceResources, buildSafeChatContext, MAX_MESSAGE_CHAR_LIMIT, sendChatMessage, type ChatMessage } from "../lib/aiChat.ts";
 import { ensureToken } from "../lib/api.ts";
 import { audioRecorder } from "../lib/audioRecorder.ts";
-import { speechManager } from "../lib/speechManager.ts";
+import { VoiceNote } from "../components/VoiceNote.tsx";
+import type { RecordingResult } from "../types/audio.ts";
 import { getSilenceTimeout } from "../lib/voicePreferences.ts";
 import { ASSISTANT_VOICE_LEVEL_EVENT, androidAssistantRequest, announceAndroidActions, hasAndroidAssistantBridge } from "./assistantBridge.ts";
 import { recordAssistantSpeech } from "./voiceCapture.ts";
 import "./androidAssistant.css";
 
-type State = "Ready" | "Preparing voice" | "Listening" | "Transcribing" | "Thinking" | "Speaking" | "Paused";
+type State = "Ready" | "Preparing voice" | "Listening" | "Preparing audio" | "Thinking" | "Speaking" | "Paused";
 let messageSequence = 0;
 const messageId = () => `${Date.now()}-${++messageSequence}`;
 
@@ -52,7 +53,6 @@ export default function AndroidAssistantApp() {
     abort.current?.abort();
     audioRecorder.cancel();
     if (hasAndroidAssistantBridge()) void androidAssistantRequest("cancelVoice").catch(() => {});
-    speechManager.terminate();
     window.speechSynthesis?.cancel();
     speechDone.current?.();
     speechDone.current = null;
@@ -86,8 +86,9 @@ export default function AndroidAssistantApp() {
 
   useEffect(() => { list.current?.scrollTo({ top: list.current.scrollHeight, behavior: "smooth" }); }, [messages, state]);
 
-  const send = async (raw: string): Promise<string> => {
+  const send = async (raw: string, recording?: RecordingResult): Promise<string> => {
     const text = raw.trim();
+    recording ??= history.current.at(-1)?.error && history.current.at(-1)?.content === text ? history.current.at(-1)?.recording : undefined;
     if (!text || busyRef.current) return "";
     if (text.length > MAX_MESSAGE_CHAR_LIMIT) throw new Error(`Keep messages under ${MAX_MESSAGE_CHAR_LIMIT} characters.`);
     busyRef.current = true; setBusy(true); setState("Thinking"); setError("");
@@ -102,9 +103,9 @@ export default function AndroidAssistantApp() {
       const expectedAccountId = getSession()?.account.id;
       if (!expectedAccountId) throw new Error("Open Alfred to connect or sign in, then try again.");
       account.current = expectedAccountId;
-      const user: ChatMessage = { id: messageId(), role: "user", content: text, timestamp: Date.now() };
-      history.current = [...previous, user]; setMessages(history.current);
-      const response = await sendChatMessage(buildSafeChatContext(previous, text), controller.signal, { preserveAccount: true, expectedAccountId });
+      const user: ChatMessage = { id: messageId(), role: "user", content: text, recording, timestamp: Date.now() };
+      history.current = boundVoiceResources([...previous, user]); setMessages(history.current);
+      const response = await sendChatMessage(buildSafeChatContext(previous, text), controller.signal, { preserveAccount: true, expectedAccountId, recording });
       if (controller.signal.aborted || expectedAccountId !== getSession()?.account.id) return "";
       if (!response.message?.content?.trim()) throw new Error("Alfred returned an empty response. Please retry your question.");
       history.current = [...history.current, { id: messageId(), role: "assistant", content: response.message.content, timestamp: Date.now() }];
@@ -134,22 +135,19 @@ export default function AndroidAssistantApp() {
     voiceRef.current = true; setVoice(true); setError(""); setState("Preparing voice");
     const current = () => voiceRef.current && turn === generation.current;
     try {
-      await speechManager.ensureModelLoaded();
       let nextPrompt = savedPrompt;
       while (current()) {
+        let recording: RecordingResult | undefined = nextPrompt ? history.current.at(-1)?.recording : undefined;
         let text = nextPrompt;
         nextPrompt = undefined;
         if (!text) {
           setState("Listening");
           const audio = await recordAssistantSpeech(getSilenceTimeout());
           if (!current()) break;
-          setState("Transcribing");
-          const transcription = await speechManager.transcribe(audio);
-          if (!current()) break;
-          text = transcription.text.trim();
-          if (!text) throw new Error("Alfred couldn't understand that recording. Retry and speak again.");
+          recording = audio;
+          text = "Voice message";
         }
-        const reply = await send(text);
+        const reply = await send(text, recording);
         if (!current()) break;
         if (reply && "speechSynthesis" in window) {
           setState("Speaking");
@@ -210,8 +208,8 @@ export default function AndroidAssistantApp() {
       }} disabled={busy}><RotateCcw size={15} />{retryPrompt ? "Retry response" : "Try again"}</button>}
     </section>}
     <div className="android-assistant-messages" ref={list} role="log" aria-label="Conversation">
-      {messages.map((message) => <article key={message.id} className={`android-assistant-message is-${message.role}`} aria-label={message.role === "user" ? "You" : "Alfred"}>{message.error && <span>Not sent</span>}{message.role === "assistant" ? <SafeMarkdown content={message.content} /> : <p>{message.content}</p>}</article>)}
-      {(busy || state === "Transcribing") && <div className="android-assistant-thinking" role="status"><Sparkles size={14} />{state === "Transcribing" ? "Transcribing speech…" : "Alfred is thinking…"}</div>}
+      {messages.map((message) => <article key={message.id} className={`android-assistant-message is-${message.role}`} aria-label={message.role === "user" ? "You" : "Alfred"}>{message.error && <span>Not sent</span>}{message.role === "assistant" ? <SafeMarkdown content={message.content} /> : <p>{message.recording ? <VoiceNote recording={message.recording} /> : message.content}</p>}</article>)}
+      {(busy || state === "Preparing audio") && <div className="android-assistant-thinking" role="status"><Sparkles size={14} />{state === "Preparing audio" ? "Preparing audio…" : "Alfred is thinking…"}</div>}
     </div>
   </main>;
 }

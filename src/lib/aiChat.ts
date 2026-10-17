@@ -1,3 +1,5 @@
+import type { RecordingResult } from "../types/audio.ts";
+import { MAX_AUDIO_BYTES } from "./audio.ts";
 import { apiFetch } from "./api.ts";
 
 export interface ChatMessage {
@@ -6,6 +8,7 @@ export interface ChatMessage {
   content: string;
   timestamp: number;
   error?: string;
+  recording?: RecordingResult;
 }
 
 export interface ActionExecutionResult {
@@ -40,6 +43,23 @@ export const MAX_MESSAGES_CONTEXT = 20;
 export const MAX_MESSAGE_CHAR_LIMIT = 4000;
 export const MAX_TOTAL_CONTEXT_CHARS = 20000;
 
+export interface ChatContextMessage {
+  role: "user" | "assistant";
+  content: string;
+  recording?: RecordingResult;
+}
+
+/** Bound retained audio without changing text-history ordering. Older notes expire explicitly. */
+export function boundVoiceResources(messages: ChatMessage[]): ChatMessage[] {
+  let bytes = 0;
+  return [...messages].reverse().map((message) => {
+    bytes += message.recording?.audio.size ?? 0;
+    return bytes > 48 * 1024 * 1024 && message.recording
+      ? { ...message, recording: undefined, content: "Recording no longer available" }
+      : message;
+  }).reverse();
+}
+
 /**
  * Builds a validated, bounded context array for the backend AI endpoint.
  * Preserves the latest user prompt, limits prior history to recent relevant messages,
@@ -49,7 +69,7 @@ export const MAX_TOTAL_CONTEXT_CHARS = 20000;
 export function buildSafeChatContext(
   history: ChatMessage[],
   latestUserText: string
-): Array<{ role: "user" | "assistant"; content: string }> {
+): ChatContextMessage[] {
   const trimmedLatest = latestUserText.trim().slice(0, MAX_MESSAGE_CHAR_LIMIT);
   const validHistory = history.filter((m) => !m.error && m.content.trim().length > 0);
 
@@ -68,7 +88,7 @@ export function buildSafeChatContext(
   let remainingChars = MAX_TOTAL_CONTEXT_CHARS - trimmedLatest.length;
   const maxPrior = MAX_MESSAGES_CONTEXT - 1;
 
-  const includedPrior: Array<{ role: "user" | "assistant"; content: string }> = [];
+  const includedPrior: ChatContextMessage[] = [];
   for (let i = priorCandidates.length - 1; i >= 0 && includedPrior.length < maxPrior; i--) {
     const item = priorCandidates[i];
     if (!item) continue;
@@ -77,6 +97,7 @@ export function buildSafeChatContext(
       includedPrior.unshift({
         role: item.role,
         content: itemContent,
+        ...(item.recording ? { recording: item.recording } : {}),
       });
       remainingChars -= itemContent.length;
     } else {
@@ -97,13 +118,32 @@ export function buildSafeChatContext(
  * Reuses existing apiFetch with auto-Bearer token injection and sanitized error mapping.
  */
 export async function sendChatMessage(
-  messages: Array<{ role: "user" | "assistant"; content: string }>,
+  messages: ChatContextMessage[],
   signal?: AbortSignal,
-  options?: { preserveAccount?: boolean; expectedAccountId?: string }
+  options?: { preserveAccount?: boolean; expectedAccountId?: string; recording?: RecordingResult }
 ): Promise<ChatCompletionResponse> {
-  const response = await apiFetch("/api/ai/chat", {
+  const wireMessages = messages.map(({ role, content }) => ({ role, content }));
+  let body: BodyInit = JSON.stringify({ messages: wireMessages });
+  const hasAudio = Boolean(options?.recording || messages.some((message) => message.recording));
+  if (hasAudio) {
+    const form = new FormData();
+    let bytes = options?.recording?.audio.size ?? 0;
+    if (bytes > MAX_AUDIO_BYTES) throw new Error("Recording is too large.");
+    if (options?.recording) form.append("audio", options.recording.audio, "voice.wav");
+    // Preserve spoken context for follow-up text and voice turns within the same request budget.
+    for (let index = messages.length - 1; index >= 0; index--) {
+      const recording = messages[index].recording;
+      if (!recording || (index === messages.length - 1 && options?.recording)) continue;
+      if (bytes + recording.audio.size > MAX_AUDIO_BYTES) continue;
+      bytes += recording.audio.size;
+      form.append(`audio-${index}`, recording.audio, "voice.wav");
+    }
+    form.append("context", JSON.stringify({ messages: wireMessages }));
+    body = form;
+  }
+  const response = await apiFetch(hasAudio ? "/api/ai/chat/audio" : "/api/ai/chat", {
     method: "POST",
-    body: JSON.stringify({ messages }),
+    body,
     signal,
     _preserveAccount: options?.preserveAccount,
     _expectedAccountId: options?.expectedAccountId,

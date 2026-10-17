@@ -5,7 +5,6 @@ import { AUTH_STORAGE_KEY, getSession } from "../../src/auth/auth.ts";
 import { buildSafeChatContext, sendChatMessage } from "../../src/lib/aiChat.ts";
 import { decodeNativeSpeech } from "../../src/android/voiceCapture.ts";
 import { androidAssistantRequest, ASSISTANT_VOICE_LEVEL_EVENT } from "../../src/android/assistantBridge.ts";
-import { speechManager } from "../../src/lib/speechManager.ts";
 import { audioRecorder } from "../../src/lib/audioRecorder.ts";
 import { resolveWindowSurface } from "../../src/lib/windowSurface.ts";
 import { readAndroidRuntimeConfig } from "../android-runtime-config.js";
@@ -70,30 +69,6 @@ test("closing voice while permission is pending stops the late microphone stream
   }
 });
 
-test("stopping speech settles initialization and permits a fresh worker", async () => {
-  const originalWorker = globalThis.Worker;
-  let terminated = 0;
-  let created = 0;
-  globalThis.Worker = class {
-    constructor() { created++; }
-    postMessage() {}
-    terminate() { terminated++; }
-  } as unknown as typeof Worker;
-  try {
-    const first = speechManager.ensureModelLoaded();
-    const rejected = assert.rejects(first, /Speech initialization cancelled/);
-    speechManager.terminate();
-    await rejected;
-    assert.equal(speechManager.getStatus(), "idle");
-    const second = speechManager.ensureModelLoaded();
-    const rejectedAgain = assert.rejects(second, /Speech initialization cancelled/);
-    speechManager.terminate();
-    await rejectedAgain;
-    assert.equal(created, 2);
-    assert.equal(terminated, 2);
-  } finally { speechManager.terminate(); globalThis.Worker = originalWorker; }
-});
-
 test("voice recording resumes a suspended audio context before starting silence detection", async () => {
   const saved = Object.fromEntries(["navigator", "window", "MediaRecorder", "requestAnimationFrame", "cancelAnimationFrame"].map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
   let resumed = 0;
@@ -113,7 +88,7 @@ test("voice recording resumes a suspended audio context before starting silence 
   }
   const fixtures = {
     navigator: { mediaDevices: { getUserMedia: async () => ({ getTracks: () => [{ stop() { stopped++; } }] }) } },
-    window: { AudioContext: TestContext }, MediaRecorder: TestRecorder,
+    window: { AudioContext: TestContext, dispatchEvent: () => true }, MediaRecorder: TestRecorder,
     requestAnimationFrame: () => 1, cancelAnimationFrame: () => {},
   };
   try {
@@ -167,8 +142,10 @@ test("shared chat validation excludes failed turns and bounds assistant context"
   assert.ok(!context.some((item) => item.content === "not sent"));
 });
 
-test("native assistant PCM is signed mono 16kHz and malformed/oversized data is rejected", () => {
-  assert.deepEqual([...decodeNativeSpeech(btoa(String.fromCharCode(0, 128, 0, 0, 255, 127)), 16000)], [-1, 0, 32767 / 32768]);
+test("native assistant PCM wraps exact signed mono samples in playable WAV", async () => {
+  const result = decodeNativeSpeech(btoa(String.fromCharCode(0, 128, 0, 0, 255, 127)), 16000);
+  assert.equal(result.audio.type, "audio/wav");
+  assert.deepEqual([...new Uint8Array(await result.audio.arrayBuffer()).slice(44)], [0, 128, 0, 0, 255, 127]);
   assert.throws(() => decodeNativeSpeech("AA==", 16000), /incomplete/);
   assert.throws(() => decodeNativeSpeech("AAAA", 48000), /invalid/);
   assert.throws(() => decodeNativeSpeech("A".repeat(1280001), 16000), /invalid/);
@@ -218,4 +195,29 @@ test("existing app requests retain their original guest recovery behavior", asyn
     assert.equal(calls, 3);
     assert.equal(getSession()?.account.id, "new-account");
   } finally { globalThis.fetch = originalFetch; values.clear(); }
+});
+
+test("voice upload uses the exact Blob and retains earlier audio for follow-up text with one request", async () => {
+  const saved = globalThis.fetch;
+  values.set(AUTH_STORAGE_KEY, JSON.stringify({ token: "unit-test-token", account: { id: "account-a", type: "user" } }));
+  const recording = decodeNativeSpeech(btoa(String.fromCharCode(0, 128, 0, 0, 255, 127)), 16000);
+  let calls = 0;
+  globalThis.fetch = async (url, init) => {
+    calls++;
+    assert.ok(String(url).endsWith("/api/ai/chat/audio"));
+    assert.ok(init?.body instanceof FormData);
+    const file = init.body.get(calls === 1 ? "audio" : "audio-0");
+    assert.ok(file instanceof Blob);
+    assert.deepEqual(await file.arrayBuffer(), await recording.audio.arrayBuffer());
+    assert.equal(new Headers(init.headers).get("Content-Type"), null);
+    const context = JSON.parse(String(init.body.get("context")));
+    assert.ok(context.messages.every((message: object) => !("recording" in message)));
+    return Response.json({ message: { role: "assistant", content: "answer" } });
+  };
+  try {
+    await sendChatMessage([{ role: "user", content: "Voice message" }], undefined, { recording });
+    const context = buildSafeChatContext([{ id: "voice", role: "user", content: "Voice message", timestamp: 0, recording }, { id: "reply", role: "assistant", content: "answer", timestamp: 1 }], "What did I say?");
+    await sendChatMessage(context);
+    assert.equal(calls, 2);
+  } finally { globalThis.fetch = saved; values.clear(); }
 });

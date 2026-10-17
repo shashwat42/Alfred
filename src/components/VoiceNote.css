@@ -1,0 +1,47 @@
+.voice-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  max-width: 100%;
+  vertical-align: middle;
+}
+
+.voice-note-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 2px 0;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.voice-note-toggle:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 4px;
+}
+
+.voice-note-toggle:disabled { cursor: default; opacity: .45; }
+.voice-note-toggle > svg:first-child { flex-shrink: 0; }
+.voice-note-waveform { display: block; width: 112px; max-width: 28vw; height: 28px; }
+.voice-note-bar { fill: currentColor; opacity: .35; }
+.voice-note-bar.is-played { opacity: 1; }
+.voice-note-toggle:hover .voice-note-bar:not(.is-played) { opacity: .55; }
+.voice-note-duration { flex-shrink: 0; font-variant-numeric: tabular-nums; font-size: .9em; }
+
+.chat-pending-recording {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 0;
+  min-height: 30px;
+  margin-right: 4px;
+  color: #fff;
+}
+
+.chat-pending-recording .voice-note { min-width: 0; }

@@ -1,3 +1,5 @@
+> Historical validation record: the local-inference results below describe earlier builds. The current audio implementation and its actual validation are recorded in [gemini-audio-migration.md](gemini-audio-migration.md).
+
 # Android assistant validation — 2026-10-16
 
 ## Devices and observed results

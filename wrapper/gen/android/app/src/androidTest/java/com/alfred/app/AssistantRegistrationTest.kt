@@ -59,10 +59,8 @@ class AssistantRegistrationTest {
         assertNotNull(script)
         val js = context.assets.open("assistant${script}").bufferedReader().use { it.readText() }
         assertTrue(js.contains("android-assistant"))
-        context.assets.open("assistant/speech-runtime/ort-wasm-simd-threaded.jsep.mjs").use { assertTrue(it.available() > 0) }
-        context.assets.open("assistant/speech-runtime/ort-wasm-simd-threaded.jsep.wasm").use {
-            assertArrayEquals(byteArrayOf(0, 97, 115, 109), ByteArray(4).also { magic -> it.read(magic) })
-        }
+        assertFalse(context.assets.list("assistant")!!.contains("speech-runtime"))
+        assertFalse(context.assets.list("assistant")!!.contains("ort"))
     }
 
     @Test fun privilegedBridgeRejectsRemoteAndMalformedOrigins() {
