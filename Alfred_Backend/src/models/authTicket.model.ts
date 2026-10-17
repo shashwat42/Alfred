@@ -3,6 +3,7 @@ import mongoose, { Document, Schema, Types } from "mongoose";
 export interface IAuthTicket extends Document {
     ticket: string;
     accountId: Types.ObjectId;
+    accountVersion: number;
     codeChallenge?: string | undefined;
     flow: "browser" | "desktop";
     status: "issued" | "consumed";
@@ -27,6 +28,7 @@ const authTicketSchema = new Schema<IAuthTicket>(
             required: true,
             index: true,
         },
+        accountVersion: { type: Number, required: true, default: 0 },
         codeChallenge: {
             type: String,
             trim: true,

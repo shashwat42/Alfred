@@ -181,7 +181,7 @@ test("an empty successful AI response becomes a retryable failure", async () => 
   finally { globalThis.fetch = originalFetch; values.clear(); }
 });
 
-test("existing app requests retain their original guest recovery behavior", async () => {
+test("expired app sessions never downgrade to a new guest", async () => {
   const originalFetch = globalThis.fetch;
   values.set(AUTH_STORAGE_KEY, JSON.stringify({ token: "expired-test-token", account: { id: "old-account", type: "guest" } }));
   let calls = 0;
@@ -191,9 +191,9 @@ test("existing app requests retain their original guest recovery behavior", asyn
     return new Response("{}", { status: calls === 1 ? 401 : 200 });
   };
   try {
-    assert.equal((await apiFetch("/api/tasks")).status, 200);
-    assert.equal(calls, 3);
-    assert.equal(getSession()?.account.id, "new-account");
+    assert.equal((await apiFetch("/api/tasks")).status, 401);
+    assert.equal(calls, 1);
+    assert.equal(getSession()?.account.id, "old-account");
   } finally { globalThis.fetch = originalFetch; values.clear(); }
 });
 

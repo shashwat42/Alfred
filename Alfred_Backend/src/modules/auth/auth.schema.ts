@@ -7,25 +7,11 @@ export const guestAuthSchema = {
         .optional(),
 };
 
+export const prepareOAuthSchema = {
+    body: z.object({ flow: z.enum(["browser", "desktop"]), code_challenge: z.string().regex(/^[A-Za-z0-9_-]{43}$/) }).strict(),
+};
 export const googleAuthSchema = {
-    query: z
-        .object({
-            flow: z.enum(["browser", "desktop"]).optional(),
-            state: z.string().trim().min(16).max(256).optional(),
-            code_challenge: z.string().trim().min(32).max(128).optional(),
-            code_challenge_method: z.literal("S256").optional(),
-        })
-        .refine(
-            (data) => {
-                if (data.flow === "desktop") {
-                    return Boolean(data.state && data.code_challenge && data.code_challenge_method === "S256");
-                }
-                return true;
-            },
-            {
-                message: "Desktop flow requires state, code_challenge, and code_challenge_method=S256",
-            }
-        ),
+    query: z.object({ state: z.string().regex(/^(desktop_)?[a-f0-9]{64}$/) }).strict(),
 };
 
 export const exchangeTicketSchema = {

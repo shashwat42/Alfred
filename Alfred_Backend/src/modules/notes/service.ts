@@ -1,32 +1,17 @@
+import { tenantRepository } from "../../security/tenantRepository.ts";
 import mongoose from "mongoose";
 import { Note, type INote } from "../../models/note.model.ts";
 
 export async function getNotes(accountId: string): Promise<INote[]> {
-    // Also clean up any accidental legacy completely empty notes
-    await Note.deleteMany({
-        accountId: new mongoose.Types.ObjectId(accountId),
-        $and: [
-            { $or: [{ title: "" }, { title: null }, { title: { $exists: false } }] },
-            { $or: [{ content: "" }, { content: null }, { content: { $exists: false } }] },
-        ],
-    }).catch(() => null);
-
-    return Note.find({
-        accountId: new mongoose.Types.ObjectId(accountId),
+    return tenantRepository(Note, accountId).find({
         $or: [{ title: { $gt: "" } }, { content: { $gt: "" } }],
-    })
-        .sort({ updatedAt: -1 })
-        .lean();
+    }, { sort: { updatedAt: -1 } });
 }
 
 export async function getRecentNotes(accountId: string, limit = 4): Promise<INote[]> {
-    return Note.find({
-        accountId: new mongoose.Types.ObjectId(accountId),
+    return tenantRepository(Note, accountId).find({
         $or: [{ title: { $gt: "" } }, { content: { $gt: "" } }],
-    })
-        .sort({ lastOpenedAt: -1, updatedAt: -1 })
-        .limit(limit)
-        .lean();
+    }, { sort: { lastOpenedAt: -1, updatedAt: -1 }, limit });
 }
 
 export async function searchNotes(accountId: string, query: string): Promise<INote[]> {
@@ -36,12 +21,9 @@ export async function searchNotes(accountId: string, query: string): Promise<INo
     }
     const escaped = cleanQuery.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const regex = new RegExp(escaped, "i");
-    return Note.find({
-        accountId: new mongoose.Types.ObjectId(accountId),
+    return tenantRepository(Note, accountId).find({
         $or: [{ title: regex }, { content: regex }],
-    })
-        .sort({ updatedAt: -1 })
-        .lean();
+    }, { sort: { updatedAt: -1 } });
 }
 
 export async function createNote(
@@ -57,8 +39,7 @@ export async function createNote(
         throw new Error("Cannot create an empty note");
     }
 
-    const note = await Note.create({
-        accountId: new mongoose.Types.ObjectId(accountId),
+    const note = await tenantRepository(Note, accountId).create({
         title: cleanTitle,
         content,
         lastOpenedAt: new Date(),
@@ -86,14 +67,12 @@ export async function updateNote(
         updateData.content = updates.content;
     }
 
-    return Note.findOneAndUpdate(
+    return tenantRepository(Note, accountId).findOneAndUpdate(
         {
             _id: new mongoose.Types.ObjectId(noteId),
-            accountId: new mongoose.Types.ObjectId(accountId),
         },
-        { $set: updateData },
-        { returnDocument: "after" }
-    ).lean();
+        updateData
+    );
 }
 
 export async function touchNote(accountId: string, noteId: string): Promise<INote | null> {
@@ -101,14 +80,12 @@ export async function touchNote(accountId: string, noteId: string): Promise<INot
         return null;
     }
 
-    return Note.findOneAndUpdate(
+    return tenantRepository(Note, accountId).findOneAndUpdate(
         {
             _id: new mongoose.Types.ObjectId(noteId),
-            accountId: new mongoose.Types.ObjectId(accountId),
         },
-        { $set: { lastOpenedAt: new Date() } },
-        { returnDocument: "after" }
-    ).lean();
+        { lastOpenedAt: new Date() }
+    );
 }
 
 export async function deleteNote(accountId: string, noteId: string): Promise<INote | null> {
@@ -116,8 +93,7 @@ export async function deleteNote(accountId: string, noteId: string): Promise<INo
         return null;
     }
 
-    return Note.findOneAndDelete({
+    return tenantRepository(Note, accountId).findOneAndDelete({
         _id: new mongoose.Types.ObjectId(noteId),
-        accountId: new mongoose.Types.ObjectId(accountId),
-    }).lean();
+    });
 }

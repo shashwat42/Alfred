@@ -73,6 +73,21 @@ const apiLimitMax = parsePositiveIntEnv("RATE_LIMIT_API_MAX", 120);
 const aiLimitWindowMs = parsePositiveIntEnv("RATE_LIMIT_AI_WINDOW_MS", 60000);
 const aiLimitMax = parsePositiveIntEnv("RATE_LIMIT_AI_MAX", 20);
 
+// Optional, bounded rollout window for previously issued Alfred bearer tokens.
+// New tokens always carry issuer/audience. Never extend this window automatically.
+const legacyUntilRaw = process.env.JWT_LEGACY_ACCEPT_UNTIL?.trim();
+const legacyAcceptUntil = legacyUntilRaw ? Date.parse(legacyUntilRaw) : 0;
+if (!Number.isFinite(legacyAcceptUntil) || (legacyUntilRaw && !/^\d{4}-\d{2}-\d{2}T.*Z$/.test(legacyUntilRaw))) {
+    throw new Error("JWT_LEGACY_ACCEPT_UNTIL must be an ISO UTC timestamp");
+}
+if (legacyAcceptUntil > Date.now() + 7 * 86400_000) {
+    throw new Error("JWT_LEGACY_ACCEPT_UNTIL cannot exceed seven days from startup");
+}
+const jwtSecret = getRequiredEnv("JWT_SECRET");
+if (process.env.NODE_ENV === "production" && jwtSecret.length < 32) {
+    throw new Error("JWT_SECRET must contain at least 32 characters in production");
+}
+
 const llmBaseUrl = getOptionalEnv(
     "LLM_BASE_URL",
     "https://generativelanguage.googleapis.com/v1beta/openai/"
@@ -133,7 +148,8 @@ export const env = {
         uri: getRequiredEnv("MONGODB_URI"),
     },
     jwt: {
-        secret: getRequiredEnv("JWT_SECRET"),
+        secret: jwtSecret,
+        legacyAcceptUntil,
     },
 };
 

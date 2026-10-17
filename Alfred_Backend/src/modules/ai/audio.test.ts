@@ -91,7 +91,7 @@ test("authenticated multipart route validates uploads, preserves account scope a
   const saved = globalThis.fetch, lookup = Account.findById;
   const accountId = "507f1f77bcf86cd799439011";
   const lookedUp: unknown[] = [];
-  Account.findById = ((id: unknown) => { lookedUp.push(id); return Promise.resolve({ _id: accountId }); }) as unknown as typeof lookup;
+  Account.findById = ((id: unknown) => { lookedUp.push(id); return Promise.resolve({ _id: accountId, type: "user", googleId: "test-google" }); }) as unknown as typeof lookup;
   let upstream = 0;
   globalThis.fetch = async (url, init) => {
     if (String(url).startsWith("http://127.0.0.1:")) return saved(url, init);
@@ -105,7 +105,7 @@ test("authenticated multipart route validates uploads, preserves account scope a
   await new Promise<void>((resolve, reject) => { server.once("listening", resolve); server.once("error", reject); });
   const address = server.address(); assert.ok(address && typeof address === "object");
   const url = `http://127.0.0.1:${address.port}/api/ai/chat/audio`;
-  const token = jwt.sign({ sub: accountId }, env.jwt.secret);
+  const token = jwt.sign({ sub: accountId, type: "user" }, env.jwt.secret, { expiresIn: "1h", issuer: "alfred", audience: "alfred-api" });
   const pcm = new Uint8Array(16000); pcm[1] = 127;
   const upload = (context: unknown = { messages }, blob = pcmToWav(pcm, 16000)) => { const form = new FormData(); form.set("audio", blob, "voice.wav"); form.set("context", JSON.stringify(context)); return form; };
   try {

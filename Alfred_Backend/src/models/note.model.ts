@@ -39,6 +39,7 @@ const noteSchema = new Schema<INote>(
 );
 
 noteSchema.index({ accountId: 1, createdAt: -1 });
-noteSchema.index({ accountId: 1, lastOpenedAt: -1 });
+noteSchema.index({ accountId: 1, updatedAt: -1 });
+noteSchema.index({ accountId: 1, lastOpenedAt: -1, updatedAt: -1 });
 
 export const Note = mongoose.model<INote>("Note", noteSchema);

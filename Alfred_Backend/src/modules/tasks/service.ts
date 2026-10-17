@@ -1,10 +1,9 @@
+import { tenantRepository } from "../../security/tenantRepository.ts";
 import mongoose from "mongoose";
 import { Task, type ITask } from "../../models/task.model.ts";
 
 export async function getTasks(accountId: string): Promise<ITask[]> {
-    return Task.find({ accountId: new mongoose.Types.ObjectId(accountId) })
-        .sort({ createdAt: -1 })
-        .lean();
+    return tenantRepository(Task, accountId).find({}, { sort: { createdAt: -1 } });
 }
 
 import type { TaskPriority } from "../../models/task.model.ts";
@@ -14,8 +13,7 @@ export async function addTask(
     taskText: string,
     priority: TaskPriority = "normal"
 ): Promise<ITask> {
-    const task = await Task.create({
-        accountId: new mongoose.Types.ObjectId(accountId),
+    const task = await tenantRepository(Task, accountId).create({
         task: taskText,
         completed: false,
         priority,
@@ -43,14 +41,12 @@ export async function updateTask(
         updateData.priority = updates.priority;
     }
 
-    return Task.findOneAndUpdate(
+    return tenantRepository(Task, accountId).findOneAndUpdate(
         {
             _id: new mongoose.Types.ObjectId(taskId),
-            accountId: new mongoose.Types.ObjectId(accountId),
         },
-        { $set: updateData },
-        { returnDocument: "after" }
-    ).lean();
+        updateData
+    );
 }
 
 export async function completeTask(
@@ -63,31 +59,19 @@ export async function completeTask(
     }
 
     if (completed !== undefined) {
-        return Task.findOneAndUpdate(
+        return tenantRepository(Task, accountId).findOneAndUpdate(
             {
                 _id: new mongoose.Types.ObjectId(taskId),
-                accountId: new mongoose.Types.ObjectId(accountId),
             },
-            { $set: { completed } },
-            { returnDocument: "after" }
-        ).lean();
+            { completed }
+        );
     }
 
-    const existing = await Task.findOne({
-        _id: new mongoose.Types.ObjectId(taskId),
-        accountId: new mongoose.Types.ObjectId(accountId),
-    });
-    if (!existing) return null;
-
-    existing.completed = !existing.completed;
-    await existing.save();
-    return existing.toObject();
+    return tenantRepository(Task, accountId).toggleCompleted(new mongoose.Types.ObjectId(taskId));
 }
 
 export async function clearAllTasks(accountId: string): Promise<{ deletedCount: number }> {
-    const result = await Task.deleteMany({
-        accountId: new mongoose.Types.ObjectId(accountId),
-    });
+    const result = await tenantRepository(Task, accountId).deleteMany();
     return { deletedCount: result.deletedCount };
 }
 
@@ -96,8 +80,7 @@ export async function deleteTask(accountId: string, taskId: string): Promise<ITa
         return null;
     }
 
-    return Task.findOneAndDelete({
+    return tenantRepository(Task, accountId).findOneAndDelete({
         _id: new mongoose.Types.ObjectId(taskId),
-        accountId: new mongoose.Types.ObjectId(accountId),
-    }).lean();
+    });
 }

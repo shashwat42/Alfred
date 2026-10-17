@@ -1,7 +1,6 @@
 import {
   API_BASE_URL,
   checkUrlAuthParameters,
-  createGuestSession,
   getToken,
   getSession,
   initAuthSession,
@@ -75,25 +74,10 @@ export async function apiFetch(
     headers.set("ngrok-skip-browser-warning", "true");
   }
 
-  let response = await fetch(url, {
+  const response = await fetch(url, {
     ...init,
     headers,
   });
-
-  // If token is invalid or expired (401), automatically regenerate guest session and retry once
-  if (response.status === 401 && !init._isRetry && !init._preserveAccount) {
-    try {
-      const freshSession = await createGuestSession();
-      headers.set("Authorization", `Bearer ${freshSession.token}`);
-      response = await fetch(url, {
-        ...init,
-        headers,
-        _isRetry: true,
-      } as RequestInit);
-    } catch (err) {
-      console.error("Auto-recovery on 401 failed:", err);
-    }
-  }
 
   return response;
 }

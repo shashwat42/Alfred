@@ -4,6 +4,10 @@ import mongoose from "mongoose";
 import { env } from "../config/env.ts";
 import { Account, type AccountType } from "../models/account.model.ts";
 
+export type Principal =
+    | { kind: "user"; accountId: string; googleSub: string | undefined }
+    | { kind: "guest"; accountId: string; guestId: string };
+
 export interface AlfredTokenPayload {
     sub: string;
     type: AccountType;
@@ -28,7 +32,16 @@ export async function authMiddleware(
     }
 
     try {
-        const decoded = jwt.verify(token, env.jwt.secret) as jwt.JwtPayload;
+        const decoded = jwt.verify(token, env.jwt.secret, { algorithms: ["HS256"] }) as jwt.JwtPayload;
+        const legacy = decoded.iss === undefined && decoded.aud === undefined
+            && Date.now() < env.jwt.legacyAcceptUntil
+            && typeof decoded.iat === "number" && typeof decoded.exp === "number"
+            && decoded.iat * 1000 < env.jwt.legacyAcceptUntil
+            && decoded.exp - decoded.iat <= 7 * 86400;
+        if (!legacy && (decoded.iss !== "alfred" || decoded.aud !== "alfred-api")) {
+            res.status(401).json({ error: "Invalid token context" });
+            return;
+        }
 
         const sub = decoded.sub;
         if (typeof sub !== "string" || !mongoose.isValidObjectId(sub)) {
@@ -37,11 +50,19 @@ export async function authMiddleware(
         }
 
         const account = await Account.findById(sub);
-        if (!account) {
+        if (!account || account.migratedTo || decoded.type !== account.type || (decoded.version ?? 0) !== (account.sessionVersion ?? 0) || typeof decoded.exp !== "number") {
             res.status(401).json({ error: "Account not found" });
             return;
         }
 
+        if ((account.type === "guest" && (!account.guestId || account.googleId)) ||
+            (account.type === "user" && (!account.googleId || account.guestId))) {
+            res.status(401).json({ error: "Invalid account identity" });
+            return;
+        }
+        req.principal = account.type === "guest"
+            ? { kind: "guest", accountId: String(account._id), guestId: account.guestId! }
+            : { kind: "user", accountId: String(account._id), googleSub: account.googleId };
         req.accountId = account._id.toString();
         req.account = account;
 

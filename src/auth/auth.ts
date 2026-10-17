@@ -366,7 +366,10 @@ export function initAuthSession(): Promise<AuthSession> {
 
       if (ticket) {
         try {
-          const session = await exchangeTicket(ticket);
+          const pending = getPendingDesktopAuth();
+          if (!pending) throw new Error("Missing login verifier");
+          const session = await exchangeTicket(ticket, pending.codeVerifier);
+          clearPendingDesktopAuth();
           cachedTicket = null;
           triggerAuthCompletionCallback(session);
           const returnLoc = getAndClearReturnLocation();
@@ -378,8 +381,8 @@ export function initAuthSession(): Promise<AuthSession> {
           }
           return session;
         } catch (err) {
-          console.error("Ticket exchange failed, falling back to guest session:", err);
           cachedTicket = null;
+          throw err;
         }
       }
 
@@ -428,27 +431,24 @@ export async function loginWithGoogle(callback?: AuthCallback): Promise<void> {
   }
   saveReturnLocation();
 
+  const session = getSession() ?? await initAuthSession();
+  const codeVerifier = generateRandomString(32);
+  const codeChallenge = await deriveCodeChallenge(codeVerifier);
+  const flow = isTauri() ? "desktop" : "browser";
+  const response = await fetch(`${API_BASE_URL}/auth/prepare`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.token}`, "ngrok-skip-browser-warning": "true" },
+    body: JSON.stringify({ flow, code_challenge: codeChallenge }),
+  });
+  if (!response.ok) throw new Error("Unable to start login. Your session may have expired.");
+  const prepared = await response.json() as { state: string; url: string };
+  savePendingDesktopAuth(prepared.state, codeVerifier);
   if (isTauri()) {
-    try {
-      const codeVerifier = generateRandomString(32);
-      const codeChallenge = await deriveCodeChallenge(codeVerifier);
-      const state = `desktop_${generateRandomString(24)}`;
-
-      savePendingDesktopAuth(state, codeVerifier);
-
-      const targetUrl = `${API_BASE_URL}/auth/google?flow=desktop&state=${encodeURIComponent(state)}&code_challenge=${encodeURIComponent(codeChallenge)}&code_challenge_method=S256`;
-
-      const { openUrl } = await import("@tauri-apps/plugin-opener");
-      await openUrl(targetUrl);
-      return;
-    } catch (err) {
-      clearPendingDesktopAuth();
-      console.error("Failed to open external browser for desktop Google sign-in:", err);
-      throw err;
-    }
+    const { openUrl } = await import("@tauri-apps/plugin-opener");
+    await openUrl(prepared.url);
+  } else {
+    window.location.href = prepared.url;
   }
-
-  window.location.href = `${API_BASE_URL}/auth/google`;
 }
 
 /**
@@ -551,9 +551,8 @@ export async function handleDesktopDeepLink(rawUrl: string): Promise<AuthSession
     }
 
     const verifier = pending.codeVerifier;
-    clearPendingDesktopAuth(); // Immediately wipe sensitive verifier from storage
-
     const session = await exchangeTicket(ticket, verifier);
+    clearPendingDesktopAuth();
     triggerAuthCompletionCallback(session);
     return session;
   } catch (err) {

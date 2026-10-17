@@ -10,7 +10,7 @@ import { connectDatabase } from "./src/config/database.ts";
 import { env } from "./src/config/env.ts";
 import { apiRateLimiter } from "./src/middleware/rateLimit.middleware.ts";
 import notificationRouter from "./src/modules/schedule-notifications/route.ts";
-import { initializeNotificationIndexes } from "./src/modules/schedule-notifications/service.ts";
+import { initializeSecurityIndexes, requireTransactionTopology } from "./src/security/indexes.ts";
 
 const app = express();
 app.set("trust proxy", 1);
@@ -30,16 +30,23 @@ app.get("/health", (_req, res) => {
     res.json({ status: "ok" });
 });
 
+app.use((error: unknown, _req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (res.headersSent) { next(error); return; }
+    console.error("Unhandled request failure", { name: error instanceof Error ? error.name : "Unknown" });
+    res.status(503).json({ error: "The service is temporarily unavailable. Please try again." });
+});
+
 async function startServer(): Promise<void> {
     try {
         await connectDatabase();
-        await initializeNotificationIndexes();
+        await requireTransactionTopology();
+        await initializeSecurityIndexes();
         void initializeAiService();
         app.listen(env.port, () => {
             console.log(`Server listening on port ${env.port}`);
         });
     } catch (err) {
-        console.error("Failed to start server due to database connection error:", err);
+        console.error("Failed to start server:", err instanceof Error ? err.message : "Unknown error");
         process.exit(1);
     }
 }

@@ -5,6 +5,8 @@ import {
   getPendingDesktopAuth,
   handleDesktopDeepLink,
   initAuthSession,
+  getToken,
+  API_BASE_URL,
   isTauri,
   loginWithGoogle as authLoginWithGoogle,
   pollDesktopAuthStatus,
@@ -199,9 +201,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const logout = () => {
-    clearSession();
-    setSession(null);
+  const logout = async () => {
+    const response = await fetch(`${API_BASE_URL}/auth/logout`, { method: "POST", headers: { Authorization: `Bearer ${getToken()}`, "ngrok-skip-browser-warning": "true" } });
+    if (response.ok || response.status === 401) {
+      clearSession();
+      setSession(null);
+    } else {
+      setError("Sign-out failed. Please try again.");
+    }
   };
 
   return (

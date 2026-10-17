@@ -19,11 +19,13 @@ const devices = new Schema({
 const deliveries = new Schema({
     _id: { type: String, required: true },
     accountId: { type: Schema.Types.ObjectId, required: true },
+    migrationSourceId: { type: Schema.Types.ObjectId },
     deviceId: { type: String, required: true }, scheduleId: { type: Schema.Types.ObjectId, required: true },
     claimedAt: { type: Date, required: true },
     // Retain beyond the occurrence, not just the short delivery window.
     expiresAt: { type: Date, required: true, expires: 0 },
 });
+deliveries.index({ accountId: 1, deviceId: 1, scheduleId: 1 });
 export const NotificationSettings = mongoose.model("ScheduleNotificationSettings", settings);
 export const NotificationDevice = mongoose.model("ScheduleNotificationDevice", devices);
 export const NotificationDelivery = mongoose.model("ScheduleNotificationDelivery", deliveries);

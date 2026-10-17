@@ -39,9 +39,14 @@ export async function createPendingOAuthState(params: {
     codeChallenge?: string | undefined;
     codeChallengeMethod?: string | undefined;
     flow: "browser" | "desktop";
+    initiatorId: mongoose.Types.ObjectId;
+    initiatorVersion: number;
 }): Promise<IOAuthState> {
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
     const doc: Record<string, unknown> = {
+        initiatorId: params.initiatorId,
+        initiatorVersion: params.initiatorVersion,
+        nonce: crypto.randomBytes(32).toString("hex"),
         state: params.state,
         flow: params.flow,
         expiresAt,
@@ -59,13 +64,14 @@ export async function createPendingOAuthState(params: {
  * Atomically consumes and deletes a pending OAuth state document to guarantee single-use.
  * Returns the state document if valid and unexpired, or null otherwise.
  */
-export async function consumePendingOAuthState(state: string): Promise<IOAuthState | null> {
+export async function consumePendingOAuthState(state: string, binding: string): Promise<IOAuthState | null> {
     if (!state || typeof state !== "string") {
         return null;
     }
 
     return await OAuthState.findOneAndDelete({
         state: state.trim(),
+        callbackBinding: crypto.createHash("sha256").update(binding).digest("hex"),
         expiresAt: { $gt: new Date() },
     });
 }
@@ -76,9 +82,11 @@ export async function consumePendingOAuthState(state: string): Promise<IOAuthSta
  */
 export async function createIssuedTicket(params: {
     accountId: mongoose.Types.ObjectId;
+    accountVersion: number;
     codeChallenge?: string | undefined;
     flow: "browser" | "desktop";
     state?: string | undefined;
+    session?: mongoose.ClientSession;
 }): Promise<string> {
     const ticket = crypto.randomBytes(32).toString("hex");
     const expiresAt = new Date(Date.now() + 90 * 1000); // 90 seconds TTL
@@ -86,6 +94,7 @@ export async function createIssuedTicket(params: {
     const doc: Record<string, unknown> = {
         ticket,
         accountId: params.accountId,
+        accountVersion: params.accountVersion,
         flow: params.flow,
         status: "issued",
         expiresAt,
@@ -97,7 +106,7 @@ export async function createIssuedTicket(params: {
         doc.state = params.state;
     }
 
-    await AuthTicket.create(doc);
+    await AuthTicket.create([doc], params.session ? { session: params.session } : {});
     return ticket;
 }
 
@@ -150,7 +159,7 @@ export async function atomicConsumeTicketByState(params: {
     }
 
     const account = await Account.findById(consumed.accountId);
-    if (!account) {
+    if (!account || account.type !== "user" || account.migratedTo || (account.sessionVersion ?? 0) !== (consumed.accountVersion ?? 0)) {
         return null;
     }
 
@@ -191,7 +200,7 @@ export async function atomicConsumeTicket(params: {
         expiresAt: { $gt: new Date() },
     };
 
-    if (existingTicket.flow === "desktop") {
+    {
         if (!codeVerifier || typeof codeVerifier !== "string") {
             return null;
         }
@@ -202,10 +211,8 @@ export async function atomicConsumeTicket(params: {
             .update(codeVerifier.trim())
             .digest("base64url");
 
-        filter.flow = "desktop";
+        filter.flow = existingTicket.flow;
         filter.codeChallenge = computedChallenge;
-    } else {
-        filter.flow = "browser";
     }
 
     // Atomic consumption: only updates if challenge and expiration match
@@ -225,7 +232,7 @@ export async function atomicConsumeTicket(params: {
     }
 
     const account = await Account.findById(consumed.accountId);
-    if (!account) {
+    if (!account || account.type !== "user" || account.migratedTo || (account.sessionVersion ?? 0) !== (consumed.accountVersion ?? 0)) {
         return null;
     }
 
@@ -237,9 +244,10 @@ export function generateAuthToken(account: IAccount): string {
     const payload = {
         sub: account._id.toString(),
         type: account.type,
+        version: account.sessionVersion ?? 0,
     };
 
-    return jwt.sign(payload, env.jwt.secret, { expiresIn: "7d" });
+    return jwt.sign(payload, env.jwt.secret, { expiresIn: "7d", issuer: "alfred", audience: "alfred-api", algorithm: "HS256" });
 }
 
 export function formatAuthResponse(account: IAccount, token: string): AuthSessionResponse {
@@ -272,17 +280,18 @@ export async function createGuestAccount(): Promise<AuthSessionResponse> {
 export async function findOrCreateGoogleAccount(
     profile: GoogleUserProfile
 ): Promise<IAccount> {
-    let account = await Account.findOne({ googleId: profile.googleId });
-
-    if (!account) {
-        account = await Account.create({
-            type: "user",
-            googleId: profile.googleId,
-            email: profile.email ?? undefined,
-            name: profile.name ?? undefined,
-            picture: profile.picture ?? undefined,
-        });
+    // Unique googleId plus upsert handles repeated and concurrent callbacks.
+    let account;
+    try {
+        account = await Account.findOneAndUpdate({ googleId: profile.googleId }, { $setOnInsert: {
+            type: "user", googleId: profile.googleId,
+            email: profile.email ?? undefined, name: profile.name ?? undefined, picture: profile.picture ?? undefined,
+        } }, { upsert: true, returnDocument: "after", runValidators: true });
+    } catch (error) {
+        if ((error as { code?: number }).code !== 11000) throw error;
+        account = await Account.findOne({ googleId: profile.googleId });
     }
+    if (!account || account.type !== "user") throw new Error("Invalid Google account");
 
     return account;
 }
@@ -295,9 +304,10 @@ export function createOAuth2Client(): OAuth2Client {
     );
 }
 
-export function getGoogleAuthUrl(state?: string): string {
+export function getGoogleAuthUrl(state: string, nonce: string): string {
     const client = createOAuth2Client();
     return client.generateAuthUrl({
+        nonce,
         access_type: "offline",
         prompt: "consent",
         scope: ["openid", "email", "profile"],
@@ -305,7 +315,7 @@ export function getGoogleAuthUrl(state?: string): string {
     });
 }
 
-export async function getGoogleUserFromCode(code: string): Promise<GoogleUserProfile> {
+export async function getGoogleUserFromCode(code: string, nonce: string): Promise<GoogleUserProfile> {
     const client = createOAuth2Client();
     const { tokens } = await client.getToken({
         code,
@@ -322,13 +332,13 @@ export async function getGoogleUserFromCode(code: string): Promise<GoogleUserPro
     });
 
     const payload = ticket.getPayload();
-    if (!payload || !payload.sub) {
+    if (!payload || !payload.sub || payload.nonce !== nonce) {
         throw new Error("Invalid ID token payload received from Google");
     }
 
     return {
         googleId: payload.sub,
-        email: payload.email ?? null,
+        email: payload.email_verified ? payload.email ?? null : null,
         name: payload.name ?? null,
         picture: payload.picture ?? null,
     };

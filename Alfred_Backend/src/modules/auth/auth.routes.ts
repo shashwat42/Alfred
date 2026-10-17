@@ -1,3 +1,4 @@
+import { authMiddleware } from "../../middleware/auth.middleware.ts";
 import { Router } from "express";
 import {
     authRateLimiter,
@@ -10,6 +11,8 @@ import {
     googleAuth,
     googleAuthCallback,
     guestAuth,
+    prepareOAuth,
+    logout,
 } from "./auth.controller.ts";
 import {
     desktopPollSchema,
@@ -17,10 +20,13 @@ import {
     googleAuthSchema,
     googleCallbackSchema,
     guestAuthSchema,
+    prepareOAuthSchema,
 } from "./auth.schema.ts";
 
 const router = Router();
 
+router.post("/prepare", authRateLimiter, authMiddleware, validate(prepareOAuthSchema), prepareOAuth);
+router.post("/logout", authMiddleware, logout);
 router.post("/guest", guestRateLimiter, validate(guestAuthSchema), guestAuth);
 router.get("/google", authRateLimiter, validate(googleAuthSchema), googleAuth);
 router.get("/google/callback", validate(googleCallbackSchema), googleAuthCallback);

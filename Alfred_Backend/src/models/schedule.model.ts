@@ -41,6 +41,7 @@ const scheduleSchema = new Schema<ISchedule>(
 );
 
 scheduleSchema.index({ accountId: 1, date: 1 });
+scheduleSchema.index({ accountId: 1, date: 1, time: 1 });
 // Bounded notification-plan pagination, including accounts with many events per day.
 scheduleSchema.index({ accountId: 1, date: 1, _id: 1 });
 

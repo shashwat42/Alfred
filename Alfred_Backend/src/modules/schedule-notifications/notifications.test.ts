@@ -1,3 +1,4 @@
+import { Account as TenantAccount } from "../../models/account.model.ts";
 import assert from "node:assert/strict";
 import { test, mock, type TestContext } from "node:test";
 import mongoose from "mongoose";
@@ -18,15 +19,16 @@ type Event = ReturnType<typeof event>;
  * Production unique _id enforcement is represented by synchronous Map insertion.
  * No live MongoDB or production database is used by these tests. */
 function fixture(t: TestContext, p: Preferences | null = defaults()) {
+    mock.method(TenantAccount, "findById", (async (id: string) => ({ _id: id, type: "user", googleId: "test-google" })) as never);
     const rows = new Map<string, Event>([[id, event()]]);
     const sent = new Map<string, unknown>();
     const installations = new Map<string, Record<string, unknown>>();
     let settings = p;
     const owned = (filter: Record<string, unknown>, row: Event) => String(row.accountId) === String(filter.accountId) && (!filter._id || String(row._id) === String(filter._id));
-    mock.method(NotificationSettings, "findOne", ((filter: Record<string, unknown>) => ({ lean: async () => filter.accountId === account && settings ? { ...settings } : null })) as never);
+    mock.method(NotificationSettings, "findOne", ((filter: Record<string, unknown>) => ({ lean: async () => String(filter.accountId) === account && settings ? { ...settings } : null })) as never);
     mock.method(NotificationSettings, "create", ((input: Preferences) => { if (settings) throw Object.assign(new Error("duplicate"), { code: 11000 }); settings = { ...input }; return Promise.resolve(input); }) as never);
     mock.method(NotificationSettings, "updateOne", (async (filter: { accountId: string; revision: number }, update: { $set: Preferences }) => {
-        if (filter.accountId !== account || settings?.revision !== filter.revision) return { modifiedCount: 0 };
+        if (String(filter.accountId) !== account || settings?.revision !== filter.revision) return { modifiedCount: 0 };
         settings = { ...update.$set }; return { modifiedCount: 1 };
     }) as never);
     mock.method(Schedule, "find", ((filter: Record<string, unknown>) => ({ sort: () => ({ limit: (count: number) => ({ lean: async () => {
@@ -43,6 +45,7 @@ function fixture(t: TestContext, p: Preferences | null = defaults()) {
         Object.assign(row, update.$set, { updatedAt: new Date(now + 1) }); return row;
     } })) as never);
     mock.method(Schedule, "findOneAndDelete", ((filter: Record<string, unknown>) => ({ lean: async () => { const row = [...rows.values()].find(row => owned(filter, row)); if (row) rows.delete(String(row._id)); return row ?? null; } })) as never);
+    mock.method(NotificationDelivery, "find", (() => ({ sort: () => ({ limit: () => ({ lean: async () => [] }) }) })) as never);
     mock.method(NotificationDelivery, "create", (async (input: { _id: string }) => {
         if (sent.has(input._id)) throw Object.assign(new Error("duplicate"), { code: 11000 });
         sent.set(input._id, input); return input;
@@ -229,7 +232,7 @@ async function api(t: TestContext) {
     const { Account } = await import("../../models/account.model.ts");
     const { env } = await import("../../config/env.ts");
     const { default: router } = await import("./route.ts");
-    mock.method(Account, "findById", (async (sub: string) => ({ _id: new mongoose.Types.ObjectId(sub), type: "user" })) as never);
+    mock.method(Account, "findById", (async (sub: string) => ({ _id: new mongoose.Types.ObjectId(sub), type: "user", googleId: "test-google" })) as never);
     mock.method(Date, "now", () => now);
     const app = express(); app.use(express.json()); app.use("/notifications", router);
     const server = app.listen(0, "127.0.0.1");
@@ -237,7 +240,7 @@ async function api(t: TestContext) {
     t.after(() => { server.closeAllConnections(); server.close(); });
     const port = (server.address() as { port: number }).port;
     const call = (path: string, body?: unknown, who: string | null = account, method = body === undefined ? "GET" : "POST") => fetch(`http://127.0.0.1:${port}/notifications${path}`, {
-        method, headers: { ...(who ? { Authorization: `Bearer ${jwt.sign({ sub: who }, env.jwt.secret)}` } : {}), "Content-Type": "application/json" },
+        method, headers: { ...(who ? { Authorization: `Bearer ${jwt.sign({ sub: who, type: "user" }, env.jwt.secret, { expiresIn: "1h", issuer: "alfred", audience: "alfred-api" })}` } : {}), "Content-Type": "application/json" },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
     return call;

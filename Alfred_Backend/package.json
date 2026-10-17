@@ -8,9 +8,10 @@
   "main": "server.js",
   "scripts": {
     "dev": "node --watch server.ts",
-    "test": "node --test src/modules/ai/*.test.ts src/modules/schedule-notifications/*.test.ts",
+    "test": "node --test src/modules/ai/*.test.ts src/modules/schedule-notifications/*.test.ts src/security/*.test.ts",
     "check": "tsc --noEmit",
-    "verify:audio-models": "node scripts/verify-audio-models.ts"
+    "verify:audio-models": "node scripts/verify-audio-models.ts",
+    "security:audit": "node scripts/audit-security.ts"
   },
   "dependencies": {
     "cors": "^2.8.6",
@@ -27,6 +28,7 @@
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^26.6.4",
+    "mongodb-memory-server": "^11.3.0",
     "nodemon": "^3.1.14",
     "ts-node": "^10.9.2",
     "tsx": "^4.23.15",

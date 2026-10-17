@@ -1,3 +1,4 @@
+import { tenantRepository } from "../../security/tenantRepository.ts";
 import mongoose from "mongoose";
 import { Schedule, type ISchedule } from "../../models/schedule.model.ts";
 
@@ -9,20 +10,16 @@ export type ScheduleItem = {
 };
 
 export async function getSchedule(accountId: string, date: string): Promise<ISchedule[]> {
-    return Schedule.find({
-        accountId: new mongoose.Types.ObjectId(accountId),
+    return tenantRepository(Schedule, accountId).find({
         date,
-    })
-        .sort({ time: 1 })
-        .lean();
+    }, { sort: { time: 1 } });
 }
 
 export async function addSchedule(
     accountId: string,
     item: { time: string; topic: string; date: string }
 ): Promise<ISchedule> {
-    const doc = await Schedule.create({
-        accountId: new mongoose.Types.ObjectId(accountId),
+    const doc = await tenantRepository(Schedule, accountId).create({
         time: item.time,
         topic: item.topic,
         date: item.date,
@@ -50,14 +47,12 @@ export async function updateSchedule(
         updateData.date = updates.date;
     }
 
-    return Schedule.findOneAndUpdate(
+    return tenantRepository(Schedule, accountId).findOneAndUpdate(
         {
             _id: new mongoose.Types.ObjectId(scheduleId),
-            accountId: new mongoose.Types.ObjectId(accountId),
         },
-        { $set: updateData },
-        { returnDocument: "after" }
-    ).lean();
+        updateData
+    );
 }
 
 export async function deleteSchedule(accountId: string, scheduleId: string): Promise<ISchedule | null> {
@@ -65,8 +60,7 @@ export async function deleteSchedule(accountId: string, scheduleId: string): Pro
         return null;
     }
 
-    return Schedule.findOneAndDelete({
+    return tenantRepository(Schedule, accountId).findOneAndDelete({
         _id: new mongoose.Types.ObjectId(scheduleId),
-        accountId: new mongoose.Types.ObjectId(accountId),
-    }).lean();
+    });
 }

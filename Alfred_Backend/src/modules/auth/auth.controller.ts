@@ -11,6 +11,9 @@ import {
     getGoogleAuthUrl,
     getGoogleUserFromCode,
 } from "./auth.service.ts";
+import { OAuthState } from "../../models/oauthState.model.ts";
+import { Account } from "../../models/account.model.ts";
+import { migrateGuest } from "../../security/guestMigration.ts";
 import { env } from "../../config/env.ts";
 
 export async function guestAuth(_req: Request, res: Response): Promise<void> {
@@ -23,45 +26,35 @@ export async function guestAuth(_req: Request, res: Response): Promise<void> {
     }
 }
 
+const bindingCookie = process.env.NODE_ENV === "production" ? "__Host-alfred_oauth" : "alfred_oauth";
+const cookieOptions = { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax" as const, path: "/", maxAge: 600_000 };
+function callbackBinding(req: Request): string {
+    const entry = req.headers.cookie?.split(";").map(v => v.trim()).find(v => v.startsWith(`${bindingCookie}=`));
+    return entry?.slice(bindingCookie.length + 1) ?? "";
+}
+
+export async function prepareOAuth(req: Request, res: Response): Promise<void> {
+    const flow = req.body.flow as "browser" | "desktop";
+    const state = `${flow === "desktop" ? "desktop_" : ""}${crypto.randomBytes(32).toString("hex")}`;
+    await createPendingOAuthState({ state, flow, codeChallenge: req.body.code_challenge,
+        codeChallengeMethod: "S256", initiatorId: req.account!._id, initiatorVersion: req.account!.sessionVersion ?? 0 });
+    res.json({ state, url: `${env.google.callbackUrl.replace(/\/callback$/, "")}?state=${encodeURIComponent(state)}` });
+}
+
 export async function googleAuth(req: Request, res: Response): Promise<void> {
-    try {
-        const { flow, state, code_challenge, code_challenge_method } = req.query as {
-            flow?: string;
-            state?: string;
-            code_challenge?: string;
-            code_challenge_method?: string;
-        };
+    const state = String(req.query.state ?? "");
+    const binding = crypto.randomBytes(32).toString("hex");
+    const pending = await OAuthState.findOneAndUpdate({ state, expiresAt: { $gt: new Date() }, callbackBinding: { $exists: false } }, {
+        $set: { callbackBinding: crypto.createHash("sha256").update(binding).digest("hex") },
+    }, { returnDocument: "after" });
+    if (!pending) { res.status(400).json({ error: "Invalid or expired login attempt" }); return; }
+    res.cookie(bindingCookie, binding, cookieOptions);
+    res.redirect(getGoogleAuthUrl(state, pending.nonce));
+}
 
-        if (flow === "desktop") {
-            const cleanState = String(state).trim();
-            await createPendingOAuthState({
-                state: cleanState,
-                codeChallenge: String(code_challenge).trim(),
-                codeChallengeMethod: String(code_challenge_method).trim(),
-                flow: "desktop",
-            });
-            const authUrl = getGoogleAuthUrl(cleanState);
-            res.redirect(authUrl);
-            return;
-        }
-
-        // Browser flow: generate secure state for CSRF defense
-        const browserState =
-            typeof state === "string" && state.trim().length >= 16
-                ? state.trim()
-                : crypto.randomBytes(16).toString("hex");
-
-        await createPendingOAuthState({
-            state: browserState,
-            flow: "browser",
-        });
-
-        const authUrl = getGoogleAuthUrl(browserState);
-        res.redirect(authUrl);
-    } catch (err) {
-        console.error("Error initiating Google OAuth:", err);
-        res.redirect(`${env.frontendUrl}/?auth_error=initialization_failed`);
-    }
+export async function logout(req: Request, res: Response): Promise<void> {
+    await Account.updateOne({ _id: req.account!._id }, { $inc: { sessionVersion: 1 } });
+    res.sendStatus(204);
 }
 
 export async function googleAuthCallback(req: Request, res: Response): Promise<void> {
@@ -86,7 +79,7 @@ export async function googleAuthCallback(req: Request, res: Response): Promise<v
 
     // 1. Handle OAuth provider errors (e.g. user denied consent)
     if (error) {
-        const pendingState = cleanState ? await consumePendingOAuthState(cleanState) : null;
+        const pendingState = cleanState ? await consumePendingOAuthState(cleanState, callbackBinding(req)) : null;
         if (isDesktopState || pendingState?.flow === "desktop") {
             const desktopErrorUrl = `alfred://auth/callback?auth_error=authorization_rejected&state=${encodeURIComponent(cleanState)}`;
             renderDesktopCallbackPage(res, desktopErrorUrl, "Authentication Cancelled", "You can close this tab and return to Alfred.");
@@ -110,7 +103,7 @@ export async function googleAuthCallback(req: Request, res: Response): Promise<v
     const cleanCode = code.trim();
 
     // 3. Atomically consume the pending OAuth state to guarantee single-use and prevent replay
-    const pendingState = await consumePendingOAuthState(cleanState);
+    const pendingState = await consumePendingOAuthState(cleanState, callbackBinding(req));
     if (!pendingState) {
         if (isDesktopState) {
             const desktopErrorUrl = `alfred://auth/callback?auth_error=invalid_state&state=${encodeURIComponent(cleanState)}`;
@@ -122,20 +115,28 @@ export async function googleAuthCallback(req: Request, res: Response): Promise<v
         return;
     }
 
-    const isDesktopFlow = pendingState.flow === "desktop" || isDesktopState;
+    res.clearCookie(bindingCookie, cookieOptions);
+    const isDesktopFlow = pendingState.flow === "desktop";
 
     try {
         // 4. Exchange code for Google identity profile
-        const userProfile = await getGoogleUserFromCode(cleanCode);
+        const userProfile = await getGoogleUserFromCode(cleanCode, pendingState.nonce);
         const account = await findOrCreateGoogleAccount(userProfile);
 
-        // 5. Issue single-use authorization ticket in MongoDB (strict 90s TTL, zero credentials at rest)
-        const ticket = await createIssuedTicket({
-            accountId: account._id,
-            codeChallenge: pendingState.codeChallenge,
-            flow: pendingState.flow,
-            state: cleanState,
-        });
+        const initiator = await Account.findById(pendingState.initiatorId);
+        if (!initiator || (initiator.sessionVersion ?? 0) !== pendingState.initiatorVersion || initiator.migratedTo) {
+            throw new Error("Login session is no longer valid");
+        }
+        let ticket = "";
+        const issueTicket = async (session?: import("mongoose").ClientSession) => {
+            ticket = await createIssuedTicket({ accountId: account._id, accountVersion: account.sessionVersion ?? 0, codeChallenge: pendingState.codeChallenge,
+                flow: pendingState.flow, state: cleanState, ...(session ? { session } : {}) });
+        };
+        if (initiator.type === "guest") {
+            await migrateGuest(initiator._id, account._id, pendingState.initiatorVersion, issueTicket);
+        } else {
+            await issueTicket();
+        }
 
         // 6. Redirect back to client
         if (isDesktopFlow) {
@@ -151,7 +152,7 @@ export async function googleAuthCallback(req: Request, res: Response): Promise<v
 
         res.redirect(`${env.frontendUrl}/?ticket=${encodeURIComponent(ticket)}`);
     } catch (err: unknown) {
-        console.error("Error during Google OAuth callback processing:", err);
+        console.error("Google OAuth callback failed");
         if (isDesktopFlow) {
             const desktopFailUrl = `alfred://auth/callback?auth_error=authentication_failed&state=${encodeURIComponent(cleanState)}`;
             renderDesktopCallbackPage(res, desktopFailUrl, "Authentication Failed", "Please return to Alfred and try again.");

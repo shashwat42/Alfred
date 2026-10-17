@@ -1,8 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { authMiddleware } from "../../middleware/auth.middleware.ts";
-import { preferences, savePreferences, registerDevice, device, plan, claim, hash } from "./service.ts";
-import { NotificationDevice } from "./models.ts";
+import { preferences, savePreferences, registerDevice, device, plan, claim, unregisterDevice } from "./service.ts";
 
 export const preferenceSchema = z.object({
     destination: z.enum(["mobile", "desktop", "both"]), enabled: z.boolean(),
@@ -36,7 +35,7 @@ router.post("/devices", run(async (req, res) => {
 router.delete("/devices", run(async (req, res) => {
     const parsed = z.object({ secret: secretSchema }).strict().safeParse(req.body);
     if (!parsed.success) return res.sendStatus(400);
-    await NotificationDevice.deleteOne({ _id: hash(parsed.data.secret), accountId: req.accountId!, sessionHash: hash(token(req)) });
+    await unregisterDevice(req.accountId!, parsed.data.secret, token(req));
     return res.sendStatus(204);
 }));
 router.post("/sync", run(async (req, res) => {

@@ -10,6 +10,9 @@ export interface IAccount {
     email?: string | undefined;
     name?: string | undefined;
     picture?: string | undefined;
+    sessionVersion?: number;
+    migratedTo?: mongoose.Types.ObjectId;
+    guestWriteVersion?: number;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -21,6 +24,9 @@ const accountSchema = new Schema<IAccount>(
             enum: ["guest", "user"],
             required: true,
         },
+        sessionVersion: { type: Number, default: 0 },
+        migratedTo: { type: Schema.Types.ObjectId, ref: "Account" },
+        guestWriteVersion: { type: Number, default: 0 },
         guestId: {
             type: String,
             unique: true,
