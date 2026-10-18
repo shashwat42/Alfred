@@ -3,6 +3,8 @@
 set -euo pipefail
 umask 077
 export COMPOSE_ANSI=never
+# Root must not leave bytecode caches in the SSH user's temporary upload tree.
+export PYTHONDONTWRITEBYTECODE=1
 [[ $(id -u) == 0 ]] || { echo 'Deployment requires root via sudo.' >&2; exit 1; }
 stage=${1:?Missing artifact directory}
 [[ $stage =~ ^/tmp/alfred-deploy\.[a-zA-Z0-9]+$ ]] || { echo 'Invalid staging directory.' >&2; exit 1; }
