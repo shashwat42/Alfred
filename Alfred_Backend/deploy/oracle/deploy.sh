@@ -59,12 +59,14 @@ cd "$stage"
 sha256sum --check --status images.sha256 || { echo 'Image archive checksum mismatch.' >&2; exit 1; }
 gzip -dc images.tar.gz | docker image load --quiet >/dev/null
 python3 - "$stage/metadata.json" <<'PY'
-import json, subprocess, sys
+import json, sys
+from pathlib import Path
+sys.path.insert(0, str(Path(sys.argv[1]).parent / 'deploy/oracle'))
+from image_identity import loaded_identity
 metadata = json.load(open(sys.argv[1]))
-for kind in ('backend',):
-    image = json.loads(subprocess.check_output(['docker', 'image', 'inspect', metadata[kind + 'Image']]))[0]
-    if image['Id'] != metadata[kind + 'Id'] or f"{image['Os']}/{image['Architecture']}" != metadata['platform']:
-        sys.exit('Loaded image identity/architecture mismatch')
+identity = loaded_identity(metadata['backendImage'])
+if identity['configDigest'] != metadata['backendConfigDigest'] or identity['platform'] != metadata['platform']:
+    sys.exit('Loaded image identity/architecture mismatch')
 PY
 # An existing self-hosted deployment needs an explicit migration; do not touch it.
 if [[ -e $base/database-config.json ]] || [[ -n $(docker ps -aq --filter label=com.docker.compose.project=alfred --filter label=com.docker.compose.service=mongo) ]]; then

@@ -156,20 +156,21 @@ jobs:
           mkdir -p "$RUNNER_TEMP/alfred-artifacts"
           cp compose.yaml compose.production.yaml "$RUNNER_TEMP/alfred-artifacts/"
           cp -R deploy "$RUNNER_TEMP/alfred-artifacts/deploy"
-          python3 - <<'PY'
-          import json, os, subprocess
-          from pathlib import Path
-          metadata = {'release': os.environ['RELEASE_ID'], 'platform': os.environ['TARGET_PLATFORM']}
-          for kind, key in [('backend', 'BACKEND_IMAGE')]:
-              name = os.environ[key]
-              image = json.loads(subprocess.check_output(['docker', 'image', 'inspect', name]))[0]
-              if f"{image['Os']}/{image['Architecture']}" != metadata['platform']:
-                  raise SystemExit('Built image architecture mismatch')
-              metadata[kind + 'Image'], metadata[kind + 'Id'] = name, image['Id']
-          path = Path(os.environ['RUNNER_TEMP']) / 'alfred-artifacts/metadata.json'
-          path.write_text(json.dumps(metadata))
-          PY
           docker image save "$BACKEND_IMAGE" | gzip -1 > "$RUNNER_TEMP/alfred-artifacts/images.tar.gz"
+          python3 - <<'PY'
+          import gzip, json, os
+          from pathlib import Path
+          from deploy.oracle.image_identity import archive_identity
+          metadata = {'release': os.environ['RELEASE_ID'], 'platform': os.environ['TARGET_PLATFORM']}
+          directory = Path(os.environ['RUNNER_TEMP']) / 'alfred-artifacts'
+          name = os.environ['BACKEND_IMAGE']
+          with gzip.open(directory / 'images.tar.gz', 'rb') as stream:
+              identity = archive_identity(stream, name)
+          if identity['platform'] != metadata['platform']:
+              raise SystemExit('Built image architecture mismatch')
+          metadata.update(backendImage=name, backendConfigDigest=identity['configDigest'])
+          (directory / 'metadata.json').write_text(json.dumps(metadata))
+          PY
           cd "$RUNNER_TEMP/alfred-artifacts"
           sha256sum images.tar.gz > images.sha256
       - name: Transfer artifacts and deploy with runtime configuration over SSH stdin
