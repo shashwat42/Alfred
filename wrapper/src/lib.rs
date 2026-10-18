@@ -1,3 +1,5 @@
+#[cfg(desktop)]
+mod desktop;
 #[cfg(target_os = "windows")]
 mod permissions;
 #[cfg(target_os = "windows")]
@@ -14,7 +16,11 @@ pub fn run() {
             .manage(permissions::MicrophoneConsent::default())
             .manage(updates::UpdateState::default())
             .plugin(tauri_plugin_updater::Builder::new().build())
-            .invoke_handler(tauri::generate_handler![permissions::request_microphone_consent, updates::check_for_app_update, updates::install_app_update])
+            .invoke_handler(tauri::generate_handler![
+                permissions::request_microphone_consent,
+                updates::check_for_app_update,
+                updates::install_app_update
+            ])
             .on_permission_request(permissions::handle_permission);
     }
 
@@ -39,12 +45,28 @@ pub fn run() {
         builder = builder.plugin(tauri_plugin_notification::init());
 
         builder = builder.on_window_event(|window, event| {
+            if let Some(webview) = window.app_handle().get_webview_window(window.label()) {
+                match event {
+                    tauri::WindowEvent::Focused(true) => {
+                        desktop::set_memory_target(&webview, false)
+                    }
+                    tauri::WindowEvent::Resized(_) => desktop::set_memory_target(
+                        &webview,
+                        window.is_minimized().unwrap_or(false)
+                            || !window.is_visible().unwrap_or(true),
+                    ),
+                    _ => {}
+                }
+            }
             if window.label() == "main"
                 && let tauri::WindowEvent::CloseRequested { api, .. } = event
             {
                 // Hide window instead of terminating application
                 api.prevent_close();
                 let _ = window.hide();
+                if let Some(webview) = window.app_handle().get_webview_window("main") {
+                    desktop::set_memory_target(&webview, true);
+                }
             }
         });
     }
@@ -69,11 +91,6 @@ pub fn run() {
                     // Supply the full-size artwork directly for the taskbar instead of
                     // relying on the default icon loaded from Windows resources.
                     window.set_icon(tauri::include_image!("icons/icon.png"))?;
-                }
-
-                if let Some(overlay) = app.get_webview_window("overlay") {
-                    let _ = overlay.set_decorations(false);
-                    let _ = overlay.set_shadow(false);
                 }
 
                 // Setup System Tray
@@ -103,18 +120,7 @@ pub fn run() {
                             }
                         }
                         "overlay" => {
-                            if let Some(overlay) = app.get_webview_window("overlay") {
-                                let is_vis = overlay.is_visible().unwrap_or(false);
-                                if is_vis {
-                                    let _ = overlay.hide();
-                                } else {
-                                    let _ = overlay.center();
-                                    let _ = overlay.show();
-                                    let _ = overlay.unminimize();
-                                    let _ = overlay.set_focus();
-                                    let _ = app.emit("alfred:overlay-summon", ());
-                                }
-                            }
+                            desktop::toggle_overlay(app);
                         }
                         "settings" => {
                             if let Some(w) = app.get_webview_window("main") {
@@ -141,6 +147,7 @@ pub fn run() {
                                 let is_visible = window.is_visible().unwrap_or(false);
                                 if is_visible {
                                     let _ = window.hide();
+                                    desktop::set_memory_target(&window, true);
                                 } else {
                                     let _ = window.show();
                                     let _ = window.unminimize();
@@ -158,19 +165,8 @@ pub fn run() {
                     let _ = app
                         .global_shortcut()
                         .on_shortcut(shortcut, move |_app, _sc, event| {
-                            if event.state() == ShortcutState::Pressed
-                                && let Some(overlay) = handle.get_webview_window("overlay")
-                            {
-                                let is_vis = overlay.is_visible().unwrap_or(false);
-                                if is_vis {
-                                    let _ = overlay.hide();
-                                } else {
-                                    let _ = overlay.center();
-                                    let _ = overlay.show();
-                                    let _ = overlay.unminimize();
-                                    let _ = overlay.set_focus();
-                                    let _ = handle.emit("alfred:overlay-summon", ());
-                                }
+                            if event.state() == ShortcutState::Pressed {
+                                desktop::toggle_overlay(&handle);
                             }
                         });
                 }

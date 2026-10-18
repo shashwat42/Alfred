@@ -35,15 +35,16 @@ import {
 const IDLE_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes of inactivity
 
 /**
- * Dismisses the overlay window safely without terminating Alfred.
+ * Release the overlay renderer when explicitly dismissed. Its session is reset
+ * by the caller; the main window and tray keep Alfred running.
  */
 async function dismissOverlayWindow(): Promise<void> {
   if (isTauri()) {
     try {
       const win = getCurrentWebviewWindow();
-      await win.hide();
+      await win.close();
     } catch (e) {
-      console.warn("Failed to hide overlay window:", e);
+      console.warn("Failed to close overlay window:", e);
     }
   }
 }
@@ -234,13 +235,15 @@ export function QuickInputOverlay({
 
     window.addEventListener("focus", handleWindowFocus);
     let unlistenSummon: (() => void) | undefined;
+    let disposed = false;
 
     const setupListener = async () => {
       try {
         const { listen } = await import("@tauri-apps/api/event");
-        unlistenSummon = await listen("alfred:overlay-summon", () => {
-          ensureFocus();
+        const unlisten = await listen("alfred:overlay-summon", () => {
+          if (!disposed) ensureFocus();
         });
+        if (disposed) unlisten(); else unlistenSummon = unlisten;
       } catch {
         // Fallback
       }
@@ -248,10 +251,17 @@ export function QuickInputOverlay({
     void setupListener();
 
     return () => {
+      disposed = true;
       window.removeEventListener("focus", handleWindowFocus);
       if (unlistenSummon) unlistenSummon();
     };
   }, [ensureFocus]);
+
+  useEffect(() => () => {
+    requestQueueRef.current = [];
+    activeAbortRef.current?.abort();
+    activeAbortRef.current = null;
+  }, []);
 
   const processNextPrompt = useCallback(
     async (textToProcess: string) => {
@@ -795,6 +805,7 @@ export function VoiceOverlay({
  */
 export default function OverlayApp() {
   const [mode, setMode] = useState<DesktopOverlayMode>(() => getSavedOverlayMode());
+  const [visible, setVisible] = useState(() => !document.hidden);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const lastActivityTimeRef = useRef<number>(0);
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -845,11 +856,20 @@ export default function OverlayApp() {
   }, []);
 
   useEffect(() => {
-    let unlisten: (() => void) | undefined;
+    let disposed = false;
+    const unlisteners: (() => void)[] = [];
+    const visibilityChanged = () => setVisible(!document.hidden);
+    document.addEventListener("visibilitychange", visibilityChanged);
     const setupSummonListener = async () => {
       try {
         const { listen } = await import("@tauri-apps/api/event");
-        unlisten = await listen("alfred:overlay-summon", () => {
+        const subscribe = async (name: string, handler: () => void) => {
+          const unlisten = await listen(name, () => { if (!disposed) handler(); });
+          if (disposed) unlisten(); else unlisteners.push(unlisten);
+        };
+        await subscribe("alfred:overlay-hidden", () => setVisible(false));
+        await subscribe("alfred:overlay-summon", () => {
+          setVisible(true);
           void positionOverlayAtTop();
           const now = Date.now();
           if (now - lastActivityTimeRef.current > IDLE_TIMEOUT_MS) {
@@ -865,7 +885,9 @@ export default function OverlayApp() {
     void setupSummonListener();
     void positionOverlayAtTop();
     return () => {
-      if (unlisten) unlisten();
+      disposed = true;
+      document.removeEventListener("visibilitychange", visibilityChanged);
+      unlisteners.forEach(unlisten => unlisten());
     };
   }, [resetSession, recordUserActivity]);
 
@@ -892,7 +914,7 @@ export default function OverlayApp() {
           onClearSession={resetSession}
           onUserActivity={recordUserActivity}
         />
-      ) : (
+      ) : visible ? (
         <VoiceOverlay
           onDismiss={handleDismiss}
           onSwitchMode={handleSwitchMode}
@@ -901,7 +923,7 @@ export default function OverlayApp() {
           onClearSession={resetSession}
           onUserActivity={recordUserActivity}
         />
-      )}
+      ) : null}
     </div>
   );
 }

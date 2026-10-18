@@ -44,6 +44,10 @@ creating guests, and both onboarding and the overlay wait for an explicit guest
 choice or verified Google account. An existing unconfirmed guest is reused after
 confirmation, and the choice is remembered for later launches.
 
+Beta.4 creates the desktop overlay on demand, releases its renderer on explicit
+dismissal, and loads only the selected window surface. Hidden/minimized Windows
+views request lower WebView2 memory use without suspending reminder timers.
+
 ## Verification
 
 Use `MODE=development` for `npm test`, `npm run test:updates-ui`, `npm run lint`,

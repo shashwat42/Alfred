@@ -1,6 +1,6 @@
 # Windows beta release
 
-The current beta is `v0.1.0-beta.3`, Windows x64 only. The desktop version lives in
+The current beta is `v0.1.0-beta.4`, Windows x64 only. The desktop version lives in
 `package.json`, `package-lock.json`, `wrapper/tauri.conf.json`, `wrapper/Cargo.toml`
 and `wrapper/Cargo.lock`. The separately deployed backend has its own version.
 
@@ -8,7 +8,8 @@ and `wrapper/Cargo.lock`. The separately deployed backend has its own version.
 
 Set `MODE=development`, then run `npm test`, `npm run lint`,
 `npm --prefix Alfred_Backend run check`, `npm --prefix Alfred_Backend test`,
-`npm run test:reliability-ui`, `npm run test:updates-ui` and `npm run build:development`.
+`npm run test:reliability-ui`, `npm run test:updates-ui`, `npm run test:startup-ui`,
+`npm run test:overlay-lifecycle` and `npm run build:development`.
 Backend tests use temporary MongoDB replica sets and stub AI providers. They need
 permission to start local processes and listen on ephemeral ports. Use the dummy
 environment from `.github/workflows/deploy-oracle.yml` and generate ephemeral
@@ -36,7 +37,7 @@ files. `ALFRED_RELEASE_API_URL` may override the HTTPS API origin explicitly.
 Existing `.env` tunnel and development-mode settings cannot override this build.
 
 Find the installer, its `.sig`, `latest.json`, `SHA256SUMS.txt`, release notes and source manifest in
-`.deployment/releases/v0.1.0-beta.3/`. The directory is ignored by Git. Existing
+`.deployment/releases/v0.1.0-beta.4/`. The directory is ignored by Git. Existing
 version output is preserved; move it aside deliberately before rebuilding.
 The manifest records the source commit and whether source changes were present
 (including untracked files, excluding machine-local Android Gradle cache state).
@@ -65,8 +66,8 @@ with `Get-FileHash -Algorithm SHA256`. This beta currently has no configured sig
 certificate. For a signed build, configure the Tauri Windows signing settings
 using credentials outside source control, then rebuild and regenerate checksums.
 
-Create a **draft GitHub prerelease** titled `Alfred v0.1.0-beta.3` using the tag
-`v0.1.0-beta.3`. Paste the version's notes and attach the installer, its `.sig`,
+Create a **draft GitHub prerelease** titled `Alfred v0.1.0-beta.4` using the tag
+`v0.1.0-beta.4`. Paste the version's notes and attach the installer, its `.sig`,
 `latest.json`, `SHA256SUMS.txt` and `release-manifest.json`. Mark it as a prerelease and review
 the assets and acceptance results before publishing to testers.
 
