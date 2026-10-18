@@ -1,6 +1,6 @@
 # Windows beta release
 
-The first beta is `v0.1.0-beta.1`, Windows x64 only. The desktop version lives in
+The current beta is `v0.1.0-beta.2`, Windows x64 only. The desktop version lives in
 `package.json`, `package-lock.json`, `wrapper/tauri.conf.json`, `wrapper/Cargo.toml`
 and `wrapper/Cargo.lock`. The separately deployed backend has its own version.
 
@@ -8,10 +8,11 @@ and `wrapper/Cargo.lock`. The separately deployed backend has its own version.
 
 Set `MODE=development`, then run `npm test`, `npm run lint`,
 `npm --prefix Alfred_Backend run check`, `npm --prefix Alfred_Backend test`,
-`npm run test:reliability-ui` and `npm run build:development`.
+`npm run test:reliability-ui`, `npm run test:updates-ui` and `npm run build:development`.
 Backend tests use temporary MongoDB replica sets and stub AI providers. They need
 permission to start local processes and listen on ephemeral ports. Use the dummy
-environment from `.github/workflows/deploy-oracle.yml` rather than real credentials.
+environment from `.github/workflows/deploy-oracle.yml` and generate ephemeral
+JWT/Google test secrets rather than supplying real credentials.
 Leave `ALFRED_NOTIFICATION_TEST_MONGODB_URI` unset so notification tests use a
 temporary database. Never point integration tests at the hosted database.
 
@@ -23,14 +24,19 @@ On Windows with Node 24, npm dependencies and Rust/MSVC build tools installed:
 npm run release:windows
 ```
 
+The command requires `TAURI_SIGNING_PRIVATE_KEY` in its process environment.
+The CI workflow inherits this from the GitHub Actions secret of the same name;
+an optional password comes from `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. See
+[updater signing](../app-updates.md#release-signing-and-assets) for key management.
+
 This performs the actual release packaging, with production frontend behavior,
 an explicit x64 target, the hosted HTTPS API and a CSP restricted to that API.
 It does not start or deploy a backend, install the app or modify local environment
 files. `ALFRED_RELEASE_API_URL` may override the HTTPS API origin explicitly.
 Existing `.env` tunnel and development-mode settings cannot override this build.
 
-Find the installer, `SHA256SUMS.txt`, release notes and manifest in
-`.deployment/releases/v0.1.0-beta.1/`. The directory is ignored by Git. Existing
+Find the installer, its `.sig`, `latest.json`, `SHA256SUMS.txt`, release notes and source manifest in
+`.deployment/releases/v0.1.0-beta.2/`. The directory is ignored by Git. Existing
 version output is preserved; move it aside deliberately before rebuilding.
 The manifest records the source commit and whether source changes were present
 (including untracked files, excluding machine-local Android Gradle cache state).
@@ -59,9 +65,9 @@ with `Get-FileHash -Algorithm SHA256`. This beta currently has no configured sig
 certificate. For a signed build, configure the Tauri Windows signing settings
 using credentials outside source control, then rebuild and regenerate checksums.
 
-Create a **draft GitHub prerelease** titled `Alfred v0.1.0-beta.1` using the tag
-`v0.1.0-beta.1`. Paste the version's notes and attach the installer,
-`SHA256SUMS.txt` and `release-manifest.json`. Mark it as a prerelease and review
+Create a **draft GitHub prerelease** titled `Alfred v0.1.0-beta.2` using the tag
+`v0.1.0-beta.2`. Paste the version's notes and attach the installer, its `.sig`,
+`latest.json`, `SHA256SUMS.txt` and `release-manifest.json`. Mark it as a prerelease and review
 the assets and acceptance results before publishing to testers.
 
 Changes to `Alfred_Backend/**` merged/pushed to `main` trigger the existing Oracle

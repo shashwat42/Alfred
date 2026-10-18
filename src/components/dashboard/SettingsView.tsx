@@ -7,6 +7,7 @@ import { isTauri } from "../../auth/auth.ts";
 import { getSilenceTimeout, saveSilenceTimeout } from "../../lib/voicePreferences.ts";
 import { AndroidAssistantSetup } from "../../android/AndroidAssistantSetup.tsx";
 import { ScheduleNotificationSettings } from "./ScheduleNotificationSettings.tsx";
+import { AppUpdateSettings } from "./AppUpdateSettings.tsx";
 import {
   type DesktopOverlayMode,
   getSavedOverlayMode,
@@ -210,6 +211,7 @@ function SettingsViewComponent() {
 
         {/* App Info Section */}
         <AccountPanel key={session?.account.id} />
+        <AppUpdateSettings />
         <section className="settings-card-group">
           <h3 className="settings-group-header">
             <Smartphone size={16} className="settings-group-icon" />

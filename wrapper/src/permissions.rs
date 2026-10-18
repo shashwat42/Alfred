@@ -16,7 +16,7 @@ pub struct MicrophoneConsent {
     prompt: Arc<Mutex<()>>,
 }
 
-fn trusted_origin(url: &tauri::Url) -> bool {
+pub(crate) fn trusted_origin(url: &tauri::Url) -> bool {
     if !url.username().is_empty() || url.password().is_some() {
         return false;
     }

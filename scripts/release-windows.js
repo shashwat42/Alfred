@@ -3,6 +3,7 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import { spawn, execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { createUpdateManifest } from "./update-manifest.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const readJson = (name) => JSON.parse(fs.readFileSync(path.join(root, name), "utf8"));
@@ -14,6 +15,7 @@ const target = "x86_64-pc-windows-msvc";
 
 async function main() {
   if (process.platform !== "win32") throw new Error("Build the Windows beta on Windows with the Rust MSVC toolchain.");
+  if (!process.env.TAURI_SIGNING_PRIVATE_KEY) throw new Error("Set TAURI_SIGNING_PRIVATE_KEY from the protected updater signing secret before packaging. Unsigned updates cannot be released.");
   if (!/^\d+\.\d+\.\d+-beta\.\d+$/.test(version)) throw new Error("Expected a numbered beta version in package.json.");
   const cargo = fs.readFileSync(path.join(root, "wrapper/Cargo.toml"), "utf8");
   const cargoVersion = cargo.match(/^version = "([^"]+)"/m)?.[1];
@@ -30,7 +32,7 @@ async function main() {
   const releaseConfig = {
     build: { beforeBuildCommand: "npm run build", devUrl: null },
     app: { security: { csp: policy } },
-    bundle: { targets: ["nsis"] },
+    bundle: { targets: ["nsis"], createUpdaterArtifacts: true },
   };
   const started = Date.now();
   const output = path.join(root, ".deployment/releases", `v${version}`);
@@ -50,6 +52,7 @@ async function main() {
   const installers = fs.readdirSync(bundle).filter((name) => name.endsWith("-setup.exe") && name.includes(version))
     .filter((name) => fs.statSync(path.join(bundle, name)).mtimeMs >= started - 2000);
   if (installers.length !== 1) throw new Error("Expected exactly one newly built installer for this beta.");
+  const signature = fs.readFileSync(path.join(bundle, `${installers[0]}.sig`), "utf8").trim();
   const sourceCommit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8", windowsHide: true }).trim();
   // Android Gradle locks are machine-local runtime state, outside this Windows release.
   const sourceChanges = execFileSync("git", ["status", "--porcelain", "--untracked-files=all", "--", ".", ":(exclude)wrapper/android/assistant/.gradle/**"], { cwd: root, encoding: "utf8", windowsHide: true }).trim();
@@ -60,6 +63,9 @@ async function main() {
   const sha256 = createHash("sha256").update(fs.readFileSync(destination)).digest("hex");
   fs.writeFileSync(path.join(output, "SHA256SUMS.txt"), `${sha256}  ${name}\n`);
   fs.copyFileSync(notes, path.join(output, "RELEASE_NOTES.md"));
+  fs.writeFileSync(path.join(output, `${name}.sig`), signature + "\n");
+  const updateManifest = createUpdateManifest({ version, installer: name, signature, notes: fs.readFileSync(notes, "utf8"), publishedAt: new Date().toISOString() });
+  fs.writeFileSync(path.join(output, "latest.json"), JSON.stringify(updateManifest, null, 2) + "\n");
   fs.writeFileSync(path.join(output, "release-manifest.json"), JSON.stringify({
     version, target, apiOrigin: api.origin, sourceCommit, hasTrackedChanges: Boolean(sourceChanges),
     builtAt: new Date().toISOString(), installer: name, sha256,

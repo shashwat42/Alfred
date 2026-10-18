@@ -11,6 +11,7 @@ import { resolveWindowSurface } from './lib/windowSurface.ts'
 import { ScheduleNotificationRuntime } from './components/ScheduleNotificationRuntime.tsx'
 import { ApplicationBoundary } from './components/reliability/ApplicationBoundary.tsx'
 import { NotificationHost } from './components/reliability/Notifications.tsx'
+import { AppUpdateRuntime } from './components/AppUpdateRuntime.tsx'
 
 const surface = resolveWindowSurface(window.location.search, window.location.hash,
   hasAndroidAssistantBridge() || /Android/i.test(navigator.userAgent))
@@ -29,7 +30,7 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <NotificationHost />
     {isAndroidAssistant ? <AndroidAssistantApp /> : <AuthProvider deferGuestCreation={!isOverlayWindow}>
-      {!isOverlayWindow && <ScheduleNotificationRuntime />}
+      {!isOverlayWindow && <><ScheduleNotificationRuntime /><AppUpdateRuntime /></>}
       {isOverlayWindow ? <OverlayApp /> : <ApplicationBoundary><App /></ApplicationBoundary>}
     </AuthProvider>}
   </StrictMode>,

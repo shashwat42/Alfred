@@ -1,7 +1,7 @@
 {
   "name": "alfred-frontend",
   "private": true,
-  "version": "0.1.0-beta.1",
+  "version": "0.1.0-beta.2",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,6 +9,7 @@
     "build:development": "tsc -b && vite build --mode development",
     "test:production-simulator": "npm run build && node scripts/verify-production-simulator.ts",
     "test:reliability-ui": "node scripts/verify-reliability-ui.ts",
+    "test:updates-ui": "node scripts/verify-update-ui.ts",
     "lint": "eslint .",
     "preview": "vite preview",
     "tauri": "tauri",

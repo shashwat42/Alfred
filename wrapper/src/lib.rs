@@ -1,5 +1,7 @@
 #[cfg(target_os = "windows")]
 mod permissions;
+#[cfg(target_os = "windows")]
+mod updates;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -10,7 +12,9 @@ pub fn run() {
     {
         builder = builder
             .manage(permissions::MicrophoneConsent::default())
-            .invoke_handler(tauri::generate_handler![permissions::request_microphone_consent])
+            .manage(updates::UpdateState::default())
+            .plugin(tauri_plugin_updater::Builder::new().build())
+            .invoke_handler(tauri::generate_handler![permissions::request_microphone_consent, updates::check_for_app_update, updates::install_app_update])
             .on_permission_request(permissions::handle_permission);
     }
 
