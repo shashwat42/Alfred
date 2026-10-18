@@ -29,8 +29,11 @@ object AssistantAvailability {
     }
 
     fun settingsIntent(context: Context): Intent? = listOf(
-        Settings.ACTION_VOICE_INPUT_SETTINGS, Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS
-    ).map { Intent(it) }.firstOrNull { it.resolveActivity(context.packageManager) != null }
+        Intent("android.intent.action.MANAGE_DEFAULT_APP")
+            .putExtra("android.intent.extra.ROLE_NAME", "android.app.role.ASSISTANT"),
+        Intent(Settings.ACTION_VOICE_INPUT_SETTINGS),
+        Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)
+    ).firstOrNull { it.resolveActivity(context.packageManager) != null }
 }
 
 class AssistantSetupActivity : Activity() {

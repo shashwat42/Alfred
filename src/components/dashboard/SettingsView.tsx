@@ -8,6 +8,7 @@ import { getSilenceTimeout, saveSilenceTimeout } from "../../lib/voicePreference
 import { AndroidAssistantSetup } from "../../android/AndroidAssistantSetup.tsx";
 import { ScheduleNotificationSettings } from "./ScheduleNotificationSettings.tsx";
 import { AppUpdateSettings } from "./AppUpdateSettings.tsx";
+import { AndroidAppUpdateSettings } from "../../android/AndroidAppUpdateSettings.tsx";
 import {
   type DesktopOverlayMode,
   getSavedOverlayMode,
@@ -211,7 +212,7 @@ function SettingsViewComponent() {
 
         {/* App Info Section */}
         <AccountPanel key={session?.account.id} />
-        <AppUpdateSettings />
+        {isAndroid ? <AndroidAppUpdateSettings /> : <AppUpdateSettings />}
         <section className="settings-card-group">
           <h3 className="settings-group-header">
             <Smartphone size={16} className="settings-group-icon" />

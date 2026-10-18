@@ -7111,6 +7111,196 @@ body.is-overlay .overlay-root {
 .schedule-permission-actions .settings-action-btn[aria-busy="true"] { cursor: wait; }
 .timeline-event-chip:focus { outline: 2px solid #f87171; outline-offset: 3px; }
 
+/* Android notification controls must not inherit the desktop form's stacked
+   checkboxes, half-screen select widths, or unstyled action buttons. */
+.App.is-android :is(.schedule-notification-settings, .android-app-updates, .android-assistant-setup) .settings-feature-card {
+    gap: 14px;
+    padding: 16px;
+    min-width: 0;
+}
+
+.App.is-android .schedule-notification-settings .settings-feature-row {
+    gap: 10px;
+    padding: 12px 0;
+    min-width: 0;
+}
+
+.App.is-android .schedule-notification-fields > .settings-feature-row {
+    flex-direction: column;
+    align-items: stretch;
+}
+
+.App.is-android .schedule-notification-fields > .settings-feature-row:has(> input[type="checkbox"]) {
+    flex-direction: row;
+    align-items: center;
+    min-height: 48px;
+    gap: 16px;
+}
+
+.App.is-android .schedule-notification-fields > .settings-feature-row > label {
+    flex: 1;
+    min-width: 0;
+    line-height: 1.45;
+}
+
+.App.is-android .schedule-notification-settings input[type="checkbox"] {
+    appearance: none;
+    position: relative;
+    flex: 0 0 42px;
+    width: 42px;
+    height: 24px;
+    margin: 0;
+    padding: 3px;
+    border: 1px solid #666;
+    border-radius: 999px;
+    background: #444;
+    cursor: pointer;
+}
+
+.App.is-android .schedule-notification-settings input[type="checkbox"]::before {
+    content: "";
+    display: block;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #fff;
+    transition: transform 150ms ease;
+}
+
+.App.is-android .schedule-notification-settings input[type="checkbox"]:checked {
+    border-color: #ef4444;
+    background: #ef4444;
+}
+
+.App.is-android .schedule-notification-settings input[type="checkbox"]:checked::before {
+    transform: translateX(18px);
+}
+
+.App.is-android .schedule-notification-settings input[type="checkbox"]:focus-visible,
+.App.is-android .schedule-destination label:has(input:focus-visible) {
+    outline: 2px solid #f87171;
+    outline-offset: 3px;
+}
+
+.App.is-android .schedule-destination {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    min-width: 0;
+    padding: 12px 0 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.App.is-android .schedule-destination legend {
+    padding: 12px 0 0;
+    margin-bottom: 10px;
+    font-size: 13px;
+    color: #f4f4f5;
+}
+
+.App.is-android .schedule-destination label {
+    position: relative;
+    justify-content: center;
+    min-width: 0;
+    min-height: 48px;
+    padding: 8px 4px;
+    font-size: 12px;
+    line-height: 1.4;
+    text-align: center;
+    overflow-wrap: anywhere;
+    color: #f4f4f5;
+}
+
+.App.is-android .schedule-destination input[type="radio"] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    clip-path: inset(50%);
+    overflow: hidden;
+}
+
+.App.is-android .schedule-notification-settings .settings-select-input {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    min-height: 44px;
+    color-scheme: dark;
+}
+
+.App.is-android :is(.schedule-notification-settings, .android-app-updates, .android-assistant-setup) .settings-feature-desc {
+    font-size: 12px;
+    line-height: 1.55;
+    overflow-wrap: anywhere;
+}
+
+.App.is-android :is(.schedule-notification-settings, .android-app-updates, .android-assistant-setup) .settings-feature-info {
+    gap: 10px;
+}
+
+.App.is-android .schedule-permission-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    padding: 0;
+    gap: 8px;
+}
+
+.App.is-android :is(.schedule-notification-settings, .android-app-updates, .android-assistant-setup) .settings-action-btn {
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    padding: 10px 12px;
+    border: 1px solid #505050;
+    background: #353535;
+    color: #f4f4f5;
+    font-size: 13px;
+    line-height: 1.45;
+    white-space: normal;
+}
+
+.App.is-android :is(.schedule-notification-settings, .android-app-updates, .android-assistant-setup) .settings-action-btn:disabled {
+    background: #242424;
+    border-color: #3a3a3a;
+    color: #a1a1aa;
+    opacity: 1;
+}
+
+.App.is-android :is(.schedule-notification-settings, .android-app-updates, .android-assistant-setup) .settings-save-feedback {
+    margin: 0;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: #202020;
+    color: #b9b9c2;
+    font-size: 12px;
+    line-height: 1.55;
+    overflow-wrap: anywhere;
+}
+
+.App.is-android .schedule-notification-settings .settings-save-feedback:empty {
+    display: none;
+}
+
+.App.is-android .android-update-actions {
+    display: grid;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.App.is-android .android-app-updates .settings-action-btn.is-primary,
+.App.is-android .android-assistant-setup .settings-action-btn.is-login {
+    background: #ef4444;
+    border-color: #ef4444;
+    color: #fff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .App.is-android .schedule-notification-settings input[type="checkbox"]::before {
+        transition: none;
+    }
+}
+
 /* Schedule bulk actions stay grouped beside Add event. */
 .schedule-header-bulk-actions{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:8px}
 .schedule-header-bulk-actions .section-clear-btn{white-space:nowrap}

@@ -6,6 +6,7 @@
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
     <queries>
+        <intent><action android:name="android.intent.action.MANAGE_DEFAULT_APP" /></intent>
         <intent><action android:name="android.settings.VOICE_INPUT_SETTINGS" /></intent>
         <intent><action android:name="android.settings.MANAGE_DEFAULT_APPS_SETTINGS" /></intent>
     </queries>

@@ -13,7 +13,7 @@ export function hasAndroidAssistantBridge() { return typeof window !== "undefine
 
 export const ASSISTANT_VOICE_LEVEL_EVENT = "alfred:assistant_voice_level";
 
-export function androidAssistantRequest(type: "status" | "setup" | "dismiss" | "openApp" | "recordVoice" | "cancelVoice", silenceMs?: number): Promise<Record<string, unknown>> {
+export function androidAssistantRequest(type: "status" | "setup" | "checkUpdates" | "downloadUpdate" | "dismiss" | "openApp" | "recordVoice" | "cancelVoice", silenceMs?: number): Promise<Record<string, unknown>> {
   const bridge = window.AlfredAndroid;
   if (!bridge) return Promise.reject(new Error("The Android assistant bridge is unavailable. Open the installed Android app."));
   if (type === "cancelVoice") {
@@ -40,7 +40,7 @@ export function androidAssistantRequest(type: "status" | "setup" | "dismiss" | "
   };
   return new Promise((resolve, reject) => {
     const id = `${Date.now()}-${++sequence}`;
-    const timer = window.setTimeout(() => { pending.delete(id); reject(new Error("Android did not respond. Please try again.")); }, type === "recordVoice" ? 45000 : 5000);
+    const timer = window.setTimeout(() => { pending.delete(id); reject(new Error("Android did not respond. Please try again.")); }, type === "recordVoice" ? 45000 : type === "checkUpdates" ? 60000 : 5000);
     pending.set(id, {
       type,
       resolve: (result) => { clearTimeout(timer); resolve(result); },

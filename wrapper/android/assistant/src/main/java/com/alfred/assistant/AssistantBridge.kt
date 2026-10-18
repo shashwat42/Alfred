@@ -1,7 +1,6 @@
 package com.alfred.assistant
 
 import android.app.Activity
-import android.content.Intent
 import android.net.Uri
 import android.webkit.WebView
 import androidx.webkit.WebViewCompat
@@ -46,14 +45,18 @@ object AssistantBridge {
     fun installMain(activity: Activity, view: WebView) {
         mainView = WeakReference(view)
         ScheduleNotifications.install(activity, view)
-        install(view) { type, _ ->
+        installAsync(view) { type, _, complete ->
             when (type) {
-                "status" -> AssistantAvailability.status(activity)
+                "status" -> complete(AssistantAvailability.status(activity))
                 "setup" -> {
-                    activity.startActivity(Intent(activity, AssistantSetupActivity::class.java))
-                    JSONObject().put("opened", true)
+                    val target = AssistantAvailability.settingsIntent(activity)
+                        ?: throw IllegalStateException("Assistant settings are unavailable")
+                    activity.startActivity(target)
+                    complete(JSONObject().put("opened", true))
                 }
-                else -> JSONObject().put("error", "Unsupported assistant action.")
+                "checkUpdates" -> AndroidAppUpdates.check(activity, complete)
+                "downloadUpdate" -> complete(AndroidAppUpdates.openDownload(activity))
+                else -> complete(JSONObject().put("error", "Unsupported assistant action."))
             }
         }
     }

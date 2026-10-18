@@ -22,7 +22,7 @@ export function AndroidAssistantSetup() {
     document.addEventListener("visibilitychange", visible);
     return () => { active = false; window.removeEventListener("focus", refresh); document.removeEventListener("visibilitychange", visible); };
   }, [available]);
-  return <section className="settings-card-group">
+  return <section className="settings-card-group android-assistant-setup">
     <h3 className="settings-group-header"><Smartphone size={16} />Android system assistant</h3>
     <div className="settings-feature-card">
       <div className="settings-feature-info">
