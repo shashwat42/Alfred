@@ -166,7 +166,7 @@ export async function googleAuthCallback(req: Request, res: Response): Promise<v
         }
 
         res.redirect(`${env.frontendUrl}/?ticket=${encodeURIComponent(ticket)}`);
-    } catch (err: unknown) {
+    } catch {
         console.error("Google OAuth callback failed");
         if (isDesktopFlow) {
             const desktopFailUrl = `alfred://auth/callback?auth_error=authentication_failed&state=${encodeURIComponent(cleanState)}`;

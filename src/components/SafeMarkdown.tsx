@@ -226,7 +226,7 @@ export function SafeMarkdown({ content }: SafeMarkdownProps) {
   if (lastIndex < sanitized.length) {
     const trailingChunk = sanitized.slice(lastIndex);
     elements.push(
-      <div key={`text-${blockIndex++}`} className="markdown-text-chunk">
+      <div key={`text-${blockIndex}`} className="markdown-text-chunk">
         {parseTextBlocks(trailingChunk)}
       </div>
     );

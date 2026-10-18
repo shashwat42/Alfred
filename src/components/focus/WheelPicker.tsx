@@ -25,12 +25,6 @@ export function WheelPicker({
     const inputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
-        if (!isEditing) {
-            setEditVal(String(value).padStart(2, "0"));
-        }
-    }, [value, isEditing]);
-
-    useEffect(() => {
         if (isEditing && inputRef.current) {
             inputRef.current.focus();
             inputRef.current.select();
@@ -163,6 +157,7 @@ export function WheelPicker({
                     className="wheel-item wheel-item-active"
                     onClick={() => {
                         if (!disabled) {
+                            setEditVal(String(value).padStart(2, "0"));
                             setIsEditing(true);
                         }
                     }}

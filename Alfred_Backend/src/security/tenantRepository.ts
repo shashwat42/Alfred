@@ -23,7 +23,7 @@ export function assertSafeFields(value: unknown): void {
 /** Deliberately narrow repository: no save, replacement, raw collection, arbitrary
  * update operators, joins, output stages or bulkWrite escape hatch. New persistence
  * methods must be implemented and reviewed here before use by a service. */
-export function tenantRepository<T>(sourceModel: Model<T, any, any, any>, accountId: string) {
+export function tenantRepository<T, TQueryHelpers, TMethods, TVirtuals>(sourceModel: Model<T, TQueryHelpers, TMethods, TVirtuals>, accountId: string) {
     // Normalize virtual/helper generics; raw document T remains unchanged.
     const model = sourceModel as unknown as Model<T>;
     const owner = ownership(accountId);

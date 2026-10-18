@@ -35,9 +35,8 @@ jobs:
     timeout-minutes: 20
     env:
       MODE: development
-      JWT_SECRET: isolated-ci-test-secret-at-least-32-chars
+      # Isolated fixtures only; deployment below reads real credentials from secrets.
       GOOGLE_CLIENT_ID: isolated-ci
-      GOOGLE_CLIENT_SECRET: isolated-ci
       GOOGLE_CALLBACK_URL: http://localhost/auth/google/callback
       MONGODB_URI: mongodb://127.0.0.1/unused_test
       LLM_API_KEY: ""
@@ -50,6 +49,13 @@ jobs:
           node-version: "24"
       - name: Install backend dependencies
         run: npm ci
+      - name: Generate an ephemeral test signing secret
+        run: |
+          for name in JWT_SECRET GOOGLE_CLIENT_SECRET; do
+            test_secret="$(node -e 'process.stdout.write(require("node:crypto").randomBytes(32).toString("hex"))')"
+            echo "::add-mask::$test_secret"
+            echo "$name=$test_secret" >> "$GITHUB_ENV"
+          done
       - name: Backend TypeScript and isolated development tests
         run: |
           npm run check

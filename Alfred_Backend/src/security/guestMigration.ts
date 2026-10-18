@@ -29,9 +29,12 @@ export async function migrateGuest(sourceId: mongoose.Types.ObjectId, targetId: 
             $set: { migratedTo: targetId }, $inc: { sessionVersion: 1 },
         }, { session });
         if (claimed.modifiedCount !== 1) throw new Error("Guest migration conflict");
-        for (const model of [Task, Note, Schedule] as mongoose.Model<any>[]) {
+        const transfer = async <T>(model: mongoose.Model<T>) => {
             await model.updateMany({ accountId: sourceId, guestId: { $exists: false } }, { $set: { accountId: targetId } }, { session, timestamps: false });
-        }
+        };
+        await transfer(Task);
+        await transfer(Note);
+        await transfer(Schedule);
         const existingSettings = await NotificationSettings.exists({ accountId: targetId }).session(session);
         if (!existingSettings) await NotificationSettings.updateOne({ accountId: sourceId, guestId: { $exists: false } }, { $set: { accountId: targetId } }, { session });
         // On a preference collision preserve the old guest preferences as an

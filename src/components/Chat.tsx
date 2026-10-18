@@ -664,7 +664,6 @@ export default function Chat({
       setVoiceModeState("starting");
       void runVoiceModeLoop(newSessionId);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [handleExitVoiceMode, isRecordingPushToTalk]);
 
   const handleRetryVoiceMode = useCallback(() => {
@@ -674,7 +673,6 @@ export default function Chat({
     setVoiceModeState("starting");
     const last = messagesRef.current.at(-1);
     void runVoiceModeLoop(newSessionId, last?.role === "user" && last.error ? last.content : undefined);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
