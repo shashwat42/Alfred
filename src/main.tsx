@@ -12,6 +12,7 @@ import { ScheduleNotificationRuntime } from './components/ScheduleNotificationRu
 import { ApplicationBoundary } from './components/reliability/ApplicationBoundary.tsx'
 import { NotificationHost } from './components/reliability/Notifications.tsx'
 import { AppUpdateRuntime } from './components/AppUpdateRuntime.tsx'
+import { OverlaySessionBoundary } from './components/OverlaySessionBoundary.tsx'
 
 const surface = resolveWindowSurface(window.location.search, window.location.hash,
   hasAndroidAssistantBridge() || /Android/i.test(navigator.userAgent))
@@ -29,9 +30,9 @@ if (isOverlayWindow && typeof document !== 'undefined') {
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <NotificationHost />
-    {isAndroidAssistant ? <AndroidAssistantApp /> : <AuthProvider deferGuestCreation={!isOverlayWindow}>
+    {isAndroidAssistant ? <AndroidAssistantApp /> : <AuthProvider>
       {!isOverlayWindow && <><ScheduleNotificationRuntime /><AppUpdateRuntime /></>}
-      {isOverlayWindow ? <OverlayApp /> : <ApplicationBoundary><App /></ApplicationBoundary>}
+      {isOverlayWindow ? <OverlaySessionBoundary><OverlayApp /></OverlaySessionBoundary> : <ApplicationBoundary><App /></ApplicationBoundary>}
     </AuthProvider>}
   </StrictMode>,
 )

@@ -11,6 +11,16 @@ export type AuthSession = {
 };
 
 export const AUTH_STORAGE_KEY = "alfred_session";
+export const GUEST_CHOICE_KEY = "alfred_guest_choice_account";
+
+export function confirmedGuestAccount(): string | null {
+  try { return localStorage.getItem(GUEST_CHOICE_KEY); } catch { return null; }
+}
+
+export function confirmGuestAccount(session: AuthSession): void {
+  if (session.account.type !== "guest") throw new Error("A guest session is required.");
+  localStorage.setItem(GUEST_CHOICE_KEY, session.account.id);
+}
 export const RECOVERABLE_SESSIONS_KEY = "alfred_recoverable_sessions";
 export const AUTH_INVALID_EVENT = "alfred_auth_invalid";
 export const PENDING_DESKTOP_AUTH_KEY = "alfred_pending_desktop_auth";

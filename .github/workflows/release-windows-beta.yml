@@ -46,6 +46,7 @@ jobs:
           npm --prefix Alfred_Backend test
           npm run test:reliability-ui
           npm run test:updates-ui
+          npm run test:startup-ui
           npm run build:development
 
   package:

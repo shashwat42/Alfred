@@ -39,6 +39,11 @@ separate and remains unconfigured.
 The first updater-enabled installer is 0.1.0-beta.2. Users of beta.1 must install
 it manually once; adding updater code cannot retrofit an already installed binary.
 
+Beta.3 fixes first-run account selection: all windows restore sessions without
+creating guests, and both onboarding and the overlay wait for an explicit guest
+choice or verified Google account. An existing unconfirmed guest is reused after
+confirmation, and the choice is remembered for later launches.
+
 ## Verification
 
 Use `MODE=development` for `npm test`, `npm run test:updates-ui`, `npm run lint`,

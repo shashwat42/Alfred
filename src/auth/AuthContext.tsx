@@ -1,7 +1,11 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
   AUTH_CHANGE_EVENT,
+  AUTH_STORAGE_KEY,
   AUTH_INVALID_EVENT,
+  GUEST_CHOICE_KEY,
+  confirmedGuestAccount,
+  confirmGuestAccount,
   createGuestSession,
   clearSession,
   DesktopAuthCancelledError,
@@ -9,6 +13,7 @@ import {
   handleDesktopDeepLink,
   initAuthSession,
   getToken,
+  getSession,
   API_BASE_URL,
   isTauri,
   loginWithGoogle as authLoginWithGoogle,
@@ -18,10 +23,11 @@ import {
 } from "./auth.ts";
 import { AuthContext } from "./authContext.ts";
 
-export function AuthProvider({ children, deferGuestCreation = false }: { children: React.ReactNode; deferGuestCreation?: boolean }) {
+export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<AuthSession | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [confirmedGuestId, setConfirmedGuestId] = useState(confirmedGuestAccount);
   // Incrementing this counter re-triggers the auth init effect.
   const [retryCount, setRetryCount] = useState(0);
 
@@ -35,17 +41,22 @@ export function AuthProvider({ children, deferGuestCreation = false }: { childre
 
   const continueAsGuest = useCallback(async () => {
     setLoading(true); setError(null);
-    try { const nextSession = await createGuestSession(true); setSession(nextSession); }
-    catch (err) { setError(err instanceof Error ? err.message : "Guest access is temporarily unavailable. Please retry."); }
+    try {
+      const nextSession = session?.account.type === "guest" && !error ? session : await createGuestSession(true);
+      confirmGuestAccount(nextSession);
+      setConfirmedGuestId(nextSession.account.id);
+      setSession(nextSession);
+    }
+    catch (err) { setError(err instanceof Error ? err.message : "Guest access is temporarily unavailable. Please retry."); throw err; }
     finally { setLoading(false); }
-  }, []);
+  }, [session, error]);
 
   useEffect(() => {
     // Local flag prevents setState from firing after this effect has cleaned up
     // (e.g. component unmounts during an in-flight request, or retry fires again).
     let cancelled = false;
 
-    (deferGuestCreation ? initAuthSession(false) : initAuthSession())
+    initAuthSession(false)
       .then((activeSession) => {
         if (!cancelled) {
           setSession(activeSession);
@@ -69,12 +80,19 @@ export function AuthProvider({ children, deferGuestCreation = false }: { childre
       const customEvent = event as CustomEvent<AuthSession | null>;
       if (!cancelled) {
         setSession(customEvent.detail ?? null);
+        setConfirmedGuestId(confirmedGuestAccount());
         setError(null);
         setLoading(false);
       }
     };
 
     window.addEventListener(AUTH_CHANGE_EVENT, handleAuthChange);
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === null || event.key === AUTH_STORAGE_KEY || event.key === GUEST_CHOICE_KEY) {
+        handleAuthChange(new CustomEvent(AUTH_CHANGE_EVENT, { detail: getSession() }));
+      }
+    };
+    window.addEventListener("storage", handleStorage);
     const handleInvalidSession = (event: Event) => {
       if (!cancelled) { setError((event as CustomEvent<string>).detail); setLoading(false); }
     };
@@ -83,9 +101,10 @@ export function AuthProvider({ children, deferGuestCreation = false }: { childre
     return () => {
       cancelled = true;
       window.removeEventListener(AUTH_CHANGE_EVENT, handleAuthChange);
+      window.removeEventListener("storage", handleStorage);
       window.removeEventListener(AUTH_INVALID_EVENT, handleInvalidSession);
     };
-  }, [retryCount, deferGuestCreation]);
+  }, [retryCount]);
 
   // Listen for Tauri desktop custom protocol deep links (via plugin and single-instance event)
   useEffect(() => {
@@ -233,6 +252,7 @@ export function AuthProvider({ children, deferGuestCreation = false }: { childre
       value={{
         session,
         loading,
+        requiresAccountChoice: !session || (session.account.type === "guest" && confirmedGuestId !== session.account.id),
         error,
         retry,
         continueAsGuest,

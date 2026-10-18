@@ -4,7 +4,7 @@ import { startScheduleNotificationCoordinator } from "../lib/scheduleNotificatio
 
 /** Lifecycle binding only; delivery policy and coordination live outside React. */
 export function ScheduleNotificationRuntime() {
-  const { session } = useAuth();
-  useEffect(() => startScheduleNotificationCoordinator(session), [session]);
+  const { session, requiresAccountChoice } = useAuth();
+  useEffect(() => startScheduleNotificationCoordinator(requiresAccountChoice ? null : session), [session, requiresAccountChoice]);
   return null;
 }

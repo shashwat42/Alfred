@@ -12,7 +12,7 @@ import {
 let inFlightAuthPromise: Promise<string | null> | null = null;
 
 /**
- * Ensures an active authorization token exists, creating a guest session if needed.
+ * Restores authorization without creating an account before the user's choice.
  */
 export async function ensureToken(): Promise<string | null> {
   const { ticket } = checkUrlAuthParameters();
@@ -25,8 +25,8 @@ export async function ensureToken(): Promise<string | null> {
   if (!inFlightAuthPromise) {
     inFlightAuthPromise = (async () => {
       try {
-        const session = await initAuthSession();
-        return session.token;
+        const session = await initAuthSession(false);
+        return session?.token ?? null;
       } catch (err) {
         console.error("Failed to ensure auth token:", err);
         return null;
@@ -52,7 +52,7 @@ function buildUrl(endpointOrUrl: string): string {
 
 /**
  * Wrapper around window.fetch that automatically injects the Authorization Bearer token,
- * provisions guest sessions on-the-fly, and handles base URL resolution.
+ * restores existing sessions and handles base URL resolution.
  */
 export async function apiFetch(
   input: string,

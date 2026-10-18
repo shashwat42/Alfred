@@ -1,6 +1,6 @@
 # Alfred
 
-Windows beta release: [release guide](docs/releases/README.md), [0.1.0-beta.2 notes](docs/releases/v0.1.0-beta.2.md) and [in-app updates](docs/app-updates.md).
+Windows beta release: [release guide](docs/releases/README.md), [0.1.0-beta.3 notes](docs/releases/v0.1.0-beta.3.md) and [in-app updates](docs/app-updates.md).
 
 Backend Docker setup and deployment instructions: [Alfred backend](Alfred_Backend/README.md).
 

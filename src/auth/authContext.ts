@@ -6,6 +6,7 @@ export type AuthCallback = (session: AuthSession | null) => void;
 export interface AuthContextType {
   session: AuthSession | null;
   loading: boolean;
+  requiresAccountChoice: boolean;
   error: string | null;
   retry: () => void;
   continueAsGuest: () => Promise<void>;
