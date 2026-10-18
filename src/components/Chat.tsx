@@ -1,4 +1,6 @@
+import { ErrorNotice } from "./reliability/Notifications";
 import { useState, useRef, useEffect, useCallback } from "react";
+import { StateControl } from "./reliability/StateControl";
 import Logo from "../assets/Alfred_Logo.svg";
 import { useAuth } from "../auth/authContext.ts";
 import { PanelLeftClose, PanelLeftOpen, Plus, Radio, Mic, MicOff, X } from "lucide-react";
@@ -87,6 +89,7 @@ export function VoiceModeHeaderIndicator({
       role="status"
       aria-live="polite"
     >
+      <ErrorNotice message={voiceModeState === "error" ? voiceModeError || "Voice connection failed." : null} retry={onRetry} title="Voice unavailable" />
       <div className="chat-voice-header-logo-wrap" aria-hidden="true">
         <img src={Logo} alt="Alfred Voice Indicator" className="chat-voice-header-logo" />
         {voiceModeState === "starting" && (
@@ -102,28 +105,18 @@ export function VoiceModeHeaderIndicator({
           {voiceModeState === "listening" && (isMuted ? "Microphone Muted" : "Listening…")}
           {voiceModeState === "transcribing" && "Preparing audio…"}
           {voiceModeState === "thinking" && "Alfred is thinking…"}
-          {voiceModeState === "error" && "Voice Error"}
+          {voiceModeState === "error" && "Voice paused"}
         </span>
         <span className="chat-voice-header-sub">
           {voiceModeState === "starting" && modelLoadingText}
           {voiceModeState === "listening" && (isMuted ? "Tap mic to unmute" : "Speak when ready")}
           {voiceModeState === "transcribing" && "Preparing recording"}
           {voiceModeState === "thinking" && "Generating answer…"}
-          {voiceModeState === "error" && (voiceModeError || "Voice error")}
+          {voiceModeState === "error" && "Try again when ready"}
         </span>
       </div>
 
-      {voiceModeState === "error" && (
-        <button
-          type="button"
-          className="chat-voice-retry-btn"
-          style={{ padding: "2px 8px", fontSize: "10px", marginLeft: "4px" }}
-          onClick={onRetry}
-          title="Retry voice connection"
-        >
-          Retry
-        </button>
-      )}
+
     </div>
   );
 }
@@ -176,34 +169,25 @@ function VoiceModeHeroIndicator({
         )}
       </div>
 
+      <ErrorNotice message={voiceModeState === "error" ? voiceModeError || "Voice connection failed." : null} retry={onRetry} title="Voice unavailable" />
       <div className="chat-voice-hero-text">
         <h2 className="chat-voice-hero-title">
           {voiceModeState === "starting" && "Initializing…"}
           {voiceModeState === "listening" && (isMuted ? "Microphone Muted" : "Listening…")}
           {voiceModeState === "transcribing" && "Preparing audio…"}
           {voiceModeState === "thinking" && "Alfred is thinking…"}
-          {voiceModeState === "error" && "Voice Error"}
+          {voiceModeState === "error" && "Voice paused"}
         </h2>
         <p className="chat-voice-hero-sub">
           {voiceModeState === "starting" && modelLoadingText}
           {voiceModeState === "listening" && (isMuted ? "Tap mic to unmute" : "Speak when ready")}
           {voiceModeState === "transcribing" && "Preparing recording"}
           {voiceModeState === "thinking" && "Generating answer…"}
-          {voiceModeState === "error" && (voiceModeError || "Voice error occurred")}
+          {voiceModeState === "error" && "Try again when ready"}
         </p>
       </div>
 
-      {voiceModeState === "error" && (
-        <button
-          type="button"
-          className="chat-voice-retry-btn"
-          style={{ padding: "6px 14px", fontSize: "11px", marginTop: "6px" }}
-          onClick={onRetry}
-          title="Retry voice connection"
-        >
-          Retry
-        </button>
-      )}
+
     </div>
   );
 }
@@ -225,6 +209,7 @@ export default function Chat({
   onOpenSettings,
 }: ChatProps) {
   const { session, loginWithGoogle } = useAuth();
+  const [signInError, setSignInError] = useState("");
   const isGoogleUser = session?.account?.type === "user";
   const displayName =
     session?.account?.name ||
@@ -443,7 +428,7 @@ export default function Chat({
     try {
       const context = buildSafeChatContext(messagesRef.current, trimmed);
 
-      const response = await sendChatMessage(context, abortController.signal, { recording });
+      const response = await sendChatMessage(context, abortController.signal, { recording, requestId: messagesRef.current.at(-1)?.id });
 
       // Check if user reset chat or cancelled voice session while waiting
       if (activeRequestIdRef.current !== currentReqId) return false;
@@ -769,6 +754,7 @@ export default function Chat({
 
   return (
     <section className={`Chat ${isCollapsed ? "is-collapsed" : ""} ${hasMessages ? "has-active-conversation" : ""}`}>
+      <ErrorNotice message={signInError} title="Google sign-in could not start" />
       {/* Top Sidebar Header: Controls & Alfred Branding */}
       <div className="chat-top-header">
         <div className="chat-actions-group">
@@ -792,6 +778,8 @@ export default function Chat({
               </div>
             </div>
           )}
+
+          <StateControl />
 
           {hasMessages && (
             <>
@@ -929,9 +917,9 @@ export default function Chat({
                     className="chat-prompt-send-btn"
                     disabled={isLoading || !hasComposerContent}
                     title="Send message"
-                    aria-label="Send message"
+                    aria-label={isLoading ? "Alfred is thinking" : "Send message"} aria-busy={isLoading}
                   >
-                    <svg
+                    {isLoading ? <VoiceSpinner size={14} /> : <svg
                       width="14"
                       height="14"
                       viewBox="0 0 24 24"
@@ -944,7 +932,7 @@ export default function Chat({
                     >
                       <line x1="12" y1="19" x2="12" y2="5" />
                       <polyline points="5 12 12 5 19 12" />
-                    </svg>
+                    </svg>}
                   </button>
                 </form>
 
@@ -1045,9 +1033,9 @@ export default function Chat({
                 className="chat-prompt-send-btn"
                 disabled={isLoading || !hasComposerContent}
                 title="Send message"
-                aria-label="Send message"
+                aria-label={isLoading ? "Alfred is thinking" : "Send message"} aria-busy={isLoading}
               >
-                <svg
+                {isLoading ? <VoiceSpinner size={14} /> : <svg
                   width="14"
                   height="14"
                   viewBox="0 0 24 24"
@@ -1060,7 +1048,7 @@ export default function Chat({
                 >
                   <line x1="12" y1="19" x2="12" y2="5" />
                   <polyline points="5 12 12 5 19 12" />
-                </svg>
+                </svg>}
               </button>
             </form>
           </div>
@@ -1089,50 +1077,11 @@ export default function Chat({
                     <div>{msg.recording ? <VoiceNote recording={msg.recording} /> : msg.content}</div>
                   )}
 
-                  {msg.error && (
-                    <div className="chat-error-card">
-                      <span>{msg.error}</span>
-                      <div className="chat-error-actions">
-                        <button
-                          type="button"
-                          className="chat-retry-btn"
-                          onClick={handleRetry}
-                          disabled={isLoading}
-                          aria-label="Retry message"
-                        >
-                          <svg
-                            width="12"
-                            height="12"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2.5"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          >
-                            <path d="M21 2v6h-6" />
-                            <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
-                            <path d="M3 22v-6h6" />
-                            <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
-                          </svg>
-                          <span>Retry</span>
-                        </button>
-                      </div>
-                    </div>
-                  )}
+                  <ErrorNotice message={msg.error} retry={handleRetry} title="Message could not be sent" />
                 </div>
               ))}
 
-              {isLoading && (
-                <div
-                  className="chat-typing-indicator"
-                  aria-label="Alfred is thinking"
-                >
-                  <div className="chat-typing-dot" />
-                  <div className="chat-typing-dot" />
-                  <div className="chat-typing-dot" />
-                </div>
-              )}
+
             </div>
 
             {/* Anchored Composer within Sidebar */}
@@ -1191,9 +1140,9 @@ export default function Chat({
                       className="chat-prompt-send-btn"
                       disabled={isLoading || !hasComposerContent}
                       title="Send message"
-                      aria-label="Send message"
+                      aria-label={isLoading ? "Alfred is thinking" : "Send message"} aria-busy={isLoading}
                     >
-                      <svg
+                      {isLoading ? <VoiceSpinner size={14} /> : <svg
                         width="14"
                         height="14"
                         viewBox="0 0 24 24"
@@ -1206,7 +1155,7 @@ export default function Chat({
                       >
                         <line x1="12" y1="19" x2="12" y2="5" />
                         <polyline points="5 12 12 5 19 12" />
-                      </svg>
+                      </svg>}
                     </button>
                   </form>
 
@@ -1289,9 +1238,9 @@ export default function Chat({
                     className="chat-composer-btn chat-composer-send-btn"
                     disabled={isLoading || !hasComposerContent}
                     title="Send message"
-                    aria-label="Send message"
+                    aria-label={isLoading ? "Alfred is thinking" : "Send message"} aria-busy={isLoading}
                   >
-                    <svg
+                    {isLoading ? <VoiceSpinner size={14} /> : <svg
                       width="14"
                       height="14"
                       viewBox="0 0 24 24"
@@ -1303,7 +1252,7 @@ export default function Chat({
                     >
                       <line x1="12" y1="19" x2="12" y2="5" />
                       <polyline points="5 12 12 5 19 12" />
-                    </svg>
+                    </svg>}
                   </button>
                 </form>
               )}
@@ -1338,7 +1287,7 @@ export default function Chat({
               <button
                 type="button"
                 className="user-bar-signin-btn"
-                onClick={() => loginWithGoogle()}
+                onClick={() => { setSignInError(""); void Promise.resolve(loginWithGoogle()).catch(error => setSignInError(error instanceof Error ? error.message : "Could not start Google sign-in.")); }}
               >
                 {displayName === "Guest"
                   ? "Sign in with Google"

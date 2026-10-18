@@ -1,3 +1,4 @@
+import { ErrorNotice } from "./components/reliability/Notifications";
 import { useState, useEffect, useRef } from "react";
 import Chat, { VoiceModeHeaderIndicator, type VoiceHeaderState } from "./components/Chat";
 import Dashboard from "./components/Dashboard";
@@ -7,6 +8,7 @@ import { MobileBottomNav, type MobileNavDestination } from "./components/MobileB
 import { useAuth } from "./auth/authContext.ts";
 import { audioRecorder } from "./lib/audioRecorder";
 import Logo from "./assets/Alfred_Logo.svg";
+import { StateControl } from "./components/reliability/StateControl";
 import { NOTIFICATION_OPEN_EVENT } from "./lib/scheduleNotifications.ts";
 
 type MobileTab = "assistant" | "dashboard";
@@ -15,7 +17,7 @@ type SwipeDestination = (typeof mobileNavOrder)[number];
 
 const App = () => {
   const isAndroidDevice = typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent);
-  const { loading, error, retry } = useAuth();
+  const { loading, error, retry, session } = useAuth();
   const [currentView, setCurrentView] = useState<DashboardView>("home");
   const [mobileTab, setMobileTab] = useState<MobileTab>("assistant");
   const [voiceHeaderState, setVoiceHeaderState] = useState<VoiceHeaderState | null>(null);
@@ -52,6 +54,16 @@ const App = () => {
       return next;
     });
   };
+
+  useEffect(() => {
+    const navigate = (event: Event) => {
+      const view = (event as CustomEvent<string>).detail;
+      if (view === "assistant") { setMobileTab("assistant"); setIsSidebarCollapsed(false); }
+      else if (["home", "tasks", "notes", "schedule"].includes(view)) { setMobileTab("dashboard"); setCurrentView(view as DashboardView); }
+    };
+    window.addEventListener("alfred:tour-navigate", navigate);
+    return () => window.removeEventListener("alfred:tour-navigate", navigate);
+  }, []);
 
   const [chatResetSignal, setChatResetSignal] = useState(0);
 
@@ -244,41 +256,13 @@ const App = () => {
           <div className="mobile-top-header-brand" onClick={handleGoHome} role="button" tabIndex={0}>
             <img src={Logo} alt="Alfred Logo" className="mobile-top-logo" />
             <span className="mobile-top-title">ALFRED</span>
+            <StateControl />
           </div>
         )}
       </header>
 
-      {error && (
-        <div
-          style={{
-            padding: "8px 16px",
-            backgroundColor: "#2a1515",
-            color: "#f87171",
-            textAlign: "center",
-            fontSize: "14px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: "12px",
-          }}
-        >
-          <span>{error}</span>
-          <button
-            onClick={() => retry()}
-            style={{
-              padding: "4px 10px",
-              background: "#3f2020",
-              color: "#fff",
-              border: "1px solid #7f1d1d",
-              borderRadius: "4px",
-              cursor: "pointer",
-            }}
-          >
-            Retry
-          </button>
-        </div>
-      )}
-      {loading ? (
+      <ErrorNotice message={error} retry={retry} />
+      {loading && !session ? (
         <div
           style={{
             display: "flex",
@@ -295,7 +279,7 @@ const App = () => {
         <>
           <main className={`Main mobile-tab-${mobileTab} ${swipeDirection ? `mobile-swipe-${swipeDirection}` : ""} ${isSidebarCollapsed ? "sidebar-collapsed" : ""}`}>
             <Chat
-              key={chatResetSignal}
+              key={`${session?.account.id}-${chatResetSignal}`}
               isCollapsed={isSidebarCollapsed}
               onToggleCollapse={handleToggleSidebar}
               onNewChat={handleNewChat}
@@ -306,7 +290,7 @@ const App = () => {
                 setCurrentView("settings");
               }}
             />
-            <Dashboard currentView={currentView} onViewChange={setCurrentView} />
+            <Dashboard key={session?.account.id} currentView={currentView} onViewChange={setCurrentView} />
           </main>
           <MobileBottomNav
             activeDestination={

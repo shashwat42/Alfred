@@ -1,4 +1,6 @@
 import mongoose from "mongoose";
+import { AiRequest, AiWindow } from "./aiUsage.ts";
+import { measureStorage } from "./storage.ts";
 import { Account } from "../models/account.model.ts";
 import { Task } from "../models/task.model.ts";
 import { Note } from "../models/note.model.ts";
@@ -13,6 +15,7 @@ export async function migrateGuest(sourceId: mongoose.Types.ObjectId, targetId: 
     await mongoose.connection.transaction(async session => {
         const target = await Account.findOne({ _id: targetId, type: "user" }).session(session);
         if (!target || !target.googleId || target.guestId) throw new Error("Invalid migration target");
+        await Account.updateOne({ _id: targetId }, { $inc: { guestWriteVersion: 1 } }, { session });
         const source = await Account.findOne({ _id: sourceId, type: "guest" }).session(session);
         if (!source || !source.guestId || source.googleId) throw new Error("Invalid migration source");
         if (source.migratedTo) {
@@ -35,6 +38,18 @@ export async function migrateGuest(sourceId: mongoose.Types.ObjectId, targetId: 
         // inaccessible archived record; never overwrite the existing user's choice.
         await NotificationDevice.updateMany({ accountId: sourceId, guestId: { $exists: false } }, { $set: { accountId: targetId, sessionHash: "revoked" } }, { session });
         await NotificationDelivery.updateMany({ accountId: sourceId, guestId: { $exists: false } }, { $set: { accountId: targetId, migrationSourceId: sourceId } }, { session });
+        // Preserve data even if migration puts the target above its storage limit.
+        // Windows merge instead of resetting either account's prior allowance.
+        const windows = await AiWindow.find({ accountId: sourceId }).session(session);
+        for (const row of windows) {
+            await AiWindow.updateOne({ accountId: targetId, window: row.window, key: row.key }, { $inc: { used: row.used }, $setOnInsert: { expiresAt: row.expiresAt } }, { session, upsert: true });
+        }
+        await AiWindow.deleteMany({ accountId: sourceId }, { session });
+        for (const request of await AiRequest.find({ accountId: sourceId }).session(session)) {
+            const collision = await AiRequest.exists({ accountId: targetId, key: request.key }).session(session);
+            await AiRequest.updateOne({ _id: request._id, accountId: sourceId }, { $set: { accountId: targetId, ...(collision ? { key: `migrated-${sourceId}-${request.key}` } : {}) } }, { session });
+        }
+        await Account.updateOne({ _id: targetId }, { $set: { storageBytes: await measureStorage(String(targetId), session), ...(source.onboardingCompleted ? { onboardingCompleted: true } : {}) } }, { session });
         if (finalize) await finalize(session);
     });
 }

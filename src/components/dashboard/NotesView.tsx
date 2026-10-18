@@ -1,3 +1,4 @@
+import { ErrorNotice } from "../reliability/Notifications";
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import {
     ChevronLeft,
@@ -25,6 +26,7 @@ interface NotesViewProps {
     onSaveNote: (note: { id?: string; title?: string; content?: string }) => Promise<NoteItem | null>;
     onDeleteNote: (id: string) => Promise<boolean>;
     onBackToList: () => void;
+    operationError?: string;
 }
 
 const PRESET_FONT_SIZES = [12, 14, 15, 16, 18, 20, 24];
@@ -52,6 +54,7 @@ export function NotesView({
     onSaveNote,
     onDeleteNote,
     onBackToList,
+    operationError,
 }: NotesViewProps) {
     const [searchQuery, setSearchQuery] = useState("");
     const [isSearching, setIsSearching] = useState(false);
@@ -411,6 +414,7 @@ export function NotesView({
     if (isEditorOpen) {
         return (
             <div key="note-editor" className="note-editor-wrapper">
+                <ErrorNotice message={operationError} />
                 {/* Editor Header */}
                 <div className="note-editor-header">
                     <div className="note-editor-header-left">
@@ -440,7 +444,7 @@ export function NotesView({
                             type="button"
                             className={`note-save-action-btn status-${saveStatus}`}
                             onClick={handleManualSave}
-                            disabled={saveStatus === "saved"}
+                            disabled={saveStatus !== "unsaved"}
                             title={saveStatus === "saved" ? "All changes saved" : "Click to save"}
                         >
                             <Check size={16} />

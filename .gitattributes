@@ -1,0 +1,5 @@
+# Deployment scripts must remain executable by Linux tools after a Windows checkout.
+*.sh text eol=lf
+Dockerfile text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf

@@ -11,6 +11,8 @@ export type AuthSession = {
 };
 
 export const AUTH_STORAGE_KEY = "alfred_session";
+export const RECOVERABLE_SESSIONS_KEY = "alfred_recoverable_sessions";
+export const AUTH_INVALID_EVENT = "alfred_auth_invalid";
 export const PENDING_DESKTOP_AUTH_KEY = "alfred_pending_desktop_auth";
 export const RETURN_URL_STORAGE_KEY = "alfred_auth_return_url";
 export const API_BASE_URL =
@@ -137,7 +139,7 @@ export function setSession(session: AuthSession): void {
 let cachedTicket: string | null = null;
 let cachedAuthError: string | null = null;
 let hasCheckedUrl = false;
-let inFlightInitPromise: Promise<AuthSession> | null = null;
+let inFlightInitPromise: Promise<AuthSession | null> | null = null;
 
 /**
  * Removes the auth session from localStorage.
@@ -164,12 +166,15 @@ export function getToken(): string | null {
 
 /**
  * Requests a new guest session from the backend.
- * Cleans up local session on failure and throws an error.
+ * Preserves existing credentials on failure. Replacing an existing session is
+ * an explicit action and archives its credential before selecting the new guest.
  */
-export async function createGuestSession(): Promise<AuthSession> {
-  try {
+export async function createGuestSession(replaceExisting = false): Promise<AuthSession> {
+    const previous = getSession();
+    if (previous && !replaceExisting) throw new Error("An existing session must be restored before starting another guest account.");
     const response = await fetch(`${API_BASE_URL}/auth/guest`, {
       method: "POST",
+      signal: AbortSignal.timeout(20_000),
       headers: {
         "Content-Type": "application/json",
         "ngrok-skip-browser-warning": "true",
@@ -177,23 +182,70 @@ export async function createGuestSession(): Promise<AuthSession> {
     });
 
     if (!response.ok) {
-      const errorBody = await response.text().catch(() => "");
-      clearSession();
-      throw new Error(`Guest session creation failed (${response.status}): ${errorBody}`);
+      throw new Error("Guest access is temporarily unavailable. Please retry; Google sign-in is optional.");
     }
 
     const sessionData = (await response.json()) as AuthSession;
     if (!sessionData?.token || !sessionData?.account?.id) {
-      clearSession();
       throw new Error("Invalid guest session data received from server");
     }
-
+    if (getSession()?.token !== previous?.token) throw new Error("Your account changed. Please try again.");
+    // Explicit guest continuation preserves the original credential and server
+    // data. Never erase it just because restoration or the network failed.
+    if (previous) {
+      const recoverable = JSON.parse(localStorage.getItem(RECOVERABLE_SESSIONS_KEY) || "{}") as Record<string, AuthSession>;
+      recoverable[previous.account.id] = previous;
+      localStorage.setItem(RECOVERABLE_SESSIONS_KEY, JSON.stringify(recoverable));
+    }
     setSession(sessionData);
     return sessionData;
-  } catch (error) {
-    clearSession();
-    throw error;
+}
+
+export class SessionRecoveryError extends Error {
+  status = 401;
+}
+
+const guestRenewals = new Map<string, Promise<AuthSession>>();
+export function renewGuestSession(expected: AuthSession): Promise<AuthSession> {
+  const current = getSession();
+  if (current?.account.id !== expected.account.id || current.account.type !== "guest") return Promise.reject(new Error("Your account changed. Please try again."));
+  if (current.token !== expected.token) return Promise.resolve(current);
+  const pending = guestRenewals.get(expected.token);
+  if (pending) return pending;
+  const renewal = (async () => {
+    const response = await fetch(`${API_BASE_URL}/auth/guest/renew`, { method: "POST", signal: AbortSignal.timeout(20_000), headers: { Authorization: `Bearer ${expected.token}`, "ngrok-skip-browser-warning": "true" } });
+    if (response.status === 401) throw new SessionRecoveryError("Your saved guest session could not be restored. Continue as a new guest; no sign-in is required. Existing data is kept.");
+    if (!response.ok) throw new Error("Guest session recovery is temporarily unavailable. Please retry.");
+    const renewed = await response.json() as AuthSession;
+    if (!renewed.token || renewed.account?.id !== expected.account.id || renewed.account.type !== "guest") throw new Error("The server returned an invalid guest renewal.");
+    if (getSession()?.token !== expected.token) throw new Error("Your account changed. Please try again.");
+    setSession(renewed);
+    return renewed;
+  })().finally(() => guestRenewals.delete(expected.token));
+  guestRenewals.set(expected.token, renewal);
+  return renewal;
+}
+
+export function reportInvalidSession(token: string): void {
+  const current = getSession();
+  if (current?.token !== token || typeof window === "undefined" || typeof window.dispatchEvent !== "function") return;
+  window.dispatchEvent(new CustomEvent(AUTH_INVALID_EVENT, { detail: current.account.type === "guest"
+    ? "Your guest session needs recovery. You can continue without Google sign-in."
+    : "Your saved session needs recovery. Continue as a guest, or sign in with Google to return to your account." }));
+}
+
+export async function restoreAuthSession(existing: AuthSession): Promise<AuthSession> {
+  const response = await fetch(`${API_BASE_URL}/auth/session`, { signal: AbortSignal.timeout(20_000), headers: { Authorization: `Bearer ${existing.token}`, "ngrok-skip-browser-warning": "true" } });
+  if (response.status === 401) {
+    if (existing.account.type === "guest") return renewGuestSession(existing);
+    throw new SessionRecoveryError("Your saved session needs recovery. You can continue as a guest without signing in, or use Google to return to your account.");
   }
+  if (!response.ok) throw new Error("Alfred is temporarily unavailable. Retry when the connection is restored.");
+  const restored = await response.json() as AuthSession;
+  if (!restored.token || restored.account?.id !== existing.account.id || restored.account.type !== existing.account.type) throw new Error("The server returned an invalid session.");
+  if (getSession()?.token !== existing.token) throw new Error("Your account changed. Please try again.");
+  setSession(restored);
+  return restored;
 }
 
 /**
@@ -221,6 +273,10 @@ export interface PendingDesktopAuth {
   state: string;
   codeVerifier: string;
   expiresAt: number;
+}
+
+export class DesktopAuthCancelledError extends Error {
+  constructor() { super("Google sign-in was cancelled. You can try again anytime."); this.name = "DesktopAuthCancelledError"; }
 }
 
 let memoryPendingAuth: PendingDesktopAuth | null = null;
@@ -283,7 +339,7 @@ export function clearPendingDesktopAuth(): void {
  * Exchanges a short-lived, one-time OAuth handoff ticket for an authenticated Alfred session.
  * Supports optional PKCE code_verifier for desktop authorization handoff.
  */
-export async function exchangeTicket(ticket: string, codeVerifier?: string): Promise<AuthSession> {
+export async function exchangeTicket(ticket: string, codeVerifier?: string, expectedState?: string): Promise<AuthSession> {
   const response = await fetch(`${API_BASE_URL}/auth/exchange`, {
     method: "POST",
     headers: {
@@ -306,6 +362,7 @@ export async function exchangeTicket(ticket: string, codeVerifier?: string): Pro
     throw new Error("Invalid session data received from server handoff");
   }
 
+  if (expectedState && getPendingDesktopAuth()?.state !== expectedState) throw new Error("This sign-in attempt was replaced. Please use the latest Google sign-in window.");
   setSession(sessionData);
   return sessionData;
 }
@@ -349,14 +406,17 @@ export function checkUrlAuthParameters(): { ticket: string | null; authError: st
  * Deduplicated via a shared in-flight promise to prevent StrictMode race conditions.
  * 1. Checks for OAuth ticket or error in URL.
  * 2. Restores an existing session if valid.
- * 3. Creates a guest session if unauthenticated.
+ * 3. Creates a guest session if unauthenticated, unless the main welcome screen
+ *    asks to defer creation until the user chooses guest or Google.
  */
-export function initAuthSession(): Promise<AuthSession> {
+export function initAuthSession(createGuest: false): Promise<AuthSession | null>;
+export function initAuthSession(createGuest?: true): Promise<AuthSession>;
+export function initAuthSession(createGuest = true): Promise<AuthSession | null> {
   if (inFlightInitPromise) {
-    return inFlightInitPromise;
+    return inFlightInitPromise.then(session => session ?? (createGuest ? createGuestSession() : null));
   }
 
-  inFlightInitPromise = (async () => {
+  inFlightInitPromise = Promise.resolve().then(async () => {
     try {
       const { ticket, authError } = checkUrlAuthParameters();
 
@@ -408,14 +468,14 @@ export function initAuthSession(): Promise<AuthSession> {
 
       const existingSession = getSession();
       if (existingSession) {
-        return existingSession;
+        return await restoreAuthSession(existingSession);
       }
 
-      return await createGuestSession();
+      return createGuest ? await createGuestSession() : null;
     } finally {
       inFlightInitPromise = null;
     }
-  })();
+  });
 
   return inFlightInitPromise;
 }
@@ -426,26 +486,45 @@ export function initAuthSession(): Promise<AuthSession> {
  * On browser: redirects current window to backend Google auth endpoint.
  */
 export async function loginWithGoogle(callback?: AuthCallback): Promise<void> {
+  // Retire cancelled/abandoned browser attempts before preparing a fresh one.
+  clearPendingDesktopAuth();
   if (callback) {
     setAuthCompletionCallback(callback);
   }
   saveReturnLocation();
 
-  const session = getSession() ?? await initAuthSession();
+  let session: AuthSession;
+  try { session = getSession() ? await restoreAuthSession(getSession()!) : await initAuthSession(); }
+  catch (error) {
+    // The user explicitly chose Google sign-in. Preserve the invalid session,
+    // then establish the ordinary guest context required by the OAuth flow.
+    if (!(error instanceof SessionRecoveryError)) throw error;
+    session = await createGuestSession(true);
+  }
   const codeVerifier = generateRandomString(32);
   const codeChallenge = await deriveCodeChallenge(codeVerifier);
   const flow = isTauri() ? "desktop" : "browser";
   const response = await fetch(`${API_BASE_URL}/auth/prepare`, {
     method: "POST",
+    signal: AbortSignal.timeout(20_000),
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.token}`, "ngrok-skip-browser-warning": "true" },
     body: JSON.stringify({ flow, code_challenge: codeChallenge }),
   });
-  if (!response.ok) throw new Error("Unable to start login. Your session may have expired.");
+  if (!response.ok) {
+    const failure = await response.json().catch(() => null) as { error?: string; retryAfter?: number } | null;
+    const retry = response.status === 429 && failure?.retryAfter ? ` Try again in ${Math.ceil(failure.retryAfter / 60)} minute(s).` : "";
+    throw new Error((failure?.error || `Unable to start Google sign-in (${response.status}). Please try again.`) + retry);
+  }
   const prepared = await response.json() as { state: string; url: string };
   savePendingDesktopAuth(prepared.state, codeVerifier);
   if (isTauri()) {
-    const { openUrl } = await import("@tauri-apps/plugin-opener");
-    await openUrl(prepared.url);
+    try {
+      const { openUrl } = await import("@tauri-apps/plugin-opener");
+      await openUrl(prepared.url);
+    } catch (error) {
+      if (getPendingDesktopAuth()?.state === prepared.state) clearPendingDesktopAuth();
+      throw error;
+    }
   } else {
     window.location.href = prepared.url;
   }
@@ -465,7 +544,7 @@ export async function pollDesktopAuthStatus(
   const intervalMs = 1500;
 
   while (Date.now() - startTime < maxWaitMs) {
-    if (signal?.aborted) {
+    if (signal?.aborted || getPendingDesktopAuth()?.state !== state) {
       return null;
     }
 
@@ -482,6 +561,7 @@ export async function pollDesktopAuthStatus(
 
       if (response.ok) {
         const sessionData = (await response.json()) as AuthSession;
+        if (signal?.aborted || getPendingDesktopAuth()?.state !== state) return null;
         if (sessionData?.token && sessionData?.account?.id) {
           clearPendingDesktopAuth();
           setSession(sessionData);
@@ -498,6 +578,7 @@ export async function pollDesktopAuthStatus(
     await new Promise((res) => setTimeout(res, intervalMs));
   }
 
+  if (getPendingDesktopAuth()?.state === state) clearPendingDesktopAuth();
   return null;
 }
 
@@ -508,55 +589,26 @@ export async function pollDesktopAuthStatus(
  */
 export async function handleDesktopDeepLink(rawUrl: string): Promise<AuthSession | null> {
   if (!rawUrl || typeof rawUrl !== "string") return null;
-
-  // Normalize quotes or trailing slashes that Windows or browsers may append
   const cleanUrl = rawUrl.trim().replace(/^["']|["']$/g, "").replace(/\/$/, "");
-
-  // Accept alfred://auth/callback or alfred:/auth/callback (Windows can strip one slash)
-  if (!cleanUrl.startsWith("alfred://auth/callback") && !cleanUrl.startsWith("alfred:/auth/callback")) {
-    return null;
-  }
-
+  if (!cleanUrl.startsWith("alfred://auth/callback") && !cleanUrl.startsWith("alfred:/auth/callback")) return null;
+  const url = new URL(cleanUrl.replace(/^alfred:\/+/i, "https://alfred-app/"));
+  const returnedState = url.searchParams.get("state");
+  const pending = getPendingDesktopAuth();
+  // A cancelled/older browser tab must never clear a newer login attempt.
+  if (!pending || pending.state !== returnedState) return null;
   try {
-    // Normalize: replace the alfred:// or alfred:/ scheme prefix so URL() can parse query params
-    const httpUrl = cleanUrl.replace(/^alfred:\/+/i, "https://alfred-app/");
-    const urlObj = new URL(httpUrl);
-    const searchParams = urlObj.searchParams;
-
-    const authError = searchParams.get("auth_error");
-    if (authError) {
-      clearPendingDesktopAuth();
-      throw new Error(`Desktop authentication failed: ${authError}`);
-    }
-
-    const ticket = searchParams.get("ticket");
-    const returnedState = searchParams.get("state");
-
-    if (!ticket || !returnedState) {
-      clearPendingDesktopAuth();
-      throw new Error("Missing ticket or state in desktop callback");
-    }
-
-    const pending = getPendingDesktopAuth();
-    if (!pending) {
-      // If already authenticated (e.g. by polling), return existing session
-      const existing = getSession();
-      if (existing) return existing;
-      throw new Error("No active pending desktop authentication attempt found or attempt expired");
-    }
-
-    if (pending.state !== returnedState) {
-      clearPendingDesktopAuth();
-      throw new Error("Mismatched OAuth state in desktop callback");
-    }
-
-    const verifier = pending.codeVerifier;
-    const session = await exchangeTicket(ticket, verifier);
+    const authError = url.searchParams.get("auth_error");
+    if (authError === "authorization_rejected" || authError === "access_denied") throw new DesktopAuthCancelledError();
+    if (authError) throw new Error(`Desktop authentication failed: ${authError}`);
+    const ticket = url.searchParams.get("ticket");
+    if (!ticket) throw new Error("Missing ticket in desktop callback");
+    const session = await exchangeTicket(ticket, pending.codeVerifier, pending.state);
+    if (getPendingDesktopAuth()?.state !== pending.state) return null;
     clearPendingDesktopAuth();
     triggerAuthCompletionCallback(session);
     return session;
   } catch (err) {
-    clearPendingDesktopAuth();
+    if (getPendingDesktopAuth()?.state === pending.state) clearPendingDesktopAuth();
     throw err;
   }
 }

@@ -33,6 +33,9 @@ export const listScheduleSchema = {
         .strict(),
 };
 
+export const clearScheduleDateSchema = { query: z.object({ date: calendarDateSchema }).strict() };
+export const clearAllSchedulesSchema = { query: z.object({}).strict() };
+
 const wrappedScheduleSchema = z
     .object({
         schedule: scheduleCoreSchema,

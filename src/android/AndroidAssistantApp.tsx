@@ -1,5 +1,6 @@
+import { ErrorNotice } from "../components/reliability/Notifications";
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
-import { ArrowUp, ArrowLeftRight, ExternalLink, MoreHorizontal, RotateCcw, Square, Trash2, X, Sparkles } from "lucide-react";
+import { ArrowUp, ArrowLeftRight, ExternalLink, MoreHorizontal, Square, Trash2, X, Sparkles } from "lucide-react";
 import Logo from "../assets/Alfred_Logo.svg";
 import { AUTH_CHANGE_EVENT, AUTH_STORAGE_KEY, getSession } from "../auth/auth.ts";
 import { SafeMarkdown } from "../components/SafeMarkdown.tsx";
@@ -103,9 +104,10 @@ export default function AndroidAssistantApp() {
       const expectedAccountId = getSession()?.account.id;
       if (!expectedAccountId) throw new Error("Open Alfred to connect or sign in, then try again.");
       account.current = expectedAccountId;
-      const user: ChatMessage = { id: messageId(), role: "user", content: text, recording, timestamp: Date.now() };
+      const failed = history.current.at(-1);
+      const user: ChatMessage = { id: failed?.error && failed.content === text ? failed.id : messageId(), role: "user", content: text, recording, timestamp: Date.now() };
       history.current = boundVoiceResources([...previous, user]); setMessages(history.current);
-      const response = await sendChatMessage(buildSafeChatContext(previous, text), controller.signal, { preserveAccount: true, expectedAccountId, recording });
+      const response = await sendChatMessage(buildSafeChatContext(previous, text), controller.signal, { preserveAccount: true, expectedAccountId, recording, requestId: user.id });
       if (controller.signal.aborted || expectedAccountId !== getSession()?.account.id) return "";
       if (!response.message?.content?.trim()) throw new Error("Alfred returned an empty response. Please retry your question.");
       history.current = [...history.current, { id: messageId(), role: "assistant", content: response.message.content, timestamp: Date.now() }];
@@ -198,18 +200,14 @@ export default function AndroidAssistantApp() {
       <button role="menuitem" onClick={() => native("openApp")}><ExternalLink size={16} />Open Alfred app</button>
       <button role="menuitem" disabled={!messages.length && !error} onClick={() => { stop(); history.current = []; setMessages([]); setError(""); setRetryPrompt(null); setPrompt(""); setMenuOpen(false); }}><Trash2 size={16} />New conversation</button>
     </div>}
-    {(!bridgeAvailable || error) && <section className="android-assistant-error" role="alert">
-      <strong>{voice ? retryPrompt ? "Couldn't get a response" : "Voice paused" : "Couldn't complete your request"}</strong>
-      <p>{error || "Assistant preview only. Install the Android app to use system controls."}</p>
-      {bridgeAvailable && error && <button className="android-assistant-retry" type="button" onClick={() => {
-        if (voice) { void toggleVoice(retryPrompt ?? undefined); }
-        else if (retryPrompt) { void send(retryPrompt).catch((err: unknown) => setError(err instanceof Error ? err.message : "Please retry.")); }
-        else setError("");
-      }} disabled={busy}><RotateCcw size={15} />{retryPrompt ? "Retry response" : "Try again"}</button>}
-    </section>}
+    <ErrorNotice message={error || (!bridgeAvailable ? "Assistant preview only. Install the Android app to use system controls." : null)} title="Assistant unavailable" retry={bridgeAvailable && error && !busy ? () => {
+      if (voice) { void toggleVoice(retryPrompt ?? undefined); }
+      else if (retryPrompt) { void send(retryPrompt).catch((err: unknown) => setError(err instanceof Error ? err.message : "Please retry.")); }
+      else setError("");
+    } : undefined} />
     <div className="android-assistant-messages" ref={list} role="log" aria-label="Conversation">
-      {messages.map((message) => <article key={message.id} className={`android-assistant-message is-${message.role}`} aria-label={message.role === "user" ? "You" : "Alfred"}>{message.error && <span>Not sent</span>}{message.role === "assistant" ? <SafeMarkdown content={message.content} /> : <p>{message.recording ? <VoiceNote recording={message.recording} /> : message.content}</p>}</article>)}
-      {(busy || state === "Preparing audio") && <div className="android-assistant-thinking" role="status"><Sparkles size={14} />{state === "Preparing audio" ? "Preparing audio…" : "Alfred is thinking…"}</div>}
+      {messages.map((message) => <article key={message.id} className={`android-assistant-message is-${message.role}`} aria-label={message.role === "user" ? "You" : "Alfred"}>{message.role === "assistant" ? <SafeMarkdown content={message.content} /> : <p>{message.recording ? <VoiceNote recording={message.recording} /> : message.content}</p>}</article>)}
+      {messages.length === 0 && (busy || state === "Preparing audio") && <div className="android-assistant-thinking" role="status"><Sparkles size={14} />{state === "Preparing audio" ? "Preparing audio…" : "Alfred is thinking…"}</div>}
     </div>
   </main>;
 }

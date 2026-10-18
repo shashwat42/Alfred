@@ -1,3 +1,4 @@
+import { ErrorNotice } from "../reliability/Notifications";
 import type { Dispatch, FormEvent, SetStateAction } from "react";
 import { createPortal } from "react-dom";
 import type { TaskPriority } from "../../types/dashboard.ts";
@@ -18,6 +19,7 @@ export function TaskDialog({
     handleAddTask,
     taskError,
     setIsTaskDialogOpen,
+    isSubmitting = false,
 }: {
     newTask: string;
     setNewTask: (task: string) => void;
@@ -26,6 +28,7 @@ export function TaskDialog({
     handleAddTask: (e: FormEvent<HTMLFormElement>) => Promise<void>;
     taskError: string;
     setIsTaskDialogOpen: Dispatch<SetStateAction<boolean>>;
+    isSubmitting?: boolean;
 }) {
     return createPortal(
         <div
@@ -53,6 +56,7 @@ export function TaskDialog({
                 </div>
                 <form className="task-add-form" onSubmit={handleAddTask}>
                     <input
+                        disabled={isSubmitting}
                         autoFocus
                         aria-label="New task"
                         placeholder="Add a task..."
@@ -66,6 +70,7 @@ export function TaskDialog({
                             {PRIORITIES.map((p) => (
                                 <button
                                     key={p.value}
+                                    disabled={isSubmitting}
                                     type="button"
                                     className={`task-priority-btn priority-${p.value} ${
                                         newTaskPriority === p.value ? "selected" : ""
@@ -78,11 +83,11 @@ export function TaskDialog({
                         </div>
                     </div>
 
-                    <button type="submit" className="task-submit-btn">
-                        Add Task
+                    <button type="submit" className="task-submit-btn" disabled={isSubmitting}>
+                        {isSubmitting ? "Adding task…" : "Add Task"}
                     </button>
                 </form>
-                {taskError && <p className="task-error" role="alert">{taskError}</p>}
+                <ErrorNotice message={taskError} />
             </section>
         </div>,
         document.body

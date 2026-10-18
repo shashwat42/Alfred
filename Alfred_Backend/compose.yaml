@@ -1,0 +1,52 @@
+name: alfred
+
+services:
+  backend:
+    build:
+      context: .
+    init: true
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    environment:
+      # Application policy uses MODE, independently of NODE_ENV in the image.
+      MODE: ${DOCKER_MODE:-development}
+      PORT: "8000"
+      MONGODB_URI: mongodb://mongo:27017/alfred?replicaSet=alfred
+    ports:
+      - "127.0.0.1:${DOCKER_API_PORT:-8000}:8000"
+    depends_on:
+      mongo:
+        condition: service_healthy
+      mongo-init:
+        condition: service_completed_successfully
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  mongo:
+    image: mongo:8.0
+    command: ["mongod", "--replSet", "alfred", "--bind_ip_all"]
+    restart: unless-stopped
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "quit(db.adminCommand({ ping: 1 }).ok ? 0 : 1)"]
+      interval: 5s
+      timeout: 5s
+      start_period: 10s
+      retries: 30
+
+  mongo-init:
+    image: mongo:8.0
+    restart: "no"
+    depends_on:
+      mongo:
+        condition: service_healthy
+    volumes:
+      - ./docker/init-replica.js:/scripts/init-replica.js:ro
+    entrypoint: ["mongosh", "--host", "mongo:27017", "--quiet", "--file", "/scripts/init-replica.js"]
+
+volumes:
+  mongo-data:

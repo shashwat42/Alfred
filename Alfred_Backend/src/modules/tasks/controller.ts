@@ -1,3 +1,4 @@
+import { sendPolicyError } from "../../security/errors.ts";
 import type { Request, Response } from "express";
 import { requireAccountId } from "../../utils/requireAccountId.ts";
 import {
@@ -17,7 +18,8 @@ export async function listTasks(req: Request, res: Response): Promise<void> {
         const tasks = await getTasks(accountId);
         res.json(tasks);
     } catch (err) {
-        console.error("Error listing tasks:", err);
+        if (sendPolicyError(err, res)) return;
+        console.error("Error listing tasks:", { name: err instanceof Error ? err.name : "Unknown" });
         res.status(500).json({ error: "Failed to retrieve tasks" });
     }
 }
@@ -48,7 +50,8 @@ export async function createTask(
         const createdTask = await addTask(accountId, taskText.trim(), priority);
         res.status(201).json(createdTask);
     } catch (err) {
-        console.error("Error creating task:", err);
+        if (sendPolicyError(err, res)) return;
+        console.error("Error creating task:", { name: err instanceof Error ? err.name : "Unknown" });
         res.status(500).json({ error: "Failed to create task" });
     }
 }
@@ -103,7 +106,8 @@ export async function updateTask(
 
         res.json(updated);
     } catch (err) {
-        console.error("Error updating task:", err);
+        if (sendPolicyError(err, res)) return;
+        console.error("Error updating task:", { name: err instanceof Error ? err.name : "Unknown" });
         res.status(500).json({ error: "Failed to update task" });
     }
 }
@@ -132,7 +136,8 @@ export async function completeTask(
 
         res.json(updated);
     } catch (err) {
-        console.error("Error completing task:", err);
+        if (sendPolicyError(err, res)) return;
+        console.error("Error completing task:", { name: err instanceof Error ? err.name : "Unknown" });
         res.status(500).json({ error: "Failed to mark task complete" });
     }
 }
@@ -151,7 +156,8 @@ export async function clearAllTasks(
             deletedCount: result.deletedCount,
         });
     } catch (err) {
-        console.error("Error clearing tasks:", err);
+        if (sendPolicyError(err, res)) return;
+        console.error("Error clearing tasks:", { name: err instanceof Error ? err.name : "Unknown" });
         res.status(500).json({ error: "Failed to clear all tasks" });
     }
 }
@@ -173,7 +179,8 @@ export async function deleteTask(
 
         res.json({ message: "Task deleted successfully", id });
     } catch (err) {
-        console.error("Error deleting task:", err);
+        if (sendPolicyError(err, res)) return;
+        console.error("Error deleting task:", { name: err instanceof Error ? err.name : "Unknown" });
         res.status(500).json({ error: "Failed to delete task" });
     }
 }

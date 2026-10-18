@@ -1,0 +1,63 @@
+# Merge with compose.yaml. Requires Docker Compose >= 2.30 (raw env files).
+services:
+  backend:
+    build: !reset null
+    image: ${ALFRED_BACKEND_IMAGE:?CI must supply the backend image}
+    platform: ${ALFRED_PLATFORM:?CI must supply the VM platform}
+    env_file: !override
+      - path: ${ALFRED_RUNTIME_DIR:?Deployment runtime directory}/backend.env
+        format: raw
+    environment: !reset {}
+    stop_grace_period: 45s
+    ports: !override
+      - "127.0.0.1:8000:8000"
+    networks: [default, database]
+    logging: &bounded-logs
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  mongo:
+    image: ${ALFRED_MONGO_IMAGE:?CI must supply the MongoDB image}
+    platform: ${ALFRED_PLATFORM}
+    entrypoint: ["bash", "/scripts/start-mongo.sh"]
+    command: ["mongod", "--config", "/scripts/mongod.conf"]
+    env_file:
+      - path: ${ALFRED_RUNTIME_DIR}/mongo.env
+        format: raw
+    volumes:
+      - ./deploy/oracle/start-mongo.sh:/scripts/start-mongo.sh:ro
+      - ./deploy/oracle/init-users.js:/docker-entrypoint-initdb.d/10-alfred-users.js:ro
+      - ./deploy/oracle/mongo-health.js:/scripts/mongo-health.js:ro
+      - ./deploy/oracle/mongod.conf:/scripts/mongod.conf:ro
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--file", "/scripts/mongo-health.js"]
+      start_period: 30s
+    tmpfs:
+      - /run/alfred-mongo:rw,noexec,nosuid,size=1m
+    networks: !override [database]
+    stop_grace_period: 60s
+    logging: *bounded-logs
+
+  mongo-init:
+    image: ${ALFRED_MONGO_IMAGE}
+    platform: ${ALFRED_PLATFORM}
+    env_file:
+      - path: ${ALFRED_RUNTIME_DIR}/mongo.env
+        format: raw
+    entrypoint: ["mongosh", "--host", "mongo:27017", "--quiet", "--file", "/scripts/init-replica-auth.js"]
+    volumes: !override
+      - ./deploy/oracle/init-replica-auth.js:/scripts/init-replica-auth.js:ro
+      - ./docker/init-replica.js:/scripts/init-replica.js:ro
+    networks: !override [database]
+    logging: *bounded-logs
+
+volumes:
+  mongo-data:
+    external: true
+    name: ${ALFRED_MONGO_VOLUME:?Explicit existing volume identity is required}
+
+networks:
+  database:
+    internal: true

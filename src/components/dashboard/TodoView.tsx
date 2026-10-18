@@ -1,4 +1,5 @@
 import type { TaskItem } from "../../types/dashboard.ts";
+import { EmptyState } from "../reliability/States";
 import { Pagination } from "../ui/Pagination.tsx";
 import { ITEMS_PER_PAGE } from "../../hooks/useTasks.ts";
 
@@ -86,9 +87,7 @@ export function TodoView({
                     })}
                 </ol>
             ) : (
-                <div className="dashboard-empty-state">
-                    <p>No tasks yet. Use Add task to get started.</p>
-                </div>
+                <EmptyState section="tasks" />
             )}
 
             <Pagination

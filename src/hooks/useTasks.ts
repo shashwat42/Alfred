@@ -1,4 +1,6 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { useLoadState } from "./useLoadState";
+import { httpMessage } from "../lib/requestError";
 import type { FormEvent } from "react";
 import { apiFetch } from "../lib/api.ts";
 import type { TaskItem, TaskPriority } from "../types/dashboard.ts";
@@ -7,6 +9,9 @@ export const ITEMS_PER_PAGE = 5;
 
 /** Custom hook to manage all task-related state and handlers. */
 export function useTasks(accountId: string | undefined) {
+    const { run, ...loadState } = useLoadState();
+    const submission = useRef(false);
+    const [isSubmitting, setSubmitting] = useState(false);
     const [task, setTask] = useState<TaskItem[]>([]);
     const [taskPage, setTaskPage] = useState(0);
     const [newTask, setNewTask] = useState("");
@@ -14,12 +19,12 @@ export function useTasks(accountId: string | undefined) {
     const [taskError, setTaskError] = useState("");
     const [isTaskDialogOpen, setIsTaskDialogOpen] = useState(false);
 
-    const loadTasks = useCallback(async () => {
+    const loadTasks = useCallback(async () => run(async () => {
         if (!accountId) return;
         try {
             const response = await apiFetch("/api/tasks");
             if (!response.ok) {
-                throw new Error(`Request failed: ${response.status}`);
+                throw new Error(httpMessage(response.status));
             }
             const data: TaskItem[] = await response.json();
             setTask(data);
@@ -28,7 +33,7 @@ export function useTasks(accountId: string | undefined) {
             console.error("Could not load tasks:", err);
             throw err;
         }
-    }, [accountId]);
+    }), [accountId, run]);
 
     useEffect(() => {
         if (!accountId) return;
@@ -53,7 +58,8 @@ export function useTasks(accountId: string | undefined) {
     async function handleAddTask(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
         const taskName = newTask.trim();
-        if (!taskName) return;
+        if (!taskName || submission.current) return;
+        submission.current = true; setSubmitting(true);
 
         setTaskError("");
         try {
@@ -74,7 +80,7 @@ export function useTasks(accountId: string | undefined) {
         } catch (error) {
             console.error("Could not add to-do:", error);
             setTaskError(error instanceof Error ? error.message : "Could not add to-do. Please try again.");
-        }
+        } finally { submission.current = false; setSubmitting(false); }
     }
 
     async function handleToggleTaskComplete(id: string, currentCompleted?: boolean) {
@@ -144,6 +150,8 @@ export function useTasks(accountId: string | undefined) {
     }
 
     return {
+        ...loadState,
+        isSubmitting,
         task,
         taskPage,
         setTaskPage,

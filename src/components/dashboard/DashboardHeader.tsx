@@ -25,6 +25,10 @@ function DashboardHeaderComponent({
     onRefresh,
     isRefreshing = false,
     lastRefreshedAt,
+    onClearScheduleDay,
+    onClearScheduleAll,
+    isScheduleClearing = false,
+    hasScheduleForDate = false,
 }: {
     activeView: DashboardView;
     handleViewChange: (view: DashboardView) => void;
@@ -47,6 +51,10 @@ function DashboardHeaderComponent({
     onRefresh?: () => void;
     isRefreshing?: boolean;
     lastRefreshedAt?: Date | null;
+    onClearScheduleDay: () => void;
+    onClearScheduleAll: () => void;
+    isScheduleClearing?: boolean;
+    hasScheduleForDate?: boolean;
 }) {
     const formattedLastRefresh = lastRefreshedAt
         ? `Last updated: ${lastRefreshedAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`
@@ -164,10 +172,14 @@ function DashboardHeaderComponent({
                         </div>
                     </div>
 
+                    <div className="schedule-header-bulk-actions">
+                    <button className="section-clear-btn" type="button" disabled={isScheduleClearing || !hasScheduleForDate} onClick={onClearScheduleDay} title={`Clear schedule for ${scheduleDate}`}>Clear day</button>
+                    <button className="section-clear-btn" type="button" disabled={isScheduleClearing} onClick={onClearScheduleAll}>Clear all dates</button>
                     <button
                         className="section-add-trigger"
                         type="button"
                         aria-label="Add schedule item"
+                        disabled={isScheduleClearing}
                         aria-haspopup="dialog"
                         aria-expanded={isScheduleDialogOpen}
                         onClick={() => {
@@ -179,6 +191,7 @@ function DashboardHeaderComponent({
                         <Plus size={18} aria-hidden="true" />
                         <span>Add event</span>
                     </button>
+                    </div>
                 </div>
             )}
 

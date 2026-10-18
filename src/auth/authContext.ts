@@ -8,6 +8,7 @@ export interface AuthContextType {
   loading: boolean;
   error: string | null;
   retry: () => void;
+  continueAsGuest: () => Promise<void>;
   loginWithGoogle: (callback?: AuthCallback) => Promise<void> | void;
   logout: () => void;
 }

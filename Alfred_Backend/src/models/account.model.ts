@@ -13,6 +13,8 @@ export interface IAccount {
     sessionVersion?: number;
     migratedTo?: mongoose.Types.ObjectId;
     guestWriteVersion?: number;
+    storageBytes?: number;
+    onboardingCompleted?: boolean;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -27,6 +29,8 @@ const accountSchema = new Schema<IAccount>(
         sessionVersion: { type: Number, default: 0 },
         migratedTo: { type: Schema.Types.ObjectId, ref: "Account" },
         guestWriteVersion: { type: Number, default: 0 },
+        storageBytes: { type: Number, default: 0 },
+        onboardingCompleted: { type: Boolean, default: false },
         guestId: {
             type: String,
             unique: true,

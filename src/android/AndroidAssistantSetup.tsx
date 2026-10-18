@@ -1,3 +1,4 @@
+import { ErrorNotice } from "../components/reliability/Notifications";
 import { useEffect, useState } from "react";
 import { Smartphone } from "lucide-react";
 import { androidAssistantRequest, hasAndroidAssistantBridge, type AssistantStatus } from "./assistantBridge.ts";
@@ -36,7 +37,7 @@ export function AndroidAssistantSetup() {
         finally { setBusy(false); }
       }}>{busy ? "Opening Android setup…" : "Open assistant setup"}</button> : <p className="settings-feature-desc">Install an updated Alfred Android build with Android System WebView to enable setup here. In a browser, assistant registration is unavailable.</p>}
       <p className="settings-feature-desc" role="status">{status ? (!status.supported ? "System assistant requires Android 12 or newer in this build. Text and local voice remain available in the regular Alfred app." : status.active ? "Active — ready for your device’s assistant gesture." : "Not selected. Android will ask you to choose the default assistant.") : ""}</p>
-      {error && <p className="settings-error" role="alert">{error}</p>}
+      <ErrorNotice message={error} />
     </div>
   </section>;
 }

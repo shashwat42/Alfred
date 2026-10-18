@@ -5,8 +5,9 @@
   "license": "ISC",
   "author": "Shashwat",
   "type": "module",
-  "main": "server.js",
+  "main": "server.ts",
   "scripts": {
+    "start": "node server.ts",
     "dev": "node --watch server.ts",
     "test": "node --test src/modules/ai/*.test.ts src/modules/schedule-notifications/*.test.ts src/security/*.test.ts",
     "check": "tsc --noEmit",

@@ -1,7 +1,9 @@
+process.env.MODE = "development";
 import { Account as TenantAccount } from "../../models/account.model.ts";
 import assert from "node:assert/strict";
 import { test, mock, type TestContext } from "node:test";
 import mongoose from "mongoose";
+import { storageModels } from "../../security/storage.ts";
 import { defaultPreferences, eventInstant, remindersFor, eligible, isDue, type Preferences } from "./policy.ts";
 import { Schedule } from "../../models/schedule.model.ts";
 import { NotificationSettings, NotificationDevice, NotificationDelivery } from "./models.ts";
@@ -19,6 +21,11 @@ type Event = ReturnType<typeof event>;
  * Production unique _id enforcement is represented by synchronous Map insertion.
  * No live MongoDB or production database is used by these tests. */
 function fixture(t: TestContext, p: Preferences | null = defaults()) {
+    // Policy unit fixtures do not emulate MongoDB transactions. Real transaction,
+    // quota, rollback and fencing behavior is covered by the replica-set suites.
+    mock.method(mongoose.connection, "transaction", (async (callback: (session?: unknown) => Promise<unknown>) => callback(undefined)) as never);
+    mock.method(TenantAccount, "updateOne", (async () => ({ matchedCount: 1, modifiedCount: 1 })) as never);
+    for (const model of storageModels) mock.method(model, "aggregate", (() => ({ session: async () => [] })) as never);
     mock.method(TenantAccount, "findById", (async (id: string) => ({ _id: id, type: "user", googleId: "test-google" })) as never);
     const rows = new Map<string, Event>([[id, event()]]);
     const sent = new Map<string, unknown>();

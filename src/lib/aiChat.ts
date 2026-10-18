@@ -19,7 +19,8 @@ export interface ActionExecutionResult {
     | "note_created"
     | "note_updated"
     | "schedule_created"
-    | "schedule_updated";
+    | "schedule_updated"
+    | "schedule_cleared";
   id: string;
   summary?: string;
 }
@@ -120,7 +121,7 @@ export function buildSafeChatContext(
 export async function sendChatMessage(
   messages: ChatContextMessage[],
   signal?: AbortSignal,
-  options?: { preserveAccount?: boolean; expectedAccountId?: string; recording?: RecordingResult }
+  options?: { preserveAccount?: boolean; expectedAccountId?: string; recording?: RecordingResult; requestId?: string }
 ): Promise<ChatCompletionResponse> {
   const wireMessages = messages.map(({ role, content }) => ({ role, content }));
   let body: BodyInit = JSON.stringify({ messages: wireMessages });
@@ -143,6 +144,7 @@ export async function sendChatMessage(
   }
   const response = await apiFetch(hasAudio ? "/api/ai/chat/audio" : "/api/ai/chat", {
     method: "POST",
+    headers: { "Idempotency-Key": options?.requestId ?? crypto.randomUUID() },
     body,
     signal,
     _preserveAccount: options?.preserveAccount,
@@ -151,8 +153,10 @@ export async function sendChatMessage(
 
   if (!response.ok) {
     let errorMessage = "Failed to communicate with Alfred AI.";
+    let errorCode: string | undefined;
     try {
-      const errorData = (await response.json()) as { error?: string };
+      const errorData = (await response.json()) as { error?: string; code?: string };
+      errorCode = errorData.code;
       if (errorData?.error && typeof errorData.error === "string") {
         errorMessage = errorData.error;
       }
@@ -162,7 +166,7 @@ export async function sendChatMessage(
 
     if (response.status === 401) {
       errorMessage = "Session expired or unauthorized. Please sign in again.";
-    } else if (response.status === 429) {
+    } else if (response.status === 429 && errorCode !== "AI_QUOTA_EXCEEDED") {
       errorMessage = "Too many requests. Please slow down and try again shortly.";
     } else if (response.status === 503) {
       errorMessage = "AI service is not configured. Please contact the administrator.";
@@ -170,7 +174,8 @@ export async function sendChatMessage(
       errorMessage = "Alfred took too long to respond. Please try again.";
     }
 
-    const error = new Error(errorMessage) as Error & { status?: number };
+    const error = new Error(errorMessage) as Error & { status?: number; code?: string };
+    error.code = errorCode;
     error.status = response.status;
     throw error;
   }

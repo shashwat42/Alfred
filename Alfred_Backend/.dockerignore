@@ -1,0 +1,13 @@
+# Only application sources and dependency manifests enter the build context.
+**
+!Dockerfile
+!.dockerignore
+!package.json
+!package-lock.json
+!server.ts
+!src/
+!src/**
+**/*.test.ts
+**/.env
+**/.env.*
+**/*.log

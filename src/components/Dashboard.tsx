@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { Timer } from "lucide-react";
+import { Loader, ErrorState, Modal } from "./reliability/States";
 import { useAuth } from "../auth/authContext.ts";
 import type { DashboardView } from "../types/dashboard.ts";
 import type { NoteItem } from "../types/notes.ts";
@@ -84,6 +85,8 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
         handleDeleteTask,
         handleClearAllTasks,
         refreshTasks,
+        isLoading: tasksLoading, loadError: tasksLoadError, hasLoaded: tasksLoaded,
+        isSubmitting: taskSubmitting,
     } = useTasks(accountId);
 
     const {
@@ -107,11 +110,16 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
         currentHourRef,
         handleAddSchedule,
         handleDeleteSchedule,
+        handleClearSchedules,
+        isClearing: scheduleClearing,
         handlePrevDay,
         handleNextDay,
         handleToday,
         refreshSchedule,
+        isLoading: scheduleLoading, loadError: scheduleLoadError, hasLoaded: scheduleLoaded,
+        isSubmitting: scheduleSubmitting,
     } = useSchedule(accountId, todayDateStr);
+    const [clearScheduleScope, setClearScheduleScope] = useState<string | null>(null);
 
     const [notificationTarget, setNotificationTarget] = useState<{ scheduleId: string } | null>(null);
     const focusedNotification = useRef<typeof notificationTarget>(null);
@@ -140,12 +148,15 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
         deleteNote,
         openNote,
         refreshNotes,
+        notesError,
+        isLoading: notesLoading, loadError: notesLoadError, hasLoaded: notesLoaded,
     } = useNotes(accountId);
 
     const {
         isRefreshing,
         lastRefreshedAt,
         refreshAll,
+        refreshError,
     } = useDashboardAutoRefresh({
         accountId,
         refreshTasks,
@@ -310,10 +321,22 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
                         onRefresh={refreshAll}
                         isRefreshing={isRefreshing}
                         lastRefreshedAt={lastRefreshedAt}
+                        onClearScheduleDay={() => setClearScheduleScope(scheduleDate)}
+                        onClearScheduleAll={() => setClearScheduleScope("all")}
+                        isScheduleClearing={scheduleClearing || scheduleSubmitting}
+                        hasScheduleForDate={activeTimelineSchedule.length > 0}
                     />
 
                     <div className="dashboard-section-body">
-                    {activeView === "home" && (
+                    {(tasksLoading || scheduleLoading || notesLoading) && (
+                        (activeView === "home" && !(tasksLoaded && scheduleLoaded && notesLoaded)) ||
+                        (activeView === "schedule" && !scheduleLoaded) ||
+                        ((activeView === "tasks" || activeView === "todo") && !tasksLoaded) ||
+                        ((activeView === "notes" || activeView === "mails") && !notesLoaded)
+                    ) && <Loader label="Loading dashboard sections…" />}
+                    {Array.from(new Set([taskError, scheduleError, notesError].filter(Boolean))).map(message => <ErrorState key={message} message={message} />)}
+                    {(tasksLoadError || scheduleLoadError || notesLoadError || refreshError) && <ErrorState message={tasksLoadError || scheduleLoadError || notesLoadError || refreshError || "Refresh failed"} retry={() => void refreshAll()} />}
+                    {activeView === "home" && tasksLoaded && scheduleLoaded && notesLoaded && (!(tasksLoadError || scheduleLoadError || notesLoadError) || activeTasks.length + activeTodaySchedule.length + activeRecentNotes.length > 0) && (
                         <UpcomingView
                             scheduleItems={activeTodaySchedule}
                             priorityTasks={activeTasks}
@@ -324,7 +347,7 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
                         />
                     )}
 
-                    {activeView === "schedule" && (
+                    {activeView === "schedule" && scheduleLoaded && (!scheduleLoadError || activeTimelineSchedule.length > 0) && (
                         <ScheduleTimelineView
                             activeTimelineSchedule={activeTimelineSchedule}
                             scheduleDate={scheduleDate}
@@ -335,7 +358,7 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
                         />
                     )}
 
-                    {(activeView === "tasks" || activeView === "todo") && (
+                    {(activeView === "tasks" || activeView === "todo") && tasksLoaded && (!tasksLoadError || activeTasks.length > 0) && (
                         <TodoView
                             visibleTasks={visibleTasks}
                             taskPage={taskPage}
@@ -346,8 +369,9 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
                         />
                     )}
 
-                    {(activeView === "notes" || activeView === "mails") && (
+                    {(activeView === "notes" || activeView === "mails") && notesLoaded && (!notesLoadError || activeNotes.length > 0) && (
                         <NotesView
+                            operationError={notesError}
                             notes={activeNotes}
                             activeNote={activeNote}
                             onSelectNote={(note) => {
@@ -370,6 +394,10 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
             </>
             )}
 
+            {clearScheduleScope && <Modal title={clearScheduleScope === "all" ? "Clear all schedule dates?" : "Clear this day’s schedule?"} onClose={() => { if (!scheduleClearing) setClearScheduleScope(null); }}>
+                <p>{clearScheduleScope === "all" ? "This permanently deletes every event in your schedule, across all dates." : `This permanently deletes all your events on ${clearScheduleScope}. Other dates are kept.`} This cannot be undone.</p>
+                <div className="schedule-clear-confirm-actions"><button type="button" disabled={scheduleClearing} onClick={() => setClearScheduleScope(null)}>Cancel</button><button type="button" className="danger" disabled={scheduleClearing} onClick={async () => { if (await handleClearSchedules(clearScheduleScope === "all" ? "all" : "date", clearScheduleScope === "all" ? undefined : clearScheduleScope)) setClearScheduleScope(null); }}>{scheduleClearing ? "Clearing…" : clearScheduleScope === "all" ? "Clear all dates" : "Clear day"}</button></div>
+            </Modal>}
             {isCalendarOpen && (
                 <CalendarDialog
                     scheduleSelectedDate={scheduleSelectedDate}
@@ -380,6 +408,7 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
 
             {isTaskDialogOpen && (
                 <TaskDialog
+                    isSubmitting={taskSubmitting}
                     newTask={newTask}
                     setNewTask={setNewTask}
                     newTaskPriority={newTaskPriority}
@@ -392,6 +421,7 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
 
             {isScheduleDialogOpen && (
                 <ScheduleDialog
+                    isSubmitting={scheduleSubmitting}
                     newScheduleDate={newScheduleDate}
                     setNewScheduleDate={setNewScheduleDate}
                     newScheduleTime={newScheduleTime}

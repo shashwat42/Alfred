@@ -3,6 +3,7 @@ import { OAuth2Client } from "google-auth-library";
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
 import { env } from "../../config/env.ts";
+import { withTenantWrite } from "../../security/tenantWrite.ts";
 import { Account, type IAccount } from "../../models/account.model.ts";
 import { AuthTicket } from "../../models/authTicket.model.ts";
 import { OAuthState, type IOAuthState } from "../../models/oauthState.model.ts";
@@ -57,7 +58,10 @@ export async function createPendingOAuthState(params: {
     if (params.codeChallengeMethod) {
         doc.codeChallengeMethod = params.codeChallengeMethod;
     }
-    return await OAuthState.create(doc);
+    return withTenantWrite(String(params.initiatorId), async session => {
+        const rows = await OAuthState.create([doc], { session: session! });
+        return rows[0]!;
+    });
 }
 
 /**
@@ -106,7 +110,8 @@ export async function createIssuedTicket(params: {
         doc.state = params.state;
     }
 
-    await AuthTicket.create([doc], params.session ? { session: params.session } : {});
+    if (params.session) await AuthTicket.create([doc], { session: params.session });
+    else await withTenantWrite(String(params.accountId), session => AuthTicket.create([doc], { session: session! }));
     return ticket;
 }
 
@@ -248,6 +253,31 @@ export function generateAuthToken(account: IAccount): string {
     };
 
     return jwt.sign(payload, env.jwt.secret, { expiresIn: "7d", issuer: "alfred", audience: "alfred-api", algorithm: "HS256" });
+}
+
+/** Guest renewal preserves canonical ownership and quotas. Only this endpoint
+ * accepts expiry within a 30-day renewal grace; ordinary API auth stays strict.
+ * Revoked, migrated, deleted, forged and Google-user credentials cannot renew. */
+export async function renewGuestAccount(token: string): Promise<AuthSessionResponse | null> {
+    let claims: jwt.JwtPayload;
+    try {
+        claims = jwt.verify(token, env.jwt.secret, { algorithms: ["HS256"], issuer: "alfred", audience: "alfred-api", ignoreExpiration: true }) as jwt.JwtPayload;
+    } catch (error) {
+        if (error instanceof jwt.JsonWebTokenError) return null;
+        throw error;
+    }
+    if (claims.type !== "guest" || typeof claims.sub !== "string" || !/^[a-f\d]{24}$/i.test(claims.sub)
+        || typeof claims.iat !== "number" || typeof claims.exp !== "number" || claims.iat * 1000 > Date.now()
+        || claims.exp <= claims.iat || claims.exp - claims.iat > 7 * 86400
+        || Date.now() > claims.exp * 1000 + 30 * 86400_000) return null;
+    const accountId = claims.sub;
+    return mongoose.connection.transaction(async session => {
+        const account = await Account.findById(accountId).session(session);
+        if (!account || account.type !== "guest" || account.migratedTo || !account.guestId || account.googleId
+            || (account.sessionVersion ?? 0) !== (claims.version ?? 0)) return null;
+        await Account.updateOne({ _id: account._id }, { $inc: { guestWriteVersion: 1 } }, { session });
+        return formatAuthResponse(account, generateAuthToken(account));
+    });
 }
 
 export function formatAuthResponse(account: IAccount, token: string): AuthSessionResponse {

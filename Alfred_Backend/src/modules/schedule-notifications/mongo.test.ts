@@ -1,7 +1,8 @@
+process.env.MODE = "development";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import mongoose from "mongoose";
-import { MongoMemoryServer } from "mongodb-memory-server";
+import { MongoMemoryReplSet } from "mongodb-memory-server";
 import { Account } from "../../models/account.model.ts";
 import { Schedule } from "../../models/schedule.model.ts";
 import { NotificationSettings, NotificationDevice, NotificationDelivery } from "./models.ts";
@@ -11,7 +12,7 @@ import { requireTransactionTopology } from "../../security/indexes.ts";
 const uri = process.env.ALFRED_NOTIFICATION_TEST_MONGODB_URI;
 test("real MongoDB: concurrent delivery uniqueness, restart reconstruction and account isolation", { timeout: 180_000 }, async () => {
     // Never run destructive test cleanup against an application database.
-    const temporary = uri ? null : await MongoMemoryServer.create();
+    const temporary = uri ? null : await MongoMemoryReplSet.create({ replSet: { count: 1 } });
     const testUri = uri ?? temporary!.getUri("alfred_notifications_test");
     const parsed = new URL(testUri);
     assert.match(parsed.pathname, /\/[a-zA-Z0-9_-]*_test$/);
@@ -20,7 +21,7 @@ test("real MongoDB: concurrent delivery uniqueness, restart reconstruction and a
     const other = new mongoose.Types.ObjectId();
     const instant = Date.parse("2026-10-17T09:50Z");
     try {
-        if (temporary) await assert.rejects(requireTransactionTopology(), /replica set or mongos/);
+        await requireTransactionTopology();
         await initializeNotificationIndexes();
         await Account.create({ _id: account, type: "user", googleId: `test-${account}` });
         await NotificationSettings.create({ accountId: account, destination: "both", enabled: true, leadMinutes: 10, timeZone: "UTC", atStart: false, revision: 1 });

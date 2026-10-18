@@ -1,3 +1,4 @@
+import { sendPolicyError } from "../../security/errors.ts";
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { authMiddleware } from "../../middleware/auth.middleware.ts";
@@ -17,7 +18,7 @@ router.use(authMiddleware);
 const token = (req: Request) => req.headers.authorization!.slice(7).trim();
 const run = (handler: (req: Request, res: Response) => Promise<unknown>) => async (req: Request, res: Response) => {
     try { await handler(req, res); }
-    catch { res.status(503).json({ error: "Schedule notifications are temporarily unavailable." }); }
+    catch (error) { if (sendPolicyError(error, res)) return; res.status(503).json({ error: "Schedule notifications are temporarily unavailable." }); }
 };
 router.get("/preferences", run(async (req, res) => res.json(await preferences(req.accountId!))));
 router.put("/preferences", run(async (req, res) => {

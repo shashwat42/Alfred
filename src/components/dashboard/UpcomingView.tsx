@@ -114,7 +114,7 @@ function UpcomingViewComponent({
                                     );
                                 })
                             ) : (
-                                <div className="upcoming-empty-hint">No upcoming events scheduled today</div>
+                                <div className="upcoming-empty-hint" role="status">Your day has room. Add a schedule to plan ahead.</div>
                             )}
                         </div>
                     </div>
@@ -140,7 +140,7 @@ function UpcomingViewComponent({
                                     </div>
                                 ))
                             ) : (
-                                <div className="upcoming-empty-hint">No priority tasks</div>
+                                <div className="upcoming-empty-hint" role="status">All clear. Add a task when something needs your attention.</div>
                             )}
                         </div>
                     </div>
@@ -212,4 +212,3 @@ function UpcomingViewComponent({
 }
 
 export const UpcomingView = memo(UpcomingViewComponent);
-

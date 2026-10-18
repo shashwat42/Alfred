@@ -1,4 +1,6 @@
 import { env } from "../../config/env.ts";
+import { createHash } from "node:crypto";
+import { withAiRequest } from "../../security/aiUsage.ts";
 import type { ChatMessageInput } from "./ai.schema.ts";
 import { buildAlfredSystemPrompt, ALFRED_SYSTEM_PROMPT } from "./prompt.ts";
 import { AI_TOOLS, executeAiTool, type ConfirmedAction } from "./tools.ts";
@@ -320,6 +322,20 @@ async function sendUpstreamRequestWithFallback(
  * Executes a bounded multi-turn tool calling loop up to 5 iterations.
  */
 export async function generateChatCompletion(
+    clientMessages: ChatMessageInput[], accountId?: string,
+    audio?: { data: string; format: "wav" },
+    historyAudio: Array<{ index: number; data: string; format: "wav" }> = [],
+    requestKey?: string
+): Promise<ChatCompletionResult> {
+    if (!env.llm.apiKey) throw new AiServiceError(503, "AI service is not configured. Please contact the administrator.");
+    const run = () => generateCompletion(clientMessages, accountId, audio, historyAudio);
+    // Account-free provider probes/tests have no tools or persisted user context.
+    if (!accountId) return run();
+    const fingerprint = createHash("sha256").update(JSON.stringify({ clientMessages, audio, historyAudio })).digest("hex");
+    return withAiRequest(accountId, requestKey, fingerprint, run);
+}
+
+async function generateCompletion(
     clientMessages: ChatMessageInput[],
     accountId?: string,
     audio?: { data: string; format: "wav" },

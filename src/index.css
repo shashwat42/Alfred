@@ -7110,3 +7110,9 @@ body.is-overlay .overlay-root {
 .schedule-permission-actions .settings-action-btn:disabled { cursor: default; }
 .schedule-permission-actions .settings-action-btn[aria-busy="true"] { cursor: wait; }
 .timeline-event-chip:focus { outline: 2px solid #f87171; outline-offset: 3px; }
+
+/* Schedule bulk actions stay grouped beside Add event. */
+.schedule-header-bulk-actions{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:8px}
+.schedule-header-bulk-actions .section-clear-btn{white-space:nowrap}
+.schedule-clear-confirm-actions{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:10px;margin-top:20px}
+@media(max-width:768px){.schedule-header-bulk-actions{width:100%}}

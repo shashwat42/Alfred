@@ -1,4 +1,5 @@
 import express from "express";
+import { sendPolicyError } from "../../security/errors.ts";
 import type { Request, Response, NextFunction } from "express";
 import { chatRequestSchema } from "./ai.schema.ts";
 import { requireAccountId } from "../../utils/requireAccountId.ts";
@@ -56,9 +57,10 @@ export async function audioCompletionHandler(req: Request, res: Response): Promi
             attachments.push({ index, bytes });
         }
         if (!attachments.length) throw new AiServiceError(400, "Missing audio recording.");
-        const result = await generateChatCompletion(validated.data.messages, accountId, undefined, attachments.map(({ index, bytes }) => ({ index, data: bytes.toString("base64"), format: "wav" })));
+        const result = await generateChatCompletion(validated.data.messages, accountId, undefined, attachments.map(({ index, bytes }) => ({ index, data: bytes.toString("base64"), format: "wav" })), req.get("Idempotency-Key"));
         res.json(result);
     } catch (err) {
+        if (sendPolicyError(err, res)) return;
         if (err instanceof AiServiceError) { res.status(err.statusCode).json({ error: err.publicMessage }); return; }
         res.status(500).json({ error: "An unexpected error occurred processing audio." });
     }

@@ -24,5 +24,16 @@ dist-ssr
 *.sln
 *.sw?
 .env
+.env.*
+!.env.example
+docs/mongo-repair-result.txt
+docs/mongod.local-before-replication.cfg
 wrapper/target
+
+# Generated deployment configuration, bundles and protected runtime copies
+.deployment/
+deploy/**/runtime/
+*.pem
+*.key
+__pycache__/
 

@@ -1,4 +1,6 @@
+import { ErrorNotice } from "../reliability/Notifications";
 import { memo, useEffect, useState } from "react";
+import { AccountPanel } from "../reliability/AccountPanel";
 import { useAuth } from "../../auth/authContext.ts";
 import { User, LogIn, LogOut, Mic, Shield, Smartphone } from "lucide-react";
 import { isTauri } from "../../auth/auth.ts";
@@ -47,7 +49,7 @@ function SettingsViewComponent() {
           <p>Manage your account and how Alfred responds to your voice.</p>
           <span>Voice and overlay preferences save on this device. Schedule notification settings save to your account.</span>
           <p className="settings-save-feedback" role="status">{feedback}</p>
-          {(saveError || error) && <p className="settings-error" role="alert">{saveError || error}</p>}
+          <ErrorNotice message={saveError || error} />
         </div>
         {/* Account Section */}
         <section className="settings-card-group">
@@ -95,7 +97,7 @@ function SettingsViewComponent() {
                     setAccountBusy(true);
                     setSaveError("");
                     try { await loginWithGoogle(); }
-                    catch { setSaveError("Sign-in could not start. Please try again."); }
+                    catch (error) { setSaveError(error instanceof Error ? error.message : "Sign-in could not start. Please try again."); }
                     finally { setAccountBusy(false); }
                   }}
                 >
@@ -207,6 +209,7 @@ function SettingsViewComponent() {
         </section>
 
         {/* App Info Section */}
+        <AccountPanel key={session?.account.id} />
         <section className="settings-card-group">
           <h3 className="settings-group-header">
             <Smartphone size={16} className="settings-group-icon" />

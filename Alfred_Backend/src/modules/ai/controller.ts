@@ -1,4 +1,5 @@
 import type { Request, Response } from "express";
+import { sendPolicyError } from "../../security/errors.ts";
 import type { ChatRequestBody } from "./ai.schema.ts";
 import { requireAccountId } from "../../utils/requireAccountId.ts";
 import {
@@ -20,15 +21,16 @@ export async function chatCompletionHandler(
             req.body.message
         );
 
-        const result = await generateChatCompletion(clientMessages, accountId);
+        const result = await generateChatCompletion(clientMessages, accountId, undefined, [], req.get("Idempotency-Key"));
         res.json(result);
     } catch (err: unknown) {
+        if (sendPolicyError(err, res)) return;
         if (err instanceof AiServiceError) {
             res.status(err.statusCode).json({ error: err.publicMessage });
             return;
         }
 
-        console.error("Unhandled error during chat completion:", err instanceof Error ? err.message : err);
+        console.error("Unhandled error during chat completion:", { name: err instanceof Error ? err.name : "Unknown" });
         res.status(500).json({ error: "An unexpected error occurred processing your request." });
     }
 }

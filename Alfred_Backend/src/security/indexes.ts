@@ -6,6 +6,7 @@ import { Note } from "../models/note.model.ts";
 import { Schedule } from "../models/schedule.model.ts";
 import { NotificationSettings, NotificationDevice, NotificationDelivery } from "../modules/schedule-notifications/models.ts";
 import mongoose from "mongoose";
+import { AiRequest, AiWindow } from "./aiUsage.ts";
 
 export const tenantModels = [Task, Note, Schedule, NotificationSettings, NotificationDevice, NotificationDelivery];
 
@@ -19,7 +20,7 @@ export async function requireTransactionTopology() {
 // Explicit deployment/startup system operation, never a tenant API. Additive only:
 // do not syncIndexes() or drop indexes that may be required by older deployments.
 export async function initializeSecurityIndexes() {
-    for (const model of [Account, OAuthState, AuthTicket, ...tenantModels]) {
+    for (const model of [Account, OAuthState, AuthTicket, AiRequest, AiWindow, ...tenantModels]) {
         await model.createIndexes();
     }
 }

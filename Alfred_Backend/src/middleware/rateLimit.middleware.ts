@@ -11,6 +11,7 @@ export const guestStore = new MemoryStore();
 export const authStore = new MemoryStore();
 export const apiStore = new MemoryStore();
 export const aiStore = new MemoryStore();
+export const desktopPollStore = new MemoryStore();
 
 function createRateLimitHandler(message: string) {
     return (_req: Request, res: Response): void => {
@@ -44,12 +45,25 @@ export const guestRateLimiter = rateLimit({
  * Prevents credential brute-forcing and rapid ticket consumption attempts.
  */
 export const authRateLimiter = rateLimit({
+    skip: () => env.mode === "development",
     windowMs: env.rateLimit.auth.windowMs,
     limit: env.rateLimit.auth.max,
     standardHeaders: "draft-7",
     legacyHeaders: false,
     store: authStore,
     handler: createRateLimitHandler("Too many authentication attempts. Please try again later."),
+});
+
+// Polling every 1.5 seconds must not consume the allowance for starting or
+// completing sign-in. Keep its own bounded counter outside development.
+export const desktopPollRateLimiter = rateLimit({
+    windowMs: 60_000,
+    limit: 120,
+    skip: () => env.mode === "development",
+    standardHeaders: "draft-7",
+    legacyHeaders: false,
+    store: desktopPollStore,
+    handler: createRateLimitHandler("Sign-in status was checked too often. Please wait briefly and retry."),
 });
 
 /**

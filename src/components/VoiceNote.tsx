@@ -4,6 +4,7 @@ import { Play, Pause } from "lucide-react";
 import type { RecordingResult } from "../types/audio.ts";
 import { getAudioWaveform, WAVEFORM_BARS } from "../lib/audioWaveform.ts";
 import "./VoiceNote.css";
+import { ErrorNotice } from "./reliability/Notifications";
 
 /** The message owns the Blob; the mounted player owns its temporary URL. */
 export function VoiceNote({ recording }: { recording: RecordingResult }) {
@@ -24,6 +25,7 @@ export function VoiceNote({ recording }: { recording: RecordingResult }) {
   }, [recording]);
   const seconds = Math.round(recording.durationMs / 1000);
   return <span className="voice-note">
+    <ErrorNotice message={error ? "This recording could not be played." : null} title="Audio unavailable" />
     <audio ref={audio} preload="metadata" onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={() => setPlaying(false)} onError={() => setError(true)} onTimeUpdate={(event) => {
       const element = event.currentTarget;
       const duration = Number.isFinite(element.duration) && element.duration > 0 ? element.duration : recording.durationMs / 1000;
@@ -40,6 +42,6 @@ export function VoiceNote({ recording }: { recording: RecordingResult }) {
         })}
       </svg>
     </button>
-    <span className="voice-note-duration">{error ? "Audio unavailable" : `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`}</span>
+    <span className="voice-note-duration">{`${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`}</span>
   </span>;
 }

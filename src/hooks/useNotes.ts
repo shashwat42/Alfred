@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
+import { useLoadState } from "./useLoadState";
+import { httpMessage } from "../lib/requestError";
 import { apiFetch } from "../lib/api.ts";
 import type { NoteItem } from "../types/notes.ts";
 
@@ -10,13 +12,13 @@ function isValidNote(n: NoteItem): boolean {
 }
 
 export function useNotes(accountId: string | undefined) {
+    const { run, ...loadState } = useLoadState();
     const [notes, setNotes] = useState<NoteItem[]>([]);
     const [recentNotes, setRecentNotes] = useState<NoteItem[]>([]);
     const [activeNote, setActiveNote] = useState<NoteItem | null>(null);
-    const [isLoading, setIsLoading] = useState(() => Boolean(accountId));
     const [notesError, setNotesError] = useState("");
 
-    const loadNotes = useCallback(async () => {
+    const loadNotes = useCallback(async () => run(async () => {
         if (!accountId) return;
         try {
             const res = await apiFetch("/api/notes");
@@ -24,15 +26,15 @@ export function useNotes(accountId: string | undefined) {
                 const data: NoteItem[] = await res.json();
                 setNotes(data.filter(isValidNote));
             } else {
-                throw new Error(`Failed to load notes: ${res.status}`);
+                throw new Error(httpMessage(res.status));
             }
         } catch (err) {
             console.error("Failed to load notes:", err);
             throw err;
         }
-    }, [accountId]);
+    }), [accountId, run]);
 
-    const loadRecentNotes = useCallback(async () => {
+    const loadRecentNotes = useCallback(async () => run(async () => {
         if (!accountId) return;
         try {
             const res = await apiFetch("/api/notes/recent?limit=4");
@@ -40,13 +42,13 @@ export function useNotes(accountId: string | undefined) {
                 const data: NoteItem[] = await res.json();
                 setRecentNotes(data.filter(isValidNote));
             } else {
-                throw new Error(`Failed to load recent notes: ${res.status}`);
+                throw new Error(httpMessage(res.status));
             }
         } catch (err) {
             console.error("Failed to load recent notes:", err);
             throw err;
         }
-    }, [accountId]);
+    }), [accountId, run]);
 
     const refreshNotes = useCallback(async () => {
         if (!accountId) return;
@@ -56,45 +58,23 @@ export function useNotes(accountId: string | undefined) {
     useEffect(() => {
         if (!accountId) return;
 
-        let isMounted = true;
-        async function fetchInitialNotes() {
-            try {
-                const [notesRes, recentRes] = await Promise.all([
-                    apiFetch("/api/notes"),
-                    apiFetch("/api/notes/recent?limit=4"),
-                ]);
-                if (notesRes.ok && isMounted) {
-                    const data: NoteItem[] = await notesRes.json();
-                    if (isMounted) setNotes(data.filter(isValidNote));
-                }
-                if (recentRes.ok && isMounted) {
-                    const data: NoteItem[] = await recentRes.json();
-                    if (isMounted) setRecentNotes(data.filter(isValidNote));
-                }
-            } catch (err) {
-                console.error("Failed to load notes:", err);
-            } finally {
-                if (isMounted) setIsLoading(false);
-            }
-        }
-
-        void fetchInitialNotes();
+        void refreshNotes().catch(() => {});
 
         const handleActionExecuted = (event: Event) => {
             const customEvt = event as CustomEvent<{ actions?: Array<{ type?: string }> }>;
             const actions = customEvt.detail?.actions;
             if (Array.isArray(actions) && actions.some((a) => a.type && a.type.startsWith("note_"))) {
-                void Promise.all([loadNotes(), loadRecentNotes()]);
+                void refreshNotes().catch(() => {});
             }
         };
 
         window.addEventListener("alfred:action_executed", handleActionExecuted);
 
         return () => {
-            isMounted = false;
+
             window.removeEventListener("alfred:action_executed", handleActionExecuted);
         };
-    }, [accountId, loadNotes, loadRecentNotes]);
+    }, [accountId, refreshNotes]);
 
     const saveNote = async (payload: { id?: string; title?: string; content?: string }): Promise<NoteItem | null> => {
         setNotesError("");
@@ -196,7 +176,7 @@ export function useNotes(accountId: string | undefined) {
         recentNotes,
         activeNote,
         setActiveNote,
-        isLoading,
+        ...loadState,
         notesError,
         loadNotes,
         loadRecentNotes,

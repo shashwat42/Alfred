@@ -1,3 +1,4 @@
+import { ErrorNotice } from "../reliability/Notifications";
 import { useRef, useState, type Dispatch, type FormEvent, type SetStateAction } from "react";
 import { createPortal } from "react-dom";
 import { Calendar, Clock } from "lucide-react";
@@ -12,6 +13,7 @@ export function ScheduleDialog({
     handleAddSchedule,
     scheduleError,
     setIsScheduleDialogOpen,
+    isSubmitting = false,
 }: {
     newScheduleDate: string;
     setNewScheduleDate: (date: string) => void;
@@ -22,6 +24,7 @@ export function ScheduleDialog({
     handleAddSchedule: (e: FormEvent<HTMLFormElement>) => Promise<void>;
     scheduleError: string;
     setIsScheduleDialogOpen: Dispatch<SetStateAction<boolean>>;
+    isSubmitting?: boolean;
 }) {
     const datePickerRef = useRef<HTMLInputElement>(null);
     const timePickerRef = useRef<HTMLInputElement>(null);
@@ -275,13 +278,11 @@ export function ScheduleDialog({
                             onChange={(event) => setNewScheduleTopic(event.target.value)}
                         />
                     </label>
-                    <button className="task-add-trigger" type="submit">
+                    <button className="task-add-trigger" type="submit" disabled={isSubmitting}>
                         Add schedule
                     </button>
                 </form>
-                {(clientError || scheduleError) && (
-                    <p className="task-error" role="alert">{clientError || scheduleError}</p>
-                )}
+                <ErrorNotice message={clientError || scheduleError} />
             </section>
         </div>,
         document.body

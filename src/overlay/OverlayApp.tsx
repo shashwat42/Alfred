@@ -1,3 +1,4 @@
+import { ErrorNotice } from "../components/reliability/Notifications";
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { isTauri } from "../auth/auth.ts";
@@ -26,7 +27,6 @@ import {
   X,
   Sparkles,
   Loader2,
-  AlertCircle,
   Square,
   ArrowLeftRight,
   Trash2,
@@ -168,19 +168,14 @@ export function OverlayConversationList({
         </div>
       ))}
 
-      {isLoading && (
+      {isLoading && messages.length === 0 && (
         <div className="flex items-center gap-2 self-start px-3.5 py-2 rounded-2xl bg-[#18181b] border border-white/12 text-xs text-red-400 font-medium shadow-sm">
           <Sparkles size={14} className="animate-pulse" />
           <span>{statusLabel}</span>
         </div>
       )}
 
-      {errorMessage && (
-        <div className="flex items-start gap-2 self-start px-3.5 py-2 rounded-2xl bg-red-950 border border-red-800 text-xs text-red-300 font-medium max-w-[90%] shadow-sm">
-          <AlertCircle size={14} className="mt-0.5 shrink-0 text-red-400" />
-          <span className="flex-1 leading-relaxed">{errorMessage}</span>
-        </div>
-      )}
+      <ErrorNotice message={errorMessage} />
 
       <div ref={conversationEndRef} />
     </div>
@@ -283,7 +278,7 @@ export function QuickInputOverlay({
 
       try {
         const context = buildSafeChatContext(updatedHistory, trimmed);
-        const result = await sendChatMessage(context, abortController.signal);
+        const result = await sendChatMessage(context, abortController.signal, { requestId: userMessage.id });
 
         if (activeAbortRef.current !== abortController) return;
 
@@ -600,7 +595,7 @@ export function VoiceOverlay({
           const context = buildSafeChatContext(currentHistory, text);
           const controller = new AbortController();
           voiceAbort.current = controller;
-          const response = await sendChatMessage(context, controller.signal, { recording: recResult });
+          const response = await sendChatMessage(context, controller.signal, { recording: recResult, requestId: userMessage.id });
           if (!isListeningRef.current || sessionIdRef.current !== currentSession) break;
 
           const assistantMessage: ChatMessage = {

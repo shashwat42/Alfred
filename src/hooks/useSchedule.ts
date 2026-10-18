@@ -1,4 +1,6 @@
 import type { FormEvent } from "react";
+import { useLoadState } from "./useLoadState";
+import { httpMessage } from "../lib/requestError";
 import { apiFetch } from "../lib/api.ts";
 import type { ScheduleItem } from "../types/dashboard.ts";
 import { useState, useEffect, useRef, useCallback } from "react";
@@ -11,8 +13,9 @@ interface ScheduleCacheEntry {
 
 const scheduleRequestCache = new Map<string, ScheduleCacheEntry>();
 
-async function fetchSchedule(url: string, maxAgeMs = 2000): Promise<ScheduleItem[]> {
-    const cached = scheduleRequestCache.get(url);
+async function fetchSchedule(url: string, accountId: string, maxAgeMs = 2000): Promise<ScheduleItem[]> {
+    const cacheKey = `${accountId}:${url}`;
+    const cached = scheduleRequestCache.get(cacheKey);
     if (cached) {
         if (cached.promise) {
             return cached.promise;
@@ -22,30 +25,30 @@ async function fetchSchedule(url: string, maxAgeMs = 2000): Promise<ScheduleItem
         }
     }
 
-    const promise = (async () => {
+    const promise: Promise<ScheduleItem[]> = (async () => {
         try {
             const response = await apiFetch(url);
             if (!response.ok) {
-                throw new Error(`Request failed: ${response.status}`);
+                throw new Error(httpMessage(response.status));
             }
             const data: ScheduleItem[] = await response.json();
-            scheduleRequestCache.set(url, { data, timestamp: Date.now() });
+            if (scheduleRequestCache.get(cacheKey)?.promise === promise) scheduleRequestCache.set(cacheKey, { data, timestamp: Date.now() });
             return data;
         } finally {
-            const entry = scheduleRequestCache.get(url);
-            if (entry && entry.promise) {
+            const entry = scheduleRequestCache.get(cacheKey);
+            if (entry?.promise === promise) {
                 delete entry.promise;
             }
         }
     })();
 
-    scheduleRequestCache.set(url, { promise, timestamp: Date.now() });
+    scheduleRequestCache.set(cacheKey, { promise, timestamp: Date.now() });
     return promise;
 }
 
 function invalidateScheduleCache(date?: string) {
     if (date) {
-        scheduleRequestCache.delete(`/api/schedule?date=${date}`);
+        for (const key of scheduleRequestCache.keys()) if (key.endsWith(`/api/schedule?date=${date}`)) scheduleRequestCache.delete(key);
     } else {
         scheduleRequestCache.clear();
     }
@@ -53,6 +56,11 @@ function invalidateScheduleCache(date?: string) {
 
 /** Custom hook to manage all schedule-related state and handlers. */
 export function useSchedule(accountId: string | undefined, todayDateStr: string) {
+    const { run, ...loadState } = useLoadState();
+    const submission = useRef(false);
+    const clearRequest = useRef(false), loadGeneration = useRef(0);
+    const [isClearing, setClearing] = useState(false);
+    const [isSubmitting, setSubmitting] = useState(false);
     const [scheduleSelectedDate, setScheduleSelectedDate] = useState(() => new Date());
     const scheduleDate = `${scheduleSelectedDate.getFullYear()}-${String(scheduleSelectedDate.getMonth() + 1).padStart(2, "0")}-${String(scheduleSelectedDate.getDate()).padStart(2, "0")}`;
 
@@ -69,27 +77,29 @@ export function useSchedule(accountId: string | undefined, todayDateStr: string)
     
     const currentHourRef = useRef<HTMLDivElement | null>(null);
 
-    const loadTodaySchedule = useCallback(async () => {
+    const loadTodaySchedule = useCallback(async () => run(async () => {
         if (!accountId) return;
+        const generation = loadGeneration.current;
         try {
-            const data = await fetchSchedule(`/api/schedule?date=${todayDateStr}`);
-            setTodaySchedule(data);
+            const data = await fetchSchedule(`/api/schedule?date=${todayDateStr}`, accountId!);
+            if (generation === loadGeneration.current) setTodaySchedule(data);
         } catch (error) {
             console.error("Could not load today's schedule:", error);
             throw error;
         }
-    }, [accountId, todayDateStr]);
+    }), [accountId, todayDateStr, run]);
 
-    const loadTimelineSchedule = useCallback(async () => {
+    const loadTimelineSchedule = useCallback(async () => run(async () => {
         if (!accountId) return;
+        const generation = loadGeneration.current;
         try {
-            const data = await fetchSchedule(`/api/schedule?date=${scheduleDate}`);
-            setTimelineSchedule(data);
+            const data = await fetchSchedule(`/api/schedule?date=${scheduleDate}`, accountId!);
+            if (generation === loadGeneration.current) setTimelineSchedule(data);
         } catch (error) {
             console.error("Could not load timeline schedule:", error);
             throw error;
         }
-    }, [accountId, scheduleDate]);
+    }), [accountId, scheduleDate, run]);
 
     const refreshSchedule = useCallback(async () => {
         if (!accountId) return;
@@ -105,9 +115,10 @@ export function useSchedule(accountId: string | undefined, todayDateStr: string)
         if (!accountId) return;
         let isMounted = true;
         async function fetchToday() {
+            const generation = loadGeneration.current;
             try {
-                const data = await fetchSchedule(`/api/schedule?date=${todayDateStr}`);
-                if (isMounted) setTodaySchedule(data);
+                const data = await run(() => fetchSchedule(`/api/schedule?date=${todayDateStr}`, accountId!));
+                if (isMounted && generation === loadGeneration.current) setTodaySchedule(data);
             } catch (error) {
                 console.error("Could not load today's schedule:", error);
             }
@@ -116,16 +127,17 @@ export function useSchedule(accountId: string | undefined, todayDateStr: string)
         return () => {
             isMounted = false;
         };
-    }, [accountId, todayDateStr]);
+    }, [accountId, todayDateStr, run]);
 
     // Initial and dependency-driven fetch for timeline schedule
     useEffect(() => {
         if (!accountId) return;
         let isMounted = true;
         async function fetchTimeline() {
+            const generation = loadGeneration.current;
             try {
-                const data = await fetchSchedule(`/api/schedule?date=${scheduleDate}`);
-                if (isMounted) setTimelineSchedule(data);
+                const data = await run(() => fetchSchedule(`/api/schedule?date=${scheduleDate}`, accountId!));
+                if (isMounted && generation === loadGeneration.current) setTimelineSchedule(data);
             } catch (error) {
                 console.error("Could not load timeline schedule:", error);
             }
@@ -134,7 +146,7 @@ export function useSchedule(accountId: string | undefined, todayDateStr: string)
         return () => {
             isMounted = false;
         };
-    }, [accountId, scheduleDate]);
+    }, [accountId, scheduleDate, run]);
 
     // Keep latest references for the dedicated action listener to avoid stale closures
     const todayDateStrRef = useRef(todayDateStr);
@@ -160,17 +172,20 @@ export function useSchedule(accountId: string | undefined, todayDateStr: string)
                     (a) =>
                         a.type === "schedule_created" ||
                         a.type === "schedule_updated" ||
-                        a.type === "schedule_deleted"
+                        a.type === "schedule_deleted" ||
+                        a.type === "schedule_cleared"
                 )
             ) {
                 const today = todayDateStrRef.current;
+                loadGeneration.current++;
+                if (actions.some(action => action.type === "schedule_cleared")) invalidateScheduleCache();
                 const timeline = scheduleDateRef.current;
                 invalidateScheduleCache(today);
                 if (timeline && timeline !== today) {
                     invalidateScheduleCache(timeline);
                 }
-                void loadTodayRef.current();
-                void loadTimelineRef.current();
+                void loadTodayRef.current().catch(() => {});
+                void loadTimelineRef.current().catch(() => {});
             }
         };
 
@@ -184,7 +199,8 @@ export function useSchedule(accountId: string | undefined, todayDateStr: string)
         event.preventDefault();
         const time = newScheduleTime.trim();
         const topic = newScheduleTopic.trim();
-        if (!time || !topic) return;
+        if (!time || !topic || submission.current || clearRequest.current) return;
+        submission.current = true; setSubmitting(true);
 
         setScheduleError("");
         try {
@@ -216,10 +232,11 @@ export function useSchedule(accountId: string | undefined, todayDateStr: string)
         } catch (error) {
             console.error("Could not add schedule item:", error);
             setScheduleError(error instanceof Error ? error.message : "Could not add schedule item. Please try again.");
-        }
+        } finally { submission.current = false; setSubmitting(false); }
     }
 
     async function handleDeleteSchedule(id: string) {
+        if (clearRequest.current) return;
         try {
             const response = await apiFetch(`/api/schedule/${id}`, { method: "DELETE" });
             if (response.ok) {
@@ -231,6 +248,29 @@ export function useSchedule(accountId: string | undefined, todayDateStr: string)
         } catch (err) {
             console.error("Could not delete schedule item:", err);
         }
+    }
+
+    async function handleClearSchedules(scope: "date" | "all", date?: string): Promise<boolean> {
+        if (!accountId || clearRequest.current || submission.current) return false;
+        if (scope === "date" && !date) { setScheduleError("Choose a date to clear."); return false; }
+        clearRequest.current = true; setClearing(true); setScheduleError("");
+        loadGeneration.current++;
+        try {
+            const url = scope === "all" ? "/api/schedule/clear-all" : `/api/schedule?date=${encodeURIComponent(date!)}`;
+            const response = await apiFetch(url, { method: "DELETE", _expectedAccountId: accountId });
+            if (!response.ok) {
+                const failure = await response.json().catch(() => null) as { error?: string } | null;
+                throw new Error(failure?.error || httpMessage(response.status));
+            }
+            loadGeneration.current++;
+            invalidateScheduleCache();
+            if (scope === "all" || date === todayDateStrRef.current) setTodaySchedule([]);
+            if (scope === "all" || date === scheduleDateRef.current) setTimelineSchedule([]);
+            return true;
+        } catch (error) {
+            setScheduleError(error instanceof Error ? error.message : "Could not clear the schedule. Please try again.");
+            return false;
+        } finally { clearRequest.current = false; setClearing(false); }
     }
 
     const handlePrevDay = () => {
@@ -250,6 +290,9 @@ export function useSchedule(accountId: string | undefined, todayDateStr: string)
     };
 
     return {
+        ...loadState,
+        isSubmitting,
+        isClearing,
         scheduleSelectedDate,
         setScheduleSelectedDate,
         scheduleDate,
@@ -270,6 +313,7 @@ export function useSchedule(accountId: string | undefined, todayDateStr: string)
         currentHourRef,
         handleAddSchedule,
         handleDeleteSchedule,
+        handleClearSchedules,
         handlePrevDay,
         handleNextDay,
         handleToday,

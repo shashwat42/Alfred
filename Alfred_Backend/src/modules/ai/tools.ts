@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { PolicyError } from "../../security/errors.ts";
 import * as tasksService from "../tasks/service.ts";
 import * as notesService from "../notes/service.ts";
 import * as scheduleService from "../schedule/service.ts";
@@ -35,7 +36,8 @@ export interface ConfirmedAction {
         | "note_created"
         | "note_updated"
         | "schedule_created"
-        | "schedule_updated";
+        | "schedule_updated"
+        | "schedule_cleared";
     id: string;
     summary?: string;
 }
@@ -107,6 +109,8 @@ const getScheduleSchema = z.object({
         .regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be in YYYY-MM-DD format")
         .refine(isValidCalendarDate, { message: "Date must be a valid calendar date in YYYY-MM-DD format" }),
 });
+const clearScheduleForDateSchema = getScheduleSchema.strict();
+const clearAllSchedulesSchema = z.object({}).strict();
 
 const updateScheduleEventSchema = z.object({
     scheduleId: z.string().trim().min(1, "Schedule ID is required"),
@@ -308,6 +312,22 @@ export const AI_TOOLS = [
             },
         },
     },
+    {
+        type: "function",
+        function: {
+            name: "clearScheduleForDate",
+            description: "Permanently delete all of the user's schedule events on one explicitly requested date. Other dates are preserved. Ask for the date if it is unclear; do not use for deleting a single event.",
+            parameters: { type: "object", properties: { date: { type: "string", description: "The date the user asked to clear, YYYY-MM-DD" } }, required: ["date"], additionalProperties: false },
+        },
+    },
+    {
+        type: "function",
+        function: {
+            name: "clearAllSchedules",
+            description: "Permanently delete the user's entire schedule across ALL dates. Use only when the user explicitly requests all dates or the entire schedule. For an ambiguous clear request, ask whether they mean one day or all dates first.",
+            parameters: { type: "object", properties: {}, additionalProperties: false },
+        },
+    },
 ];
 
 /**
@@ -344,6 +364,8 @@ export async function executeAiTool(
         "updateNote",
         "createScheduleEvent",
         "updateScheduleEvent",
+        "clearScheduleForDate",
+        "clearAllSchedules",
     ].includes(toolName);
 
     const idempotencyKey = isMutation
@@ -582,6 +604,26 @@ export async function executeAiTool(
                 break;
             }
 
+            case "clearScheduleForDate": {
+                const { date } = clearScheduleForDateSchema.parse(parsedArgs);
+                const result = await scheduleService.clearScheduleForDate(accountId, date);
+                executionResult = {
+                    success: true,
+                    data: { date, deletedCount: result.deletedCount },
+                    action: { type: "schedule_cleared", id: date, summary: `Cleared ${result.deletedCount} event(s) on ${date}` },
+                };
+                break;
+            }
+            case "clearAllSchedules": {
+                clearAllSchedulesSchema.parse(parsedArgs);
+                const result = await scheduleService.clearAllSchedules(accountId);
+                executionResult = {
+                    success: true,
+                    data: { scope: "all", deletedCount: result.deletedCount },
+                    action: { type: "schedule_cleared", id: "all", summary: `Cleared ${result.deletedCount} event(s) across all dates` },
+                };
+                break;
+            }
             default:
                 executionResult = {
                     success: false,
@@ -598,6 +640,7 @@ export async function executeAiTool(
 
         return executionResult;
     } catch (err: unknown) {
+        if (err instanceof PolicyError) return { success: false, error: `${err.details.code}: ${err.message}` };
         if (err instanceof z.ZodError) {
             return {
                 success: false,
@@ -605,7 +648,7 @@ export async function executeAiTool(
             };
         }
 
-        console.error(`[AI Tool Error] Failed executing ${toolName}:`, err);
+        console.error(`[AI Tool Error] Failed executing ${toolName}:`, { name: err instanceof Error ? err.name : "Unknown" });
         return {
             success: false,
             error: "An internal error occurred while executing the operation.",

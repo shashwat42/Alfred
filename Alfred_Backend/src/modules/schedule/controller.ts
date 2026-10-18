@@ -1,3 +1,4 @@
+import { sendPolicyError } from "../../security/errors.ts";
 import type { Request, Response } from "express";
 import { requireAccountId } from "../../utils/requireAccountId.ts";
 import { normalizeDateInput } from "../../utils/dateUtils.ts";
@@ -6,6 +7,8 @@ import {
     deleteSchedule as removeSchedule,
     getSchedule,
     updateSchedule as editSchedule,
+    clearScheduleForDate,
+    clearAllSchedules,
 } from "./service.ts";
 
 export type ScheduleItem = {
@@ -13,6 +16,31 @@ export type ScheduleItem = {
     topic: string;
     date: string;
 };
+
+export async function clearScheduleDate(req: Request, res: Response): Promise<void> {
+    try {
+        const accountId = requireAccountId(req, res);
+        if (!accountId) return;
+        const date = req.query.date as string;
+        const result = await clearScheduleForDate(accountId, date);
+        res.json({ deletedCount: result.deletedCount, date });
+    } catch (error) {
+        if (sendPolicyError(error, res)) return;
+        res.status(500).json({ error: "Could not clear the selected day's schedule" });
+    }
+}
+
+export async function clearScheduleOverall(req: Request, res: Response): Promise<void> {
+    try {
+        const accountId = requireAccountId(req, res);
+        if (!accountId) return;
+        const result = await clearAllSchedules(accountId);
+        res.json({ deletedCount: result.deletedCount });
+    } catch (error) {
+        if (sendPolicyError(error, res)) return;
+        res.status(500).json({ error: "Could not clear the schedule" });
+    }
+}
 
 export async function listSchedule(req: Request, res: Response): Promise<void> {
     try {
@@ -28,7 +56,8 @@ export async function listSchedule(req: Request, res: Response): Promise<void> {
         const schedule = await getSchedule(accountId, date);
         res.json(schedule);
     } catch (err) {
-        console.error("Error listing schedule:", err);
+        if (sendPolicyError(err, res)) return;
+        console.error("Error listing schedule:", { name: err instanceof Error ? err.name : "Unknown" });
         res.status(500).json({ error: "Failed to retrieve schedule" });
     }
 }
@@ -73,7 +102,8 @@ export async function createSchedule(
 
         res.status(201).json({ schedule: created });
     } catch (err) {
-        console.error("Error creating schedule:", err);
+        if (sendPolicyError(err, res)) return;
+        console.error("Error creating schedule:", { name: err instanceof Error ? err.name : "Unknown" });
         res.status(500).json({ error: "Failed to create schedule item" });
     }
 }
@@ -132,7 +162,8 @@ export async function updateSchedule(
 
         res.json({ schedule: updated });
     } catch (err) {
-        console.error("Error updating schedule:", err);
+        if (sendPolicyError(err, res)) return;
+        console.error("Error updating schedule:", { name: err instanceof Error ? err.name : "Unknown" });
         res.status(500).json({ error: "Failed to update schedule item" });
     }
 }
@@ -154,7 +185,8 @@ export async function deleteSchedule(
 
         res.json({ message: "Schedule item deleted successfully", id });
     } catch (err) {
-        console.error("Error deleting schedule:", err);
+        if (sendPolicyError(err, res)) return;
+        console.error("Error deleting schedule:", { name: err instanceof Error ? err.name : "Unknown" });
         res.status(500).json({ error: "Failed to delete schedule item" });
     }
 }

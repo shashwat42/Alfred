@@ -4,6 +4,9 @@ import {
   getToken,
   getSession,
   initAuthSession,
+  renewGuestSession,
+  reportInvalidSession,
+  SessionRecoveryError,
 } from "../auth/auth.ts";
 
 let inFlightAuthPromise: Promise<string | null> | null = null;
@@ -74,18 +77,37 @@ export async function apiFetch(
     headers.set("ngrok-skip-browser-warning", "true");
   }
 
-  const response = await fetch(url, {
-    ...init,
-    headers,
-  });
-
+  let response: Response;
+  try {
+    const timeout = AbortSignal.timeout(input.includes("/api/ai/") ? 120_000 : 20_000);
+    response = await fetch(url, { ...init, headers,
+      signal: init.signal ? AbortSignal.any([init.signal, timeout]) : timeout,
+    });
+  } catch (error) {
+    if (init.signal?.aborted) throw error;
+    if (error instanceof DOMException && error.name === "TimeoutError") throw new Error("The request timed out. Please retry; your input is preserved.", { cause: error });
+    throw new Error(typeof navigator !== "undefined" && !navigator.onLine ? "You’re offline. Check your connection and retry." : "The Alfred server could not be reached. Please retry.", { cause: error });
+  }
+  if (response.status === 401 && token) {
+    const current = getSession();
+    if (!init._isRetry && current?.token === token && current.account.type === "guest") {
+      try {
+        const renewed = await renewGuestSession(current);
+        const retryHeaders = new Headers(headers); retryHeaders.set("Authorization", `Bearer ${renewed.token}`);
+        return apiFetch(input, { ...init, headers: retryHeaders, _isRetry: true, _expectedAccountId: current.account.id });
+      } catch (error) {
+        if (!(error instanceof SessionRecoveryError)) throw error;
+      }
+    }
+    reportInvalidSession(token);
+  }
   return response;
 }
 
 /**
  * Helper to make authenticated JSON requests and parse the response body.
  */
-export async function apiJson<T = unknown>(input: string, init: RequestInit = {}): Promise<T> {
+export async function apiJson<T = unknown>(input: string, init: RequestInit & { _expectedAccountId?: string } = {}): Promise<T> {
   const headers = new Headers(init.headers);
   if (!headers.has("Content-Type") && init.body && typeof init.body === "string") {
     headers.set("Content-Type", "application/json");
@@ -97,9 +119,9 @@ export async function apiJson<T = unknown>(input: string, init: RequestInit = {}
   });
 
   if (!response.ok) {
-    const errorText = await response.text().catch(() => "");
-    throw new Error(`API error (${response.status}): ${errorText || response.statusText}`);
+    const payload = await response.json().catch(() => null) as { error?: string; code?: string } | null;
+    throw new Error(response.status === 401 ? "Your session needs recovery. You can continue as a guest without signing in." : payload?.error || `Request failed (${response.status}). Please retry.`);
   }
-
+  if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
 }

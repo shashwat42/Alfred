@@ -1,3 +1,4 @@
+process.env.MODE = "development";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
@@ -84,12 +85,19 @@ test("audio validation rejects spoofing, malformed, empty, silent, oversized and
 });
 
 test("authenticated multipart route validates uploads, preserves account scope and never forwards client account fields", async () => {
+  const { MongoMemoryReplSet } = await import("mongodb-memory-server");
+  const { default: mongoose } = await import("mongoose");
+  const database = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
+  await mongoose.connect(database.getUri("alfred_audio_test"));
+  const { initializeSecurityIndexes } = await import("../../security/indexes.ts");
+  await initializeSecurityIndexes();
   const { default: express } = await import("express");
   const { default: router } = await import("./route.ts");
   const { default: jwt } = await import("jsonwebtoken");
   const { Account } = await import("../../models/account.model.ts");
   const saved = globalThis.fetch, lookup = Account.findById;
   const accountId = "507f1f77bcf86cd799439011";
+  await Account.create({ _id: accountId, type: "user", googleId: "test-google" });
   const lookedUp: unknown[] = [];
   Account.findById = ((id: unknown) => { lookedUp.push(id); return Promise.resolve({ _id: accountId, type: "user", googleId: "test-google" }); }) as unknown as typeof lookup;
   let upstream = 0;
@@ -125,5 +133,6 @@ test("authenticated multipart route validates uploads, preserves account scope a
   } finally {
     globalThis.fetch = saved; Account.findById = lookup;
     await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
+    await mongoose.disconnect(); await database.stop();
   }
 });

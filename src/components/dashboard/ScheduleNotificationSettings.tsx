@@ -1,3 +1,5 @@
+import { Loader } from "../reliability/States";
+import { ErrorNotice } from "../reliability/Notifications";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Bell } from "lucide-react";
 import { useAuth } from "../../auth/authContext.ts";
@@ -81,7 +83,7 @@ function ScheduleNotificationSettingsForm({ accountId }: { accountId: string | u
   return <section className="settings-card-group schedule-notification-settings">
     <h3 className="settings-group-header"><Bell size={16} className="settings-group-icon" />Schedule Notifications</h3>
     <div className="settings-feature-card">
-      {!value ? <div className="settings-feature-row"><span role="status">{error || "Loading schedule notification settings…"}</span><button type="button" className="settings-action-btn" onClick={() => void load()}>Retry</button></div> : <fieldset disabled={busy} className="schedule-notification-fields">
+      {!value ? error ? null : <Loader label="Loading notification settings…" /> : <fieldset disabled={busy} className="schedule-notification-fields">
         <legend className="sr-only">Schedule notification preferences</legend>
         <div className="settings-feature-row"><label htmlFor="schedule-notifications-enabled" className="settings-feature-title">Schedule reminders</label><input id="schedule-notifications-enabled" type="checkbox" checked={value.enabled} onChange={e => void save({ enabled: e.target.checked })} /></div>
         <fieldset className="schedule-destination"><legend>Delivery destination</legend>
@@ -100,7 +102,7 @@ function ScheduleNotificationSettingsForm({ accountId }: { accountId: string | u
       </div>}
       {platform === "mobile" && !exactAlarms && <div className="settings-feature-row"><div className="settings-feature-info"><span className="settings-feature-desc">Android currently permits inexact alarms, which can arrive too late. Allow “Alarms &amp; reminders” for more precise timing. Background network and battery limits still apply.</span><button type="button" className="settings-action-btn" onClick={() => { void androidNotificationRequest("timing").catch(() => setError("Could not open Alarms & reminders settings.")); }}>Improve reminder timing</button></div></div>}
       {platform && <p className="settings-save-feedback" role="status">{deliveryStatus}</p>}
-      <p className="settings-save-feedback" role="status">{busy ? "Saving…" : feedback}</p>{error && <p className="settings-error" role="alert">{error}</p>}
+      <p className="settings-save-feedback" role="status">{busy ? "Saving…" : feedback}</p><ErrorNotice message={error} retry={() => void load()} />
     </div>
   </section>;
 }

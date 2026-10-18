@@ -6,12 +6,16 @@ import {
     deleteSchedule,
     listSchedule,
     updateSchedule,
+    clearScheduleDate,
+    clearScheduleOverall,
 } from "./controller.ts";
 import {
     createScheduleSchema,
     listScheduleSchema,
     scheduleIdParamSchema,
     updateScheduleSchema,
+    clearScheduleDateSchema,
+    clearAllSchedulesSchema,
 } from "./schedule.schema.ts";
 
 const router = Router();
@@ -22,6 +26,8 @@ router.get("/", validate(listScheduleSchema), listSchedule);
 router.post("/", validate(createScheduleSchema), createSchedule);
 router.put("/:id", validate(updateScheduleSchema), updateSchedule);
 router.patch("/:id", validate(updateScheduleSchema), updateSchedule);
+router.delete("/", validate(clearScheduleDateSchema), clearScheduleDate);
+router.delete("/clear-all", validate(clearAllSchedulesSchema), clearScheduleOverall);
 router.delete("/:id", validate(scheduleIdParamSchema), deleteSchedule);
 
 export default router;

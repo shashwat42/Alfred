@@ -1,6 +1,7 @@
 import { tenantRepository } from "../../security/tenantRepository.ts";
 import mongoose from "mongoose";
 import { Schedule, type ISchedule } from "../../models/schedule.model.ts";
+import { isValidCalendarDate } from "../../utils/dateUtils.ts";
 
 export type ScheduleItem = {
     _id?: string;
@@ -63,4 +64,13 @@ export async function deleteSchedule(accountId: string, scheduleId: string): Pro
     return tenantRepository(Schedule, accountId).findOneAndDelete({
         _id: new mongoose.Types.ObjectId(scheduleId),
     });
+}
+
+export async function clearScheduleForDate(accountId: string, date: string) {
+    if (!isValidCalendarDate(date)) throw new Error("A valid calendar date in YYYY-MM-DD format is required");
+    return tenantRepository(Schedule, accountId).deleteMany({ date });
+}
+
+export async function clearAllSchedules(accountId: string) {
+    return tenantRepository(Schedule, accountId).deleteMany();
 }

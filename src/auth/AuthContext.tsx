@@ -1,7 +1,10 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
   AUTH_CHANGE_EVENT,
+  AUTH_INVALID_EVENT,
+  createGuestSession,
   clearSession,
+  DesktopAuthCancelledError,
   getPendingDesktopAuth,
   handleDesktopDeepLink,
   initAuthSession,
@@ -15,7 +18,7 @@ import {
 } from "./auth.ts";
 import { AuthContext } from "./authContext.ts";
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+export function AuthProvider({ children, deferGuestCreation = false }: { children: React.ReactNode; deferGuestCreation?: boolean }) {
   const [session, setSession] = useState<AuthSession | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -30,12 +33,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setRetryCount((c) => c + 1);
   }, []);
 
+  const continueAsGuest = useCallback(async () => {
+    setLoading(true); setError(null);
+    try { const nextSession = await createGuestSession(true); setSession(nextSession); }
+    catch (err) { setError(err instanceof Error ? err.message : "Guest access is temporarily unavailable. Please retry."); }
+    finally { setLoading(false); }
+  }, []);
+
   useEffect(() => {
     // Local flag prevents setState from firing after this effect has cleaned up
     // (e.g. component unmounts during an in-flight request, or retry fires again).
     let cancelled = false;
 
-    initAuthSession()
+    (deferGuestCreation ? initAuthSession(false) : initAuthSession())
       .then((activeSession) => {
         if (!cancelled) {
           setSession(activeSession);
@@ -59,17 +69,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const customEvent = event as CustomEvent<AuthSession | null>;
       if (!cancelled) {
         setSession(customEvent.detail ?? null);
+        setError(null);
         setLoading(false);
       }
     };
 
     window.addEventListener(AUTH_CHANGE_EVENT, handleAuthChange);
+    const handleInvalidSession = (event: Event) => {
+      if (!cancelled) { setError((event as CustomEvent<string>).detail); setLoading(false); }
+    };
+    window.addEventListener(AUTH_INVALID_EVENT, handleInvalidSession);
 
     return () => {
       cancelled = true;
       window.removeEventListener(AUTH_CHANGE_EVENT, handleAuthChange);
+      window.removeEventListener(AUTH_INVALID_EVENT, handleInvalidSession);
     };
-  }, [retryCount]);
+  }, [retryCount, deferGuestCreation]);
 
   // Listen for Tauri desktop custom protocol deep links (via plugin and single-instance event)
   useEffect(() => {
@@ -106,7 +122,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } catch (err) {
         if (active) {
           setError(
-            err instanceof Error
+            err instanceof DesktopAuthCancelledError ? null : err instanceof Error
               ? err.message
               : "Desktop authentication failed."
           );
@@ -173,6 +189,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const handleLoginWithGoogle = useCallback(async (callback?: AuthCallback) => {
+    setError(null);
     // Capture pending auth state BEFORE opening the browser.
     // authLoginWithGoogle generates state+verifier then calls openUrl.
     // After openUrl resolves the browser is open but no ticket exists yet.
@@ -218,6 +235,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         loading,
         error,
         retry,
+        continueAsGuest,
         loginWithGoogle: handleLoginWithGoogle,
         logout,
       }}

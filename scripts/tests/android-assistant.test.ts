@@ -188,11 +188,11 @@ test("expired app sessions never downgrade to a new guest", async () => {
   globalThis.fetch = async (url) => {
     calls++;
     if (String(url).endsWith("/auth/guest")) return Response.json({ token: "fresh-test-token", account: { id: "new-account", type: "guest" } });
-    return new Response("{}", { status: calls === 1 ? 401 : 200 });
+    return new Response("{}", { status: 401 });
   };
   try {
     assert.equal((await apiFetch("/api/tasks")).status, 401);
-    assert.equal(calls, 1);
+    assert.equal(calls, 2);
     assert.equal(getSession()?.account.id, "old-account");
   } finally { globalThis.fetch = originalFetch; values.clear(); }
 });

@@ -1,4 +1,6 @@
 import "dotenv/config";
+import { parseMode } from "./policy.ts";
+const mode = parseMode(process.env.MODE, process.env.NODE_ENV);
 
 function getRequiredEnv(key: string): string {
     const value = process.env[key];
@@ -21,6 +23,9 @@ export function parseAllowedOrigins(
     defaultOrigin: string,
     isProd = process.env.NODE_ENV === "production"
 ): string[] {
+    // Packaged Tauri desktop/Android WebViews use these exact origins in release
+    // builds too. They are application origins, not development-server origins.
+    const nativeOrigins = ["http://tauri.localhost", "https://tauri.localhost"];
     if (rawOrigins && rawOrigins.trim().length > 0) {
         const origins = rawOrigins
             .split(",")
@@ -30,17 +35,17 @@ export function parseAllowedOrigins(
         if (!origins.includes(defaultOrigin)) {
             origins.push(defaultOrigin);
         }
-        return origins;
+        return [...new Set([...origins, ...nativeOrigins])];
     }
 
     // Default origins when ALLOWED_ORIGINS is not explicitly configured
     if (!isProd) {
         // Safe development defaults: web Vite dev server + Tauri local desktop webview origins
-        return [defaultOrigin, "http://tauri.localhost", "https://tauri.localhost"];
+        return [defaultOrigin, ...nativeOrigins];
     }
 
-    // Strict production default: only the explicitly configured frontend URL
-    return [defaultOrigin];
+    // Production keeps the configured web app plus exact packaged-app origins.
+    return [defaultOrigin, ...nativeOrigins];
 }
 
 const frontendUrl = getOptionalEnv("FRONTEND_URL", "http://localhost:5173");
@@ -55,7 +60,7 @@ function parsePositiveIntEnv(key: string, defaultValue: number): number {
     if (!raw || raw.trim().length === 0) return defaultValue;
     const parsed = parseInt(raw.trim(), 10);
     if (isNaN(parsed) || parsed <= 0) {
-        console.warn(`Invalid positive integer for ${key}: "${raw}". Falling back to default ${defaultValue}.`);
+        console.warn(`Invalid positive integer for ${key}. Falling back to default ${defaultValue}.`);
         return defaultValue;
     }
     return parsed;
@@ -84,7 +89,7 @@ if (legacyAcceptUntil > Date.now() + 7 * 86400_000) {
     throw new Error("JWT_LEGACY_ACCEPT_UNTIL cannot exceed seven days from startup");
 }
 const jwtSecret = getRequiredEnv("JWT_SECRET");
-if (process.env.NODE_ENV === "production" && jwtSecret.length < 32) {
+if (mode === "production" && jwtSecret.length < 32) {
     throw new Error("JWT_SECRET must contain at least 32 characters in production");
 }
 
@@ -108,9 +113,10 @@ const llmMaxOutputTokens = parsePositiveIntEnv("LLM_MAX_OUTPUT_TOKENS", 1024);
 const llmTimeoutMs = parsePositiveIntEnv("LLM_TIMEOUT_MS", 60000);
 
 export const env = {
+    mode,
     port,
     frontendUrl,
-    allowedOrigins: parseAllowedOrigins(process.env.ALLOWED_ORIGINS, frontendUrl),
+    allowedOrigins: parseAllowedOrigins(process.env.ALLOWED_ORIGINS, frontendUrl, mode === "production"),
     rateLimit: {
         guest: {
             windowMs: guestLimitWindowMs,
@@ -152,4 +158,3 @@ export const env = {
         legacyAcceptUntil,
     },
 };
-

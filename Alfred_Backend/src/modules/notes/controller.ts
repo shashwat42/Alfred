@@ -1,3 +1,4 @@
+import { sendPolicyError } from "../../security/errors.ts";
 import type { Request, Response } from "express";
 import { requireAccountId } from "../../utils/requireAccountId.ts";
 import {
@@ -17,7 +18,8 @@ export async function listNotes(req: Request, res: Response): Promise<void> {
         const notes = await getNotes(accountId);
         res.json(notes);
     } catch (err) {
-        console.error("Error listing notes:", err);
+        if (sendPolicyError(err, res)) return;
+        console.error("Error listing notes:", { name: err instanceof Error ? err.name : "Unknown" });
         res.status(500).json({ error: "Failed to retrieve notes" });
     }
 }
@@ -31,7 +33,8 @@ export async function getRecentNotesHandler(req: Request, res: Response): Promis
         const notes = await getRecentNotes(accountId, isNaN(limit) ? 4 : limit);
         res.json(notes);
     } catch (err) {
-        console.error("Error getting recent notes:", err);
+        if (sendPolicyError(err, res)) return;
+        console.error("Error getting recent notes:", { name: err instanceof Error ? err.name : "Unknown" });
         res.status(500).json({ error: "Failed to retrieve recent notes" });
     }
 }
@@ -55,7 +58,8 @@ export async function createNoteHandler(
         const note = await createNote(accountId, title, content);
         res.status(201).json(note);
     } catch (err) {
-        console.error("Error creating note:", err);
+        if (sendPolicyError(err, res)) return;
+        console.error("Error creating note:", { name: err instanceof Error ? err.name : "Unknown" });
         res.status(500).json({ error: "Failed to create note" });
     }
 }
@@ -83,7 +87,8 @@ export async function updateNoteHandler(
 
         res.json(updated);
     } catch (err) {
-        console.error("Error updating note:", err);
+        if (sendPolicyError(err, res)) return;
+        console.error("Error updating note:", { name: err instanceof Error ? err.name : "Unknown" });
         res.status(500).json({ error: "Failed to update note" });
     }
 }
@@ -105,7 +110,8 @@ export async function openNoteHandler(
 
         res.json(updated);
     } catch (err) {
-        console.error("Error opening note:", err);
+        if (sendPolicyError(err, res)) return;
+        console.error("Error opening note:", { name: err instanceof Error ? err.name : "Unknown" });
         res.status(500).json({ error: "Failed to record note opening" });
     }
 }
@@ -127,7 +133,8 @@ export async function deleteNoteHandler(
 
         res.json({ message: "Note deleted successfully", id });
     } catch (err) {
-        console.error("Error deleting note:", err);
+        if (sendPolicyError(err, res)) return;
+        console.error("Error deleting note:", { name: err instanceof Error ? err.name : "Unknown" });
         res.status(500).json({ error: "Failed to delete note" });
     }
 }

@@ -1,0 +1,195 @@
+name: Deploy backend to Oracle
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: Alfred_Backend
+    shell: bash
+
+concurrency:
+  group: alfred-oracle-production
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      MODE: development
+      JWT_SECRET: isolated-ci-test-secret-at-least-32-chars
+      GOOGLE_CLIENT_ID: isolated-ci
+      GOOGLE_CLIENT_SECRET: isolated-ci
+      GOOGLE_CALLBACK_URL: http://localhost/auth/google/callback
+      MONGODB_URI: mongodb://127.0.0.1/unused_test
+      LLM_API_KEY: ""
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "24"
+      - name: Install backend dependencies
+        run: npm ci
+      - name: Backend TypeScript and isolated development tests
+        run: |
+          npm run check
+          npm test
+      - name: Deployment configuration tests and Compose validation
+        run: |
+          python3 -m unittest discover -s deploy/oracle -p 'test_*.py' -v
+          for script in deploy/oracle/*.sh; do bash -n "$script"; done
+          bash deploy/oracle/validate.sh
+
+  deploy:
+    needs: validate
+    if: github.ref == 'refs/heads/main'
+    environment: production
+    runs-on: ${{ vars.OCI_BUILD_RUNNER || 'ubuntu-24.04' }}
+    timeout-minutes: 40
+    env:
+      TARGET_PLATFORM: ${{ vars.OCI_PLATFORM || 'linux/amd64' }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Set release identity and verify native build architecture
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$(uname -m)" in
+            x86_64) native=linux/amd64 ;;
+            aarch64) native=linux/arm64 ;;
+            *) echo 'Unsupported build runner architecture'; exit 1 ;;
+          esac
+          [[ "$native" == "$TARGET_PLATFORM" ]] || { echo 'Choose a native OCI_BUILD_RUNNER matching OCI_PLATFORM'; exit 1; }
+          release="${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          echo "RELEASE_ID=$release" >> "$GITHUB_ENV"
+          echo "BACKEND_IMAGE=alfred-backend:$release" >> "$GITHUB_ENV"
+          echo "MONGO_IMAGE=alfred-mongo:$release" >> "$GITHUB_ENV"
+      - name: Prepare protected SSH configuration and verify connectivity
+        env:
+          OCI_HOST: ${{ secrets.OCI_HOST }}
+          OCI_SSH_USER: ${{ vars.OCI_SSH_USER }}
+          OCI_SSH_PORT: ${{ vars.OCI_SSH_PORT || '22' }}
+          OCI_SSH_PRIVATE_KEY: ${{ secrets.OCI_SSH_PRIVATE_KEY }}
+          OCI_SSH_KNOWN_HOSTS: ${{ secrets.OCI_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          umask 077
+          python3 - <<'PY'
+          import os, re
+          from pathlib import Path
+          directory = Path(os.environ['RUNNER_TEMP']) / 'alfred-ssh'
+          directory.mkdir(mode=0o700)
+          host, user, port = (os.environ.get(key, '') for key in ('OCI_HOST', 'OCI_SSH_USER', 'OCI_SSH_PORT'))
+          if not re.fullmatch(r'[a-zA-Z0-9][a-zA-Z0-9.:-]*', host) or not re.fullmatch(r'[a-z_][a-z0-9_-]*', user) or not port.isdigit() or not 0 < int(port) < 65536:
+              raise SystemExit('Missing or invalid Oracle SSH connection settings')
+          for field, filename in [('OCI_SSH_PRIVATE_KEY', 'key'), ('OCI_SSH_KNOWN_HOSTS', 'known_hosts')]:
+              value = os.environ.get(field, '')
+              if not value.strip():
+                  raise SystemExit('Missing ' + field)
+              path = directory / filename
+              path.write_text(value.rstrip() + '\n')
+              path.chmod(0o600)
+          configuration = f'''Host oracle
+            HostName {host}
+            User {user}
+            Port {port}
+            IdentityFile {directory}/key
+            UserKnownHostsFile {directory}/known_hosts
+            StrictHostKeyChecking yes
+            IdentitiesOnly yes
+            BatchMode yes
+            ConnectTimeout 15
+            ServerAliveInterval 15
+            ServerAliveCountMax 3
+            LogLevel ERROR
+          '''
+          (directory / 'config').write_text(configuration)
+          (directory / 'config').chmod(0o600)
+          PY
+          remote_arch=$(ssh -F "$RUNNER_TEMP/alfred-ssh/config" oracle uname -m)
+          case "$TARGET_PLATFORM:$remote_arch" in
+            linux/amd64:x86_64|linux/arm64:aarch64) ;;
+            *) echo 'Oracle VM/build architecture mismatch'; exit 1 ;;
+          esac
+      - name: Generate runtime configuration from production GitHub secrets
+        env:
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          MONGO_ROOT_USERNAME: ${{ secrets.MONGO_ROOT_USERNAME }}
+          MONGO_ROOT_PASSWORD: ${{ secrets.MONGO_ROOT_PASSWORD }}
+          MONGO_APP_USERNAME: ${{ secrets.MONGO_APP_USERNAME }}
+          MONGO_APP_PASSWORD: ${{ secrets.MONGO_APP_PASSWORD }}
+          MONGO_REPLICA_KEY: ${{ secrets.MONGO_REPLICA_KEY }}
+          FRONTEND_URL: ${{ vars.FRONTEND_URL }}
+          ALLOWED_ORIGINS: ${{ vars.ALLOWED_ORIGINS }}
+          GOOGLE_CALLBACK_URL: ${{ vars.GOOGLE_CALLBACK_URL }}
+          PUBLIC_HEALTH_URL: ${{ vars.PUBLIC_HEALTH_URL }}
+          MONGO_VOLUME: ${{ vars.OCI_MONGO_VOLUME }}
+          ALLOW_EMPTY_DATABASE: ${{ vars.OCI_ALLOW_EMPTY_DATABASE || 'false' }}
+          ALFRED_SETTINGS_JSON: ${{ vars.ALFRED_SETTINGS_JSON || '{}' }}
+        run: |
+          set -euo pipefail
+          umask 077
+          python3 deploy/oracle/config.py --directory "$RUNNER_TEMP/alfred-runtime"
+          docker compose --env-file "$RUNNER_TEMP/alfred-runtime/deploy.env" -f compose.yaml -f compose.production.yaml config --quiet
+      - name: Build existing API image and package architecture-matched images
+        run: |
+          set -euo pipefail
+          umask 077
+          docker build --platform "$TARGET_PLATFORM" -t "$BACKEND_IMAGE" .
+          docker pull --platform "$TARGET_PLATFORM" mongo:8.0
+          docker tag mongo:8.0 "$MONGO_IMAGE"
+          mkdir -p "$RUNNER_TEMP/alfred-artifacts/docker"
+          cp compose.yaml compose.production.yaml "$RUNNER_TEMP/alfred-artifacts/"
+          cp -R deploy "$RUNNER_TEMP/alfred-artifacts/deploy"
+          cp docker/init-replica.js "$RUNNER_TEMP/alfred-artifacts/docker/"
+          python3 - <<'PY'
+          import json, os, subprocess
+          from pathlib import Path
+          metadata = {'release': os.environ['RELEASE_ID'], 'platform': os.environ['TARGET_PLATFORM']}
+          for kind, key in [('backend', 'BACKEND_IMAGE'), ('mongo', 'MONGO_IMAGE')]:
+              name = os.environ[key]
+              image = json.loads(subprocess.check_output(['docker', 'image', 'inspect', name]))[0]
+              if f"{image['Os']}/{image['Architecture']}" != metadata['platform']:
+                  raise SystemExit('Built image architecture mismatch')
+              metadata[kind + 'Image'], metadata[kind + 'Id'] = name, image['Id']
+          path = Path(os.environ['RUNNER_TEMP']) / 'alfred-artifacts/metadata.json'
+          path.write_text(json.dumps(metadata))
+          PY
+          docker image save "$BACKEND_IMAGE" "$MONGO_IMAGE" | gzip -1 > "$RUNNER_TEMP/alfred-artifacts/images.tar.gz"
+          cd "$RUNNER_TEMP/alfred-artifacts"
+          sha256sum images.tar.gz > images.sha256
+      - name: Transfer artifacts and deploy with runtime configuration over SSH stdin
+        run: |
+          set -euo pipefail
+          config="$RUNNER_TEMP/alfred-ssh/config"
+          stage=$(ssh -F "$config" oracle 'umask 077; mktemp -d /tmp/alfred-deploy.XXXXXXXX')
+          [[ "$stage" =~ ^/tmp/alfred-deploy\.[a-zA-Z0-9]+$ ]] || { echo 'Invalid remote staging directory'; exit 1; }
+          printf '%s\n' "$stage" > "$RUNNER_TEMP/alfred-stage"
+          scp -q -F "$config" -r "$RUNNER_TEMP/alfred-artifacts/." "oracle:$stage/"
+          ssh -F "$config" oracle "sudo -n bash '$stage/deploy/oracle/deploy.sh' '$stage'" < "$RUNNER_TEMP/alfred-runtime/config.json"
+      - name: Remove temporary runner credentials and remote artifacts
+        if: always()
+        run: |
+          set -eu
+          if [[ -f "$RUNNER_TEMP/alfred-stage" && -f "$RUNNER_TEMP/alfred-ssh/config" ]]; then
+            stage=$(cat "$RUNNER_TEMP/alfred-stage")
+            if [[ "$stage" =~ ^/tmp/alfred-deploy\.[a-zA-Z0-9]+$ ]]; then
+              ssh -F "$RUNNER_TEMP/alfred-ssh/config" oracle "rm -rf -- '$stage'" || echo 'Remote artifact cleanup requires operator attention.'
+            fi
+          fi
+          rm -rf -- "$RUNNER_TEMP/alfred-runtime" "$RUNNER_TEMP/alfred-ssh" "$RUNNER_TEMP/alfred-artifacts"

@@ -1,0 +1,8 @@
+.app-state-toast-region{position:fixed;top:40px;right:32px;width:min(340px,calc(100vw - 64px));z-index:2000;pointer-events:none}
+.app-state-toast{display:flex;align-items:flex-start;gap:9px;padding:10px 12px;border:1px solid #414141;border-radius:9px;background:#242424;color:#efefef;box-shadow:0 6px 20px #0003;pointer-events:auto;font-family:inherit}
+.app-state-toast.is-error{background:#301313;border-color:#6e2525;color:#ffb0b0}
+.app-state-toast>svg{flex-shrink:0;width:15px;height:15px;margin-top:1px}.app-state-toast>div{flex:1;min-width:0}.app-state-toast strong{display:block;font-size:12px;font-weight:650;line-height:1.4}.app-state-toast p{font-size:11px;line-height:1.4;margin:3px 0 0;color:inherit}.app-state-toast-caption{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.app-state-toast button{display:grid;place-items:center;padding:3px;background:none;border:0;border-radius:4px;color:inherit;cursor:pointer;flex-shrink:0}.app-state-toast button:hover{background:#ffffff0d}.app-state-toast button:focus-visible{outline:2px solid #f44343;outline-offset:3px}
+.app-state-toast-spinner{animation:alfred-toast-spin 1s linear infinite}@keyframes alfred-toast-spin{to{transform:rotate(360deg)}}
+@media(max-width:768px){.app-state-toast-region{top:64px;right:16px;width:min(340px,calc(100vw - 32px))}}
+@media(prefers-reduced-motion:reduce){.app-state-toast-spinner{animation:none}}

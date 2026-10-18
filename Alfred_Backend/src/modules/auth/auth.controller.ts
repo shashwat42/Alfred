@@ -10,24 +10,39 @@ import {
     findOrCreateGoogleAccount,
     getGoogleAuthUrl,
     getGoogleUserFromCode,
+    renewGuestAccount,
+    formatAuthResponse,
 } from "./auth.service.ts";
 import { OAuthState } from "../../models/oauthState.model.ts";
 import { Account } from "../../models/account.model.ts";
 import { migrateGuest } from "../../security/guestMigration.ts";
 import { env } from "../../config/env.ts";
 
+export function restoreSession(req: Request, res: Response): void {
+    // Return the existing token: validating a Google session must not refresh
+    // its iat or satisfy the recent-login requirement for account deletion.
+    res.json(formatAuthResponse(req.account!, req.headers.authorization!.slice(7).trim()));
+}
+
+export async function renewGuestSession(req: Request, res: Response): Promise<void> {
+    const header = req.headers.authorization;
+    const session = header?.startsWith("Bearer ") ? await renewGuestAccount(header.slice(7).trim()) : null;
+    if (!session) { res.status(401).json({ code: "GUEST_SESSION_UNRECOVERABLE", error: "This guest session could not be restored. You can continue as a new guest without signing in." }); return; }
+    res.json(session);
+}
+
 export async function guestAuth(_req: Request, res: Response): Promise<void> {
     try {
         const session = await createGuestAccount();
         res.status(201).json(session);
     } catch (err) {
-        console.error("Error creating guest account:", err);
+        console.error("Error creating guest account:", { name: err instanceof Error ? err.name : "Unknown" });
         res.status(500).json({ error: "Failed to initialize guest session" });
     }
 }
 
-const bindingCookie = process.env.NODE_ENV === "production" ? "__Host-alfred_oauth" : "alfred_oauth";
-const cookieOptions = { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax" as const, path: "/", maxAge: 600_000 };
+const bindingCookie = env.mode === "production" ? "__Host-alfred_oauth" : "alfred_oauth";
+const cookieOptions = { httpOnly: true, secure: env.mode === "production", sameSite: "lax" as const, path: "/", maxAge: 600_000 };
 function callbackBinding(req: Request): string {
     const entry = req.headers.cookie?.split(";").map(v => v.trim()).find(v => v.startsWith(`${bindingCookie}=`));
     return entry?.slice(bindingCookie.length + 1) ?? "";
