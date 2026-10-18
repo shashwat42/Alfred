@@ -5,14 +5,14 @@ import os
 from pathlib import Path
 import re
 import sys
-from urllib.parse import quote, urlsplit
+from urllib.parse import parse_qs, urlsplit
+from ipaddress import ip_address
 
 SECRETS = (
     "JWT_SECRET", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "LLM_API_KEY",
-    "MONGO_ROOT_USERNAME", "MONGO_ROOT_PASSWORD", "MONGO_APP_USERNAME",
-    "MONGO_APP_PASSWORD", "MONGO_REPLICA_KEY",
+    "MONGODB_URI",
 )
-DEPLOY = ("BACKEND_IMAGE", "MONGO_IMAGE", "TARGET_PLATFORM", "MONGO_VOLUME", "PUBLIC_HEALTH_URL", "ALLOW_EMPTY_DATABASE")
+DEPLOY = ("BACKEND_IMAGE", "TARGET_PLATFORM", "PUBLIC_HEALTH_URL")
 PUBLIC = ("FRONTEND_URL", "ALLOWED_ORIGINS", "GOOGLE_CALLBACK_URL")
 OPTIONAL = {
     "STORAGE_QUOTA_BYTES": "10000000", "AI_DAILY_REQUESTS": "50", "AI_MONTHLY_REQUESTS": "1000",
@@ -23,7 +23,7 @@ OPTIONAL = {
     "LLM_BASE_URL": "https://generativelanguage.googleapis.com/v1beta/openai/",
     "LLM_MODEL": "gemini-3.5-flash-lite", "LLM_FALLBACK_MODELS": "gemini-3.1-flash-lite",
     "LLM_SITE_NAME": "Alfred", "LLM_MAX_OUTPUT_TOKENS": "1024", "LLM_TIMEOUT_MS": "60000",
-    "LLM_SITE_URL": "", "JWT_LEGACY_ACCEPT_UNTIL": "",
+    "LLM_SITE_URL": "", "JWT_LEGACY_ACCEPT_UNTIL": "", "MONGODB_DNS_SERVERS": "",
 }
 
 
@@ -54,17 +54,28 @@ def validate(config):
     for field, value in config.items():
         require(isinstance(value, str) and not any(c in value for c in "\r\n\x00"), field)
     require(len(config["JWT_SECRET"]) >= 32, "JWT_SECRET")
-    for field in ("MONGO_ROOT_PASSWORD", "MONGO_APP_PASSWORD"):
-        require(len(config[field]) >= 20, field)
-    for field in ("MONGO_ROOT_USERNAME", "MONGO_APP_USERNAME"):
-        require(re.fullmatch(r"[a-zA-Z][a-zA-Z0-9_-]{0,62}", config[field]), field)
-    require(config["MONGO_ROOT_USERNAME"] != config["MONGO_APP_USERNAME"], "distinct MongoDB users")
-    require(re.fullmatch(r"[A-Za-z0-9+/=]{6,1024}", config["MONGO_REPLICA_KEY"]), "MONGO_REPLICA_KEY")
+    try:
+        uri = urlsplit(config["MONGODB_URI"])
+        require(uri.scheme == "mongodb+srv" and uri.hostname and uri.hostname.endswith(".mongodb.net")
+                and uri.username and uri.password and uri.path == "/alfred" and not uri.fragment
+                and uri.port is None and not any(c in config["MONGODB_URI"] for c in "<>"), "MONGODB_URI")
+        options = {key.lower(): value for key, value in parse_qs(uri.query, keep_blank_values=True).items()}
+        require(options.get("authsource", ["admin"]) == ["admin"], "MONGODB_URI authSource")
+        for option in ("tls", "ssl"):
+            require(option not in options or options[option] == ["true"], "MONGODB_URI TLS")
+        for option in ("tlsinsecure", "tlsallowinvalidcertificates", "tlsallowinvalidhostnames"):
+            require(option not in options or options[option] == ["false"], "MONGODB_URI TLS validation")
+    except ValueError:
+        raise ConfigurationError("Invalid MONGODB_URI") from None
     require(config["TARGET_PLATFORM"] in ("linux/amd64", "linux/arm64"), "TARGET_PLATFORM")
-    require(config["ALLOW_EMPTY_DATABASE"] in ("true", "false"), "ALLOW_EMPTY_DATABASE")
-    require(re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}", config["MONGO_VOLUME"]), "MONGO_VOLUME")
-    for field in ("BACKEND_IMAGE", "MONGO_IMAGE"):
-        require(re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_./:@-]+", config[field]), field)
+    require(re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_./:@-]+", config["BACKEND_IMAGE"]), "BACKEND_IMAGE")
+    dns_servers = config.get("MONGODB_DNS_SERVERS", "")
+    if dns_servers:
+        try:
+            for server in dns_servers.split(","):
+                ip_address(server.strip())
+        except ValueError:
+            raise ConfigurationError("Invalid MONGODB_DNS_SERVERS") from None
     frontend = https_url(config["FRONTEND_URL"], "FRONTEND_URL")
     require(frontend.path in ("", "/"), "FRONTEND_URL origin")
     callback = https_url(config["GOOGLE_CALLBACK_URL"], "GOOGLE_CALLBACK_URL")
@@ -113,26 +124,16 @@ def generate(config, directory):
     directory.mkdir(parents=True, exist_ok=True, mode=0o700)
     if os.name != "nt":
         os.chmod(directory, 0o700)
-    backend = {key: config[key] for key in ("JWT_SECRET", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "LLM_API_KEY") + PUBLIC}
+    backend = {key: config[key] for key in SECRETS + PUBLIC}
     backend.update({key: config[key] for key in OPTIONAL if config[key]})
     backend.update(MODE="production", NODE_ENV="production", PORT="8000")
-    backend["MONGODB_URI"] = (
-        f"mongodb://{quote(config['MONGO_APP_USERNAME'], safe='')}:{quote(config['MONGO_APP_PASSWORD'], safe='')}"
-        "@mongo:27017/alfred?authSource=alfred&replicaSet=alfred"
-    )
-    mongo = {
-        "MONGO_ROOT_USERNAME": config["MONGO_ROOT_USERNAME"],
-        "MONGO_ROOT_PASSWORD": config["MONGO_ROOT_PASSWORD"],
-        **{key: config[key] for key in ("MONGO_APP_USERNAME", "MONGO_APP_PASSWORD", "MONGO_REPLICA_KEY")},
-    }
-    for filename, values in (("backend.env", backend), ("mongo.env", mongo)):
-        protected_write(directory / filename, "".join(f"{key}={value}\n" for key, value in values.items()))
+    protected_write(directory / "backend.env", "".join(f"{key}={value}\n" for key, value in backend.items()))
     # Only non-secret, validated paths/image names go into Compose interpolation.
     require(not re.search(r"[\s$#'\"]", str(directory)), "runtime directory path")
     deploy = {
         "ALFRED_RUNTIME_DIR": str(directory).replace("\\", "/"),
-        "ALFRED_BACKEND_IMAGE": config["BACKEND_IMAGE"], "ALFRED_MONGO_IMAGE": config["MONGO_IMAGE"],
-        "ALFRED_PLATFORM": config["TARGET_PLATFORM"], "ALFRED_MONGO_VOLUME": config["MONGO_VOLUME"],
+        "ALFRED_BACKEND_IMAGE": config["BACKEND_IMAGE"],
+        "ALFRED_PLATFORM": config["TARGET_PLATFORM"],
     }
     protected_write(directory / "deploy.env", "".join(f"{key}={value}\n" for key, value in deploy.items()))
     protected_write(directory / "config.json", json.dumps(config))

@@ -107,6 +107,16 @@ export class AudioRecorder {
 
     try {
       window.dispatchEvent(new Event("alfred:pause-playback"));
+      // Windows WebView2 uses Alfred's native consent dialog instead of exposing
+      // the internal tauri.localhost origin in its microphone prompt.
+      if ("__TAURI_INTERNALS__" in window && /Windows/i.test(navigator.userAgent)) {
+        const { invoke } = await import("@tauri-apps/api/core");
+        const allowed = await invoke<boolean>("request_microphone_consent");
+        if (!allowed) throw new DOMException("Microphone permission was denied.", "NotAllowedError");
+        if (captureGeneration !== this.captureGeneration) {
+          throw new AudioRecorderError("UNKNOWN", "Recording cancelled");
+        }
+      }
       // 1. Request microphone permission on-demand
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {

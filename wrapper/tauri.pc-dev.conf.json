@@ -1,0 +1,9 @@
+{
+  "build": {
+    "beforeBuildCommand": "npm run build:development",
+    "devUrl": null
+  },
+  "bundle": {
+    "targets": ["nsis"]
+  }
+}

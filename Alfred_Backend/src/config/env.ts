@@ -1,6 +1,13 @@
 import "dotenv/config";
+import { isIP } from "node:net";
 import { parseMode } from "./policy.ts";
 const mode = parseMode(process.env.MODE, process.env.NODE_ENV);
+
+const mongodbDnsServers = (process.env.MONGODB_DNS_SERVERS ?? "")
+    .split(",").map((server) => server.trim()).filter(Boolean);
+if (mongodbDnsServers.some((server) => !isIP(server))) {
+    throw new Error("MONGODB_DNS_SERVERS must contain comma-separated IP addresses");
+}
 
 function getRequiredEnv(key: string): string {
     const value = process.env[key];
@@ -152,6 +159,7 @@ export const env = {
     },
     mongodb: {
         uri: getRequiredEnv("MONGODB_URI"),
+        dnsServers: mongodbDnsServers,
     },
     jwt: {
         secret: jwtSecret,

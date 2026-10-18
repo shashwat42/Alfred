@@ -1,6 +1,14 @@
 # Alfred backend
 
 Oracle Cloud / GitHub Actions deployment: [production runbook](../docs/oracle-deployment.md).
+The Oracle workflow now uses Atlas and deploys only the API container. Complete
+server SSH, HTTPS and GitHub repository Actions settings before the first deployment.
+The [GitHub setup checklist](../docs/GITHUB-ORACLE-SETUP.md) lists the exact secrets
+and variables for the current Oracle server.
+
+Local backend using MongoDB Atlas: [Atlas setup](ATLAS-SETUP.md). Use
+`docker compose up -d --build`
+after setting the private `MONGODB_URI` in this directory's `.env`.
 
 This directory is the Docker and deployment root. It contains `Dockerfile`,
 `compose.yaml`, `compose.production.yaml`, `docker/`, and `deploy/oracle/`.
@@ -8,6 +16,25 @@ The GitHub Actions workflow stays at the repository's `.github/workflows` locati
 and runs its commands from this directory.
 
 ## Docker Compose
+
+For the container plus an ngrok HTTPS tunnel, run from the **repository root**:
+
+```powershell
+npm run dev:backend
+```
+
+Start Docker Desktop first and install/authenticate ngrok on your PATH. The command
+checks the Atlas URI in `Alfred_Backend/.env`, starts or reuses a tunnel to port 8000,
+updates the frontend API URL and backend Google callback, then rebuilds/recreates
+the backend container and waits for database readiness. It forces development mode
+and never starts a local MongoDB container. Register the printed callback URL in
+Google Cloud's authorized redirect URIs. Restart an already running frontend after
+its API URL changes.
+
+Ctrl+C stops the ngrok process started by this command; a reused tunnel and the
+backend container remain running. To stop the container from the repository root:
+`docker compose -f Alfred_Backend/compose.yaml stop backend`.
+The old `npm run dev:ngrok` command remains an alias for `npm run dev:backend`.
 
 Run commands from `Alfred_Backend` with Docker Desktop running Linux containers
 and Docker Compose v2 installed:
@@ -21,7 +48,8 @@ cd D:\Projects\Alfred\Alfred\Alfred_Backend
 2. Set `JWT_SECRET` to a long random value and configure your Google OAuth client
    ID, secret, and callback URL. Set `LLM_API_KEY` for assistant features.
    Configuration is supplied at runtime; environment files are excluded from the image.
-3. Start the backend and its database:
+3. Set `MONGODB_URI` to your Atlas URI with database `/alfred` and `authSource=admin`.
+   Allow this computer's public IP in Atlas Network Access. Start the backend:
 
    ```powershell
    docker compose up -d --build
@@ -33,17 +61,23 @@ Compose explicitly sets `MODE=development`, so development quota bypasses apply.
 The image installs only runtime dependencies and runs `node server.ts` as a non-root
 user using Node 24's built-in TypeScript support.
 
-MongoDB runs as a single-member replica set because account, storage, and AI usage
-writes require transactions. The initializer preserves an existing replica set and
-waits for a primary before the backend starts. MongoDB has no published host port.
-Data persists in the Compose `mongo-data` named volume across container rebuilds
-and `docker compose down`.
+The default Compose file runs only the API. It reads `MONGODB_URI` from `.env`
+and uses Atlas for transactions and storage. Startup creates the required collections
+and additive indexes; it does not migrate local data. Saved sessions from the old
+local database require a fresh guest session or Google sign-in.
 
-This is a **separate database** from MongoDB installed on your computer. Existing
-accounts and content are not copied into Docker. A frontend with a saved session
-from another database may need to sign in again or start a new guest session.
-Compose overrides `MONGODB_URI` and `PORT` from the backend environment file to use
-the container database and internal port 8000.
+For networks where Atlas SRV lookups fail, set
+`MONGODB_DNS_SERVERS=1.1.1.1,8.8.8.8` in the backend `.env`. This changes DNS only
+inside the backend process and leaves the operating system DNS unchanged.
+
+An optional local development replica set remains available explicitly:
+
+```powershell
+docker compose -f compose.yaml -f compose.local-mongo.yaml up -d --build
+```
+
+This optional override creates a separate disposable database and overrides the
+Atlas URI. Normal `docker compose up` does not start MongoDB.
 
 If another backend already uses port 8000, stop that backend yourself or choose a
 different Docker port before starting:
@@ -75,14 +109,14 @@ fresh sign-in from Alfred; an already-open sign-in tab belongs to the old attemp
 Useful commands:
 
 ```powershell
-docker compose logs -f backend mongo-init
+docker compose logs -f backend
 docker compose ps -a
 docker compose down
 ```
 
-Do not add `--volumes` to the shutdown command unless you intend to delete the
-Docker database. The local Compose MongoDB has no authentication and is intended
-for development on its private Docker network.
+The optional local MongoDB override has no authentication and is intended only
+for development on its private Docker network. Removing Docker containers does
+not delete data hosted in Atlas.
 
 ## Deploying the API image
 

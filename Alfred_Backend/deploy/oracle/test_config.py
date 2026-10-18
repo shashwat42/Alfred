@@ -4,7 +4,6 @@ from pathlib import Path
 import tempfile
 import unittest
 from config import ConfigurationError, generate, validate
-from database_identity import ensure_identity
 
 
 def fixture():
@@ -13,20 +12,13 @@ def fixture():
         "GOOGLE_CLIENT_ID": "fixture.apps.googleusercontent.com",
         "GOOGLE_CLIENT_SECRET": "test-only-oauth-secret",
         "LLM_API_KEY": "test-only-provider-key",
-        "MONGO_ROOT_USERNAME": "fixture_admin",
-        "MONGO_ROOT_PASSWORD": "test-only-root-password-long-enough",
-        "MONGO_APP_USERNAME": "fixture_api",
-        "MONGO_APP_PASSWORD": "test-only-api-$quote'\"#:/@password",
-        "MONGO_REPLICA_KEY": "aGVsbG9maXh0dXJlb25seW5vdGFyZWFsa2V5",
+        "MONGODB_URI": "mongodb+srv://fixture_api:test%24%27%22%23%3A%2F%40@fixture.mongodb.net/alfred?retryWrites=true&w=majority&authSource=admin",
         "FRONTEND_URL": "https://app.example.invalid",
         "ALLOWED_ORIGINS": "https://app.example.invalid,http://tauri.localhost,https://tauri.localhost",
         "GOOGLE_CALLBACK_URL": "https://api.example.invalid/auth/google/callback",
         "PUBLIC_HEALTH_URL": "https://api.example.invalid/ready",
         "BACKEND_IMAGE": "alfred-backend:validation",
-        "MONGO_IMAGE": "mongo:8.0",
         "TARGET_PLATFORM": "linux/amd64",
-        "MONGO_VOLUME": "alfred_validation_mongo-data",
-        "ALLOW_EMPTY_DATABASE": "false",
     }
 
 
@@ -38,11 +30,10 @@ class ConfigurationTests(unittest.TestCase):
             generate(config, Path(directory))
             backend = (Path(directory) / "backend.env").read_text(encoding="utf-8")
             self.assertIn("GOOGLE_CLIENT_SECRET=" + config["GOOGLE_CLIENT_SECRET"] + "\n", backend)
-            self.assertIn("%24quote%27%22%23%3A%2F%40", backend)
+            self.assertIn("MONGODB_URI=" + config["MONGODB_URI"] + "\n", backend)
             self.assertIn("MODE=production\n", backend)
-            self.assertIn("authSource=alfred&replicaSet=alfred", backend)
-            mongo = (Path(directory) / "mongo.env").read_text(encoding="utf-8")
-            self.assertNotIn("JWT_SECRET", mongo)
+            self.assertIn("authSource=admin", backend)
+            self.assertFalse((Path(directory) / "mongo.env").exists())
             self.assertNotIn("MONGO_ROOT_PASSWORD", backend)
             if os.name != "nt":
                 self.assertEqual((Path(directory) / "config.json").stat().st_mode & 0o777, 0o600)
@@ -54,9 +45,9 @@ class ConfigurationTests(unittest.TestCase):
             ("ALLOWED_ORIGINS", "*"),
             ("LLM_API_KEY", "SECRET_SENTINEL\nINJECTED=yes"),
             ("TARGET_PLATFORM", "linux/386"),
-            ("MONGO_VOLUME", "../unsafe"),
+            ("MONGODB_DNS_SERVERS", "invalid"),
             ("MODE", "development"),
-            ("ALLOW_EMPTY_DATABASE", "yes"),
+            ("MONGO_VOLUME", "unsupported-old-config"),
         ):
             with self.subTest(field=field):
                 config = {**fixture(), field: value}
@@ -68,26 +59,25 @@ class ConfigurationTests(unittest.TestCase):
         with self.assertRaises(ConfigurationError):
             validate({**fixture(), "PUBLIC_HEALTH_URL": "https://another.example.invalid/ready"})
 
-    def test_populated_unmanaged_volume_and_unapproved_empty_volume_are_rejected(self):
-        with tempfile.TemporaryDirectory() as directory:
-            baseline = Path(directory) / "database.json"
-            for populated in (True, False):
-                with self.assertRaises(ValueError):
-                    ensure_identity(fixture(), baseline, populated)
-                self.assertFalse(baseline.exists())
+    def test_atlas_uri_rejects_wrong_database_and_insecure_tls(self):
+        for uri in (
+            "mongodb://user:password@localhost/alfred",
+            "mongodb+srv://user:password@fixture.mongodb.net/wrong",
+            "mongodb+srv://user:password@fixture.mongodb.net/alfred?tls=false",
+            "mongodb+srv://user:password@fixture.mongodb.net/alfred?tlsAllowInvalidCertificates=true",
+            "mongodb+srv://user:password@fixture.mongodb.net/alfred?authSource=alfred",
+        ):
+            with self.subTest(uri=uri), self.assertRaises(ConfigurationError):
+                validate({**fixture(), "MONGODB_URI": uri})
 
-    def test_authorized_database_identity_survives_retry_and_rejects_rotation(self):
+    def test_optional_dns_override_is_private_runtime_configuration(self):
         with tempfile.TemporaryDirectory() as directory:
-            baseline = Path(directory) / "database.json"
-            config = {**fixture(), "ALLOW_EMPTY_DATABASE": "true"}
-            ensure_identity(config, baseline, False)
-            original = baseline.read_bytes()
-            ensure_identity(config, baseline, True)
-            self.assertEqual(original, baseline.read_bytes())
-            for field in ("MONGO_VOLUME", "MONGO_ROOT_PASSWORD", "MONGO_APP_PASSWORD", "MONGO_REPLICA_KEY"):
-                with self.subTest(field=field), self.assertRaises(ValueError):
-                    ensure_identity({**config, field: "changed-sensitive-value"}, baseline, True)
-            self.assertEqual(original, baseline.read_bytes())
+            generate({**fixture(), "MONGODB_DNS_SERVERS": "1.1.1.1,8.8.8.8"}, Path(directory))
+            backend = (Path(directory) / "backend.env").read_text(encoding="utf-8")
+            deploy = (Path(directory) / "deploy.env").read_text(encoding="utf-8")
+            self.assertIn("MONGODB_DNS_SERVERS=1.1.1.1,8.8.8.8", backend)
+            self.assertNotIn("MONGODB_URI", deploy)
+            self.assertNotIn("ALFRED_MONGO", deploy)
 
 
 if __name__ == "__main__":

@@ -25,24 +25,27 @@ async function fetchSchedule(url: string, accountId: string, maxAgeMs = 2000): P
         }
     }
 
-    const promise: Promise<ScheduleItem[]> = (async () => {
+    const request: ScheduleCacheEntry = { timestamp: Date.now() };
+    // Defer the request until its cache entry is installed, including sync failures.
+    const promise = Promise.resolve().then(async (): Promise<ScheduleItem[]> => {
         try {
             const response = await apiFetch(url);
             if (!response.ok) {
                 throw new Error(httpMessage(response.status));
             }
             const data: ScheduleItem[] = await response.json();
-            if (scheduleRequestCache.get(cacheKey)?.promise === promise) scheduleRequestCache.set(cacheKey, { data, timestamp: Date.now() });
+            if (scheduleRequestCache.get(cacheKey) === request) scheduleRequestCache.set(cacheKey, { data, timestamp: Date.now() });
             return data;
         } finally {
             const entry = scheduleRequestCache.get(cacheKey);
-            if (entry?.promise === promise) {
+            if (entry === request) {
                 delete entry.promise;
             }
         }
-    })();
+    });
 
-    scheduleRequestCache.set(cacheKey, { promise, timestamp: Date.now() });
+    request.promise = promise;
+    scheduleRequestCache.set(cacheKey, request);
     return promise;
 }
 

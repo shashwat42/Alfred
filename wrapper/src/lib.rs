@@ -1,7 +1,18 @@
+#[cfg(target_os = "windows")]
+mod permissions;
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     #[allow(unused_mut)]
     let mut builder = tauri::Builder::default();
+
+    #[cfg(target_os = "windows")]
+    {
+        builder = builder
+            .manage(permissions::MicrophoneConsent::default())
+            .invoke_handler(tauri::generate_handler![permissions::request_microphone_consent])
+            .on_permission_request(permissions::handle_permission);
+    }
 
     #[cfg(desktop)]
     {

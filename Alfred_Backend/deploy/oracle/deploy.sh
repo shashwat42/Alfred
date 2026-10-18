@@ -28,8 +28,8 @@ if not version or tuple(map(int, version.groups())) < (2, 30):
 PY
 platform=$(uname -m)
 case "$platform" in
-  x86_64) platform=linux/amd64; grep -qw avx /proc/cpuinfo || { echo 'MongoDB requires AVX.' >&2; exit 1; } ;;
-  aarch64) platform=linux/arm64; grep -qE '^Features.* (fphp|dcpop|sha3|sm3|sm4|asimddp|sha512|sve)( |$)' /proc/cpuinfo || { echo 'MongoDB requires ARMv8.2-A or newer.' >&2; exit 1; } ;;
+  x86_64) platform=linux/amd64 ;;
+  aarch64) platform=linux/arm64 ;;
   *) echo 'Unsupported VM architecture.' >&2; exit 1 ;;
 esac
 python3 - "$stage/metadata.json" "$incoming/config.json" "$platform" <<'PY'
@@ -40,16 +40,15 @@ if metadata['platform'] != sys.argv[3] or config['TARGET_PLATFORM'] != sys.argv[
     sys.exit('Image/VM architecture mismatch')
 if not re.fullmatch(r'[0-9a-f]{40}-[0-9]+-[0-9]+', metadata['release']):
     sys.exit('Invalid release identity')
-if config['BACKEND_IMAGE'] != metadata['backendImage'] or config['MONGO_IMAGE'] != metadata['mongoImage']:
+if config['BACKEND_IMAGE'] != metadata['backendImage']:
     sys.exit('Image configuration does not match artifacts')
 PY
 release_id=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["release"])' "$stage/metadata.json")
 release="$base/releases/$release_id"
 [[ ! -e $release ]] || { echo 'Release directory already exists; use a fresh workflow attempt.' >&2; exit 1; }
-install -d -m 700 "$release" "$release/docker"
+install -d -m 700 "$release"
 cp "$stage/compose.yaml" "$stage/compose.production.yaml" "$release/"
 cp -R "$stage/deploy" "$release/deploy"
-cp "$stage/docker/init-replica.js" "$release/docker/"
 cp "$stage/metadata.json" "$release/metadata.json"
 python3 "$release/deploy/oracle/config.py" --input "$incoming/config.json" --directory "$release/runtime"
 compose=(docker compose --project-name alfred --env-file "$release/runtime/deploy.env" -f "$release/compose.yaml" -f "$release/compose.production.yaml")
@@ -62,33 +61,17 @@ gzip -dc images.tar.gz | docker image load --quiet >/dev/null
 python3 - "$stage/metadata.json" <<'PY'
 import json, subprocess, sys
 metadata = json.load(open(sys.argv[1]))
-for kind in ('backend', 'mongo'):
+for kind in ('backend',):
     image = json.loads(subprocess.check_output(['docker', 'image', 'inspect', metadata[kind + 'Image']]))[0]
     if image['Id'] != metadata[kind + 'Id'] or f"{image['Os']}/{image['Architecture']}" != metadata['platform']:
         sys.exit('Loaded image identity/architecture mismatch')
 PY
-volume=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["MONGO_VOLUME"])' "$release/runtime/config.json")
-# Never create a replacement volume when its name is missing or mistyped.
-docker volume inspect "$volume" >/dev/null || { echo 'Explicit MongoDB volume must already exist.' >&2; exit 1; }
-[[ $(docker volume inspect -f '{{.Driver}}' "$volume") == local ]] || { echo 'Only local named volumes are supported.' >&2; exit 1; }
-mountpoint=$(docker volume inspect -f '{{.Mountpoint}}' "$volume")
-[[ -d $mountpoint ]] || { echo 'Cannot inspect MongoDB storage safely.' >&2; exit 1; }
-populated=false
-if [[ -n $(find "$mountpoint" -mindepth 1 -maxdepth 1 -print -quit) ]]; then populated=true; fi
-python3 "$release/deploy/oracle/database_identity.py" "$release/runtime/config.json" "$base/database-config.json" "$populated"
-# Reject other Compose projects sharing the selected database volume.
-python3 - "$volume" <<'PY'
-import json, subprocess, sys
-ids = subprocess.check_output(['docker', 'ps', '-aq', '--filter', 'volume=' + sys.argv[1]]).decode().split()
-if ids:
-    for container in json.loads(subprocess.check_output(['docker', 'inspect', *ids])):
-        if container['Config'].get('Labels', {}).get('com.docker.compose.project') != 'alfred':
-            sys.exit('MongoDB volume is used by another project; refusing deployment')
-PY
-# Immutable release directories retain previous configurations as protected backups.
-# No down, volume removal, schema migration, rs.reconfig or credential update occurs.
-"${compose[@]}" up -d --no-build --pull never mongo
-"${compose[@]}" up -d --no-build --pull never --force-recreate mongo-init
+# An existing self-hosted deployment needs an explicit migration; do not touch it.
+if [[ -e $base/database-config.json ]] || [[ -n $(docker ps -aq --filter label=com.docker.compose.project=alfred --filter label=com.docker.compose.service=mongo) ]]; then
+  echo 'Existing local MongoDB deployment detected. Migrate it to Atlas explicitly before this deployment.' >&2
+  exit 1
+fi
+# Atlas storage is external. No MongoDB containers, volumes or data deletion.
 "${compose[@]}" up -d --no-build --pull never --wait --wait-timeout 180 backend
 python3 - <<'PY'
 import json, urllib.request

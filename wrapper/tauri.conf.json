@@ -38,15 +38,16 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; connect-src 'self' http://localhost:8000 https://*.ngrok-free.app https://*.ngrok.app https://*.ngrok-free.dev https://*.ngrok.dev https://*.ngrok.io; img-src 'self' data: https:; media-src 'self' blob: data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; script-src 'self'; worker-src 'self' blob:; child-src 'self' blob:; font-src 'self' data: https://fonts.gstatic.com;",
-      "devCsp": "default-src 'self' http://localhost:5173; connect-src 'self' http://localhost:8000 http://localhost:5173 ws://localhost:5173 https://*.ngrok-free.app https://*.ngrok.app https://*.ngrok-free.dev https://*.ngrok.dev https://*.ngrok.io; img-src 'self' data: https: http://localhost:5173; media-src 'self' blob: data:; style-src 'self' 'unsafe-inline' http://localhost:5173 https://fonts.googleapis.com; script-src 'self' 'unsafe-eval' 'unsafe-inline' http://localhost:5173; worker-src 'self' blob:; child-src 'self' blob:; font-src 'self' data: http://localhost:5173 https://fonts.gstatic.com;"
+      "csp": "default-src 'self'; connect-src 'self' https://alfred-137-23-49-88.sslip.io http://localhost:8000 https://*.ngrok-free.app https://*.ngrok.app https://*.ngrok-free.dev https://*.ngrok.dev https://*.ngrok.io; img-src 'self' data: https:; media-src 'self' blob: data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; script-src 'self'; worker-src 'self' blob:; child-src 'self' blob:; font-src 'self' data: https://fonts.gstatic.com;",
+      "devCsp": "default-src 'self' http://localhost:5173; connect-src 'self' https://alfred-137-23-49-88.sslip.io http://localhost:8000 http://localhost:5173 ws://localhost:5173 https://*.ngrok-free.app https://*.ngrok.app https://*.ngrok-free.dev https://*.ngrok.dev https://*.ngrok.io; img-src 'self' data: https: http://localhost:5173; media-src 'self' blob: data:; style-src 'self' 'unsafe-inline' http://localhost:5173 https://fonts.googleapis.com; script-src 'self' 'unsafe-eval' 'unsafe-inline' http://localhost:5173; worker-src 'self' blob:; child-src 'self' blob:; font-src 'self' data: http://localhost:5173 https://fonts.gstatic.com;"
     }
-
   },
   "plugins": {
     "deep-link": {
       "desktop": {
-        "schemes": ["alfred"]
+        "schemes": [
+          "alfred"
+        ]
       }
     }
   },

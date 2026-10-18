@@ -4,6 +4,17 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'Alfred_Backend/**'
+      - '.github/workflows/deploy-oracle.yml'
+      - 'AGENTS.md'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'Alfred_Backend/**'
+      - '.github/workflows/deploy-oracle.yml'
+      - 'AGENTS.md'
   workflow_dispatch:
 
 permissions:
@@ -15,12 +26,11 @@ defaults:
     shell: bash
 
 concurrency:
-  group: alfred-oracle-production
+  group: alfred-oracle-${{ github.event.pull_request.number || 'production' }}
   cancel-in-progress: false
 
 jobs:
   validate:
-    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
@@ -52,8 +62,7 @@ jobs:
 
   deploy:
     needs: validate
-    if: github.ref == 'refs/heads/main'
-    environment: production
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ${{ vars.OCI_BUILD_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 40
     env:
@@ -75,7 +84,6 @@ jobs:
           release="${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           echo "RELEASE_ID=$release" >> "$GITHUB_ENV"
           echo "BACKEND_IMAGE=alfred-backend:$release" >> "$GITHUB_ENV"
-          echo "MONGO_IMAGE=alfred-mongo:$release" >> "$GITHUB_ENV"
       - name: Prepare protected SSH configuration and verify connectivity
         env:
           OCI_HOST: ${{ secrets.OCI_HOST }}
@@ -129,39 +137,30 @@ jobs:
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
-          MONGO_ROOT_USERNAME: ${{ secrets.MONGO_ROOT_USERNAME }}
-          MONGO_ROOT_PASSWORD: ${{ secrets.MONGO_ROOT_PASSWORD }}
-          MONGO_APP_USERNAME: ${{ secrets.MONGO_APP_USERNAME }}
-          MONGO_APP_PASSWORD: ${{ secrets.MONGO_APP_PASSWORD }}
-          MONGO_REPLICA_KEY: ${{ secrets.MONGO_REPLICA_KEY }}
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
           FRONTEND_URL: ${{ vars.FRONTEND_URL }}
           ALLOWED_ORIGINS: ${{ vars.ALLOWED_ORIGINS }}
           GOOGLE_CALLBACK_URL: ${{ vars.GOOGLE_CALLBACK_URL }}
           PUBLIC_HEALTH_URL: ${{ vars.PUBLIC_HEALTH_URL }}
-          MONGO_VOLUME: ${{ vars.OCI_MONGO_VOLUME }}
-          ALLOW_EMPTY_DATABASE: ${{ vars.OCI_ALLOW_EMPTY_DATABASE || 'false' }}
           ALFRED_SETTINGS_JSON: ${{ vars.ALFRED_SETTINGS_JSON || '{}' }}
         run: |
           set -euo pipefail
           umask 077
           python3 deploy/oracle/config.py --directory "$RUNNER_TEMP/alfred-runtime"
           docker compose --env-file "$RUNNER_TEMP/alfred-runtime/deploy.env" -f compose.yaml -f compose.production.yaml config --quiet
-      - name: Build existing API image and package architecture-matched images
+      - name: Build existing API image and package the architecture-matched API image
         run: |
           set -euo pipefail
           umask 077
           docker build --platform "$TARGET_PLATFORM" -t "$BACKEND_IMAGE" .
-          docker pull --platform "$TARGET_PLATFORM" mongo:8.0
-          docker tag mongo:8.0 "$MONGO_IMAGE"
-          mkdir -p "$RUNNER_TEMP/alfred-artifacts/docker"
+          mkdir -p "$RUNNER_TEMP/alfred-artifacts"
           cp compose.yaml compose.production.yaml "$RUNNER_TEMP/alfred-artifacts/"
           cp -R deploy "$RUNNER_TEMP/alfred-artifacts/deploy"
-          cp docker/init-replica.js "$RUNNER_TEMP/alfred-artifacts/docker/"
           python3 - <<'PY'
           import json, os, subprocess
           from pathlib import Path
           metadata = {'release': os.environ['RELEASE_ID'], 'platform': os.environ['TARGET_PLATFORM']}
-          for kind, key in [('backend', 'BACKEND_IMAGE'), ('mongo', 'MONGO_IMAGE')]:
+          for kind, key in [('backend', 'BACKEND_IMAGE')]:
               name = os.environ[key]
               image = json.loads(subprocess.check_output(['docker', 'image', 'inspect', name]))[0]
               if f"{image['Os']}/{image['Architecture']}" != metadata['platform']:
@@ -170,7 +169,7 @@ jobs:
           path = Path(os.environ['RUNNER_TEMP']) / 'alfred-artifacts/metadata.json'
           path.write_text(json.dumps(metadata))
           PY
-          docker image save "$BACKEND_IMAGE" "$MONGO_IMAGE" | gzip -1 > "$RUNNER_TEMP/alfred-artifacts/images.tar.gz"
+          docker image save "$BACKEND_IMAGE" | gzip -1 > "$RUNNER_TEMP/alfred-artifacts/images.tar.gz"
           cd "$RUNNER_TEMP/alfred-artifacts"
           sha256sum images.tar.gz > images.sha256
       - name: Transfer artifacts and deploy with runtime configuration over SSH stdin
@@ -182,6 +181,17 @@ jobs:
           printf '%s\n' "$stage" > "$RUNNER_TEMP/alfred-stage"
           scp -q -F "$config" -r "$RUNNER_TEMP/alfred-artifacts/." "oracle:$stage/"
           ssh -F "$config" oracle "sudo -n bash '$stage/deploy/oracle/deploy.sh' '$stage'" < "$RUNNER_TEMP/alfred-runtime/config.json"
+      - name: Report deployed revision
+        env:
+          PUBLIC_HEALTH_URL: ${{ vars.PUBLIC_HEALTH_URL }}
+        run: |
+          python3 - <<'PY'
+          import os
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as summary:
+              summary.write('Backend deployed successfully to Oracle.\n\n')
+              summary.write('Commit: `' + os.environ['GITHUB_SHA'] + '`\n\n')
+              summary.write('Readiness: ' + os.environ['PUBLIC_HEALTH_URL'] + '\n')
+          PY
       - name: Remove temporary runner credentials and remote artifacts
         if: always()
         run: |

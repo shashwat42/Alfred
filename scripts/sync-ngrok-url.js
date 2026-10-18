@@ -14,7 +14,7 @@ const DEFAULT_LOCAL_URL = "http://localhost:8000";
  * Queries the ngrok local management API (default: http://127.0.0.1:4040/api/tunnels).
  * Returns the public HTTPS URL if an active tunnel exists, or null.
  */
-function fetchNgrokTunnel(timeoutMs = 2500) {
+export function fetchNgrokTunnel(timeoutMs = 2500) {
   return new Promise((resolve) => {
     const req = http.get("http://127.0.0.1:4040/api/tunnels", { timeout: timeoutMs }, (res) => {
       if (res.statusCode !== 200) {
@@ -30,9 +30,17 @@ function fetchNgrokTunnel(timeoutMs = 2500) {
         try {
           const json = JSON.parse(data);
           const tunnels = Array.isArray(json?.tunnels) ? json.tunnels : [];
-          // Look for an HTTPS tunnel pointing to port 8000 or any backend
+          // Ignore unrelated tunnels (for example, a frontend on port 5173).
           const httpsTunnel = tunnels.find(
-            (t) => typeof t.public_url === "string" && t.public_url.startsWith("https://")
+            (t) => {
+              if (typeof t.public_url !== "string" || !t.public_url.startsWith("https://")) return false;
+              try {
+                const address = String(t.config?.addr ?? "");
+                if (address === "8000") return true;
+                const target = new URL(address.includes("://") ? address : `http://${address}`);
+                return ["localhost", "127.0.0.1", "[::1]"].includes(target.hostname) && target.port === "8000";
+              } catch { return false; }
+            }
           );
 
           if (!httpsTunnel) {
@@ -148,8 +156,7 @@ export async function syncNgrokUrl(options = {}) {
   }
 
   if (required) {
-    console.error("[ngrok-sync] Error: Required active ngrok tunnel was not found on http://127.0.0.1:4040.");
-    process.exit(1);
+    throw new Error("Required ngrok tunnel to localhost:8000 was not found on http://127.0.0.1:4040.");
   }
 
   // Fallback to localhost if no active ngrok tunnel is running

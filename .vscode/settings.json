@@ -1,6 +1,8 @@
 {
   "css.lint.unknownAtRules": "ignore",
-  "gradle.nestedProjects": ["wrapper/gen/android"],
+  "gradle.nestedProjects": [
+    "wrapper/gen/android"
+  ],
   "java.import.exclusions": [
     "**/node_modules/**",
     "**/.metadata/**",
@@ -8,5 +10,7 @@
     "**/META-INF/maven/**",
     "**/wrapper/android/assistant",
     "**/wrapper/android/assistant/**"
-  ]
+  ],
+  "java.configuration.updateBuildConfiguration": "interactive",
+  "java.import.gradle.version": "9.6.1"
 }

@@ -1,0 +1,3 @@
+# Compatibility alias: compose.yaml now uses Atlas by default.
+services:
+  backend: {}
