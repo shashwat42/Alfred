@@ -16,6 +16,8 @@ android {
 kotlin { compilerOptions { jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_1_8 } }
 
 dependencies {
+    implementation(platform("com.google.firebase:firebase-bom:35.0.2"))
+    implementation("com.google.firebase:firebase-messaging")
     implementation("androidx.webkit:webkit:1.14.0")
     testImplementation("junit:junit:4.13.2")
 }

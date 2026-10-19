@@ -6,12 +6,13 @@ export interface Preferences {
     leadMinutes: number;
     atStart: boolean;
     timeZone: string;
+    timeZoneMode?: "automatic" | "manual" | undefined;
     revision: number;
     effectiveFrom?: number;
 }
 export const defaultPreferences = (): Preferences => ({
     destination: "both", enabled: true, leadMinutes: 10, atStart: false,
-    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC", revision: 0,
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC", timeZoneMode: "automatic", revision: 0,
 });
 export type Platform = "mobile" | "desktop";
 export interface Reminder {

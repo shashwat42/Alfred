@@ -1,5 +1,6 @@
 """Generate protected runtime files. Never print values or exception contents."""
 import argparse
+import base64
 import json
 import os
 from pathlib import Path
@@ -12,9 +13,11 @@ SECRETS = (
     "JWT_SECRET", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "LLM_API_KEY",
     "MONGODB_URI",
 )
+OPTIONAL_SECRETS = ("FCM_SERVICE_ACCOUNT_BASE64",)
 DEPLOY = ("BACKEND_IMAGE", "TARGET_PLATFORM", "PUBLIC_HEALTH_URL")
 PUBLIC = ("FRONTEND_URL", "ALLOWED_ORIGINS", "GOOGLE_CALLBACK_URL")
 OPTIONAL = {
+    "FCM_PROJECT_ID": "",
     "STORAGE_QUOTA_BYTES": "10000000", "AI_DAILY_REQUESTS": "50", "AI_MONTHLY_REQUESTS": "1000",
     "RATE_LIMIT_GUEST_WINDOW_MS": "900000", "RATE_LIMIT_GUEST_MAX": "10",
     "RATE_LIMIT_AUTH_WINDOW_MS": "900000", "RATE_LIMIT_AUTH_MAX": "30",
@@ -48,7 +51,7 @@ def https_url(value, field):
 
 def validate(config):
     require(isinstance(config, dict), "configuration object")
-    require(not (set(config) - set(SECRETS + DEPLOY + PUBLIC) - set(OPTIONAL)), "unknown setting")
+    require(not (set(config) - set(SECRETS + OPTIONAL_SECRETS + DEPLOY + PUBLIC) - set(OPTIONAL)), "unknown setting")
     for field in SECRETS + DEPLOY + PUBLIC:
         require(isinstance(config.get(field), str) and config[field].strip(), field)
     for field, value in config.items():
@@ -97,6 +100,15 @@ def validate(config):
             require(re.fullmatch(r"[1-9][0-9]*", value) and int(value) <= 9007199254740991, field)
         config[field] = value
     https_url(config["LLM_BASE_URL"], "LLM_BASE_URL")
+    push_key = config.get("FCM_SERVICE_ACCOUNT_BASE64", "")
+    require(bool(push_key) == bool(config["FCM_PROJECT_ID"]), "FCM configuration pair")
+    if push_key:
+        try:
+            credential = json.loads(base64.b64decode(push_key, validate=True))
+            require(isinstance(credential, dict) and credential.get("type") == "service_account" and credential.get("project_id") == config["FCM_PROJECT_ID"]
+                    and isinstance(credential.get("private_key"), str) and isinstance(credential.get("client_email"), str), "FCM credential")
+        except (ValueError, TypeError):
+            raise ConfigurationError("Invalid FCM credential") from None
     config["LLM_SITE_URL"] = config["LLM_SITE_URL"] or config["FRONTEND_URL"]
     https_url(config["LLM_SITE_URL"], "LLM_SITE_URL")
     if config["JWT_LEGACY_ACCEPT_UNTIL"]:
@@ -125,6 +137,7 @@ def generate(config, directory):
     if os.name != "nt":
         os.chmod(directory, 0o700)
     backend = {key: config[key] for key in SECRETS + PUBLIC}
+    backend.update({key: config[key] for key in OPTIONAL_SECRETS if config.get(key)})
     backend.update({key: config[key] for key in OPTIONAL if config[key]})
     backend.update(MODE="production", NODE_ENV="production", PORT="8000")
     protected_write(directory / "backend.env", "".join(f"{key}={value}\n" for key, value in backend.items()))
@@ -140,7 +153,8 @@ def generate(config, directory):
 
 
 def from_environment():
-    config = {key: os.environ.get(key, "") for key in SECRETS + DEPLOY + PUBLIC}
+    config = {key: os.environ.get(key, "") for key in SECRETS + OPTIONAL_SECRETS + DEPLOY + PUBLIC}
+    config.update({"FCM_PROJECT_ID": os.environ.get("FCM_PROJECT_ID", "")})
     try:
         settings = json.loads(os.environ.get("ALFRED_SETTINGS_JSON", "{}") or "{}")
     except ValueError:

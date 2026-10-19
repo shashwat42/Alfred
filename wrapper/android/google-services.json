@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1039412013042",
+    "project_id": "alfred-push-shashwat42",
+    "storage_bucket": "alfred-push-shashwat42.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1039412013042:android:01ce2ddb0cc1897cd3ed6b",
+        "android_client_info": {
+          "package_name": "com.alfred.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDBUJw14EQZuqO5ryUW6iV9yAoKBuJRQvU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

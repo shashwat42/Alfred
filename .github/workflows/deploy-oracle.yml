@@ -144,6 +144,8 @@ jobs:
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
           MONGODB_URI: ${{ secrets.MONGODB_URI }}
+          FCM_SERVICE_ACCOUNT_BASE64: ${{ secrets.FCM_SERVICE_ACCOUNT_BASE64 }}
+          FCM_PROJECT_ID: ${{ vars.FCM_PROJECT_ID }}
           FRONTEND_URL: ${{ vars.FRONTEND_URL }}
           ALLOWED_ORIGINS: ${{ vars.ALLOWED_ORIGINS }}
           GOOGLE_CALLBACK_URL: ${{ vars.GOOGLE_CALLBACK_URL }}

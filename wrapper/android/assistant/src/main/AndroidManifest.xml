@@ -6,11 +6,13 @@
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
     <queries>
-        <intent><action android:name="android.intent.action.MANAGE_DEFAULT_APP" /></intent>
         <intent><action android:name="android.settings.VOICE_INPUT_SETTINGS" /></intent>
         <intent><action android:name="android.settings.MANAGE_DEFAULT_APPS_SETTINGS" /></intent>
     </queries>
     <application android:fullBackupContent="@xml/schedule_notification_backup_rules" android:dataExtractionRules="@xml/schedule_notification_extraction_rules">
+        <service android:name="com.alfred.assistant.SchedulePushService" android:exported="false">
+            <intent-filter><action android:name="com.google.firebase.MESSAGING_EVENT" /></intent-filter>
+        </service>
         <receiver android:name="com.alfred.assistant.ScheduleNotificationAlarm" android:exported="false" />
         <service android:name="com.alfred.assistant.ScheduleNotificationJob" android:permission="android.permission.BIND_JOB_SERVICE" android:exported="true" />
         <activity android:name="com.alfred.assistant.ScheduleNotificationPermissionActivity" android:exported="false" android:excludeFromRecents="true" android:theme="@style/AlfredAssistantSession" />

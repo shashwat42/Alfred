@@ -8,7 +8,6 @@ import android.content.Intent
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
-import android.provider.Settings
 import android.service.voice.VoiceInteractionService
 import android.widget.Button
 import android.widget.LinearLayout
@@ -25,15 +24,19 @@ object AssistantAvailability {
         return JSONObject().put("active", active).put("roleAvailable", roleAvailable)
             .put("supported", supported())
             .put("sdk", Build.VERSION.SDK_INT)
-            .put("settingsAvailable", settingsIntent(context) != null)
+            .put("settingsAvailable", AssistantSettingsPolicy.actions.any { Intent(it).resolveActivity(context.packageManager) != null })
     }
 
-    fun settingsIntent(context: Context): Intent? = listOf(
-        Intent("android.intent.action.MANAGE_DEFAULT_APP")
-            .putExtra("android.intent.extra.ROLE_NAME", "android.app.role.ASSISTANT"),
-        Intent(Settings.ACTION_VOICE_INPUT_SETTINGS),
-        Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)
-    ).firstOrNull { it.resolveActivity(context.packageManager) != null }
+    fun openSetup(activity: Activity): Boolean {
+        if (Build.VERSION.SDK_INT >= 29) {
+            val manager = activity.getSystemService(RoleManager::class.java)
+            if (manager?.isRoleAvailable(RoleManager.ROLE_ASSISTANT) == true && !manager.isRoleHeld(RoleManager.ROLE_ASSISTANT)) {
+                try { activity.startActivity(manager.createRequestRoleIntent(RoleManager.ROLE_ASSISTANT)); return true }
+                catch (_: Exception) { /* Fall back to public Settings when the role chooser is unavailable. */ }
+            }
+        }
+        return AssistantSettingsPolicy.open { activity.startActivity(Intent(it)) }
+    }
 }
 
 class AssistantSetupActivity : Activity() {
@@ -75,20 +78,6 @@ class AssistantSetupActivity : Activity() {
 
     private fun chooseAssistant() {
         if (!AssistantAvailability.supported()) return
-        if (Build.VERSION.SDK_INT >= 29) {
-            val manager = getSystemService(RoleManager::class.java)
-            if (manager != null && manager.isRoleAvailable(RoleManager.ROLE_ASSISTANT) && !manager.isRoleHeld(RoleManager.ROLE_ASSISTANT)) {
-                try {
-                    @Suppress("DEPRECATION")
-                    startActivityForResult(manager.createRequestRoleIntent(RoleManager.ROLE_ASSISTANT), 1)
-                    return
-                } catch (_: Exception) { /* Use supported settings below when a role chooser is unavailable. */ }
-            }
-        }
-        val intent = AssistantAvailability.settingsIntent(this)
-        if (intent != null) {
-            try { startActivity(intent) }
-            catch (_: Exception) { statusText.text = "Android could not open assistant settings. Open Settings → Apps → Default apps → Digital assistant manually." }
-        } else statusText.text = "This device does not expose assistant selection. Alfred remains available as a regular app."
+        if (!AssistantAvailability.openSetup(this)) statusText.text = "Open Android Settings → Apps → Default apps → Digital assistant to select Alfred."
     }
 }

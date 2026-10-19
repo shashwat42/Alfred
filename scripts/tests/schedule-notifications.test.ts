@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { installationSecret, notificationRequest, notificationPermission, openScheduleTarget, androidNotificationRequest, deliverDesktopReminder, canOpenNotificationSettings, openNotificationSettings, NOTIFICATION_OPEN_EVENT } from "../../src/lib/scheduleNotifications.ts";
+import { installationSecret, notificationRequest, notificationPermission, openScheduleTarget, androidNotificationRequest, deliverDesktopReminder, canOpenNotificationSettings, openNotificationSettings, NOTIFICATION_OPEN_EVENT, syncDetectedTimeZone } from "../../src/lib/scheduleNotifications.ts";
 import { mockIPC, clearMocks } from "@tauri-apps/api/mocks";
 import { startScheduleNotificationCoordinator } from "../../src/lib/scheduleNotificationCoordinator.ts";
 
@@ -21,6 +21,43 @@ test("installation identity is random, stable locally, and regenerated for corru
   const first = installationSecret(); assert.match(first, /^[a-f0-9]{64}$/); assert.equal(installationSecret(), first);
   storage.setItem("alfred_schedule_notification_installation", "corrupt");
   assert.notEqual(installationSecret(), first);
+});
+
+test("automatic time zone replaces legacy UTC with the detected device zone and preserves other preferences", async () => {
+  browser();
+  const savedFetch = globalThis.fetch;
+  const resolvedOptions = Intl.DateTimeFormat.prototype.resolvedOptions;
+  Intl.DateTimeFormat.prototype.resolvedOptions = function () { return { ...resolvedOptions.call(this), timeZone: "Asia/Kolkata" }; };
+  const saved = { destination: "both", enabled: true, leadMinutes: 10, atStart: false, timeZone: "UTC", revision: 3 };
+  const writes: unknown[] = [];
+  globalThis.fetch = async (_url, init) => {
+    if (init?.method === "PUT") { const body = JSON.parse(String(init.body)); writes.push(body); return Response.json({ ...body, revision: 4 }); }
+    return Response.json(saved);
+  };
+  try {
+    const result = await syncDetectedTimeZone(accountId);
+    assert.equal(result?.timeZone, "Asia/Kolkata");
+    assert.deepEqual(writes, [{ ...saved, timeZone: "Asia/Kolkata", timeZoneMode: "automatic" }]);
+  } finally { globalThis.fetch = savedFetch; Intl.DateTimeFormat.prototype.resolvedOptions = resolvedOptions; }
+});
+
+test("automatic detection respects explicit UTC, legacy custom zones and concurrent manual changes", async () => {
+  browser(); const savedFetch = globalThis.fetch;
+  const saved = { destination: "both", enabled: true, leadMinutes: 10, atStart: false, timeZone: "UTC", revision: 3 };
+  let writes = 0, reads = 0;
+  globalThis.fetch = async () => Response.json({ ...saved, timeZoneMode: "manual" });
+  try {
+    assert.equal((await syncDetectedTimeZone(accountId))?.timeZoneMode, "manual");
+    globalThis.fetch = async () => Response.json({ ...saved, timeZone: "America/New_York" });
+    assert.equal((await syncDetectedTimeZone(accountId))?.timeZone, "America/New_York");
+    globalThis.fetch = async (_url, init) => {
+      if (init?.method === "PUT") { writes++; return Response.json({}, { status: 409 }); }
+      reads++;
+      return Response.json({ ...saved, timeZoneMode: reads === 1 ? undefined : "manual" });
+    };
+    assert.equal((await syncDetectedTimeZone(accountId))?.timeZoneMode, "manual");
+    assert.equal(writes, 1); assert.equal(reads, 2);
+  } finally { globalThis.fetch = savedFetch; }
 });
 test("notification requests preserve account sessions and never create a guest on 401", async () => {
   browser(); const saved = globalThis.fetch; let calls = 0;
@@ -123,6 +160,7 @@ test("coordinator prevents overlapping polls and stops native delivery on sign-o
   const dueAt = Date.now();
   const reminder = { key: `${scheduleId}:${dueAt + 600000}:lead`, scheduleId, date: "2026-10-17", title: "Call Sam", body: "10:00 UTC", kind: "lead", dueAt, eventAt: dueAt + 600000 };
   globalThis.fetch = async (url, init) => {
+    if (String(url).endsWith("/preferences")) return Response.json({ destination: "both", enabled: true, leadMinutes: 10, atStart: false, timeZone: "UTC", timeZoneMode: "manual", revision: 1 });
     if (init?.method === "DELETE") { deletions++; return new Response(null, { status: 204 }); }
     if (String(url).endsWith("/devices")) return new Response(null, { status: 204 });
     if (String(url).endsWith("/sync")) { syncs++; started(); return delayedSync; }

@@ -3,6 +3,7 @@ import { Account as TenantAccount } from "../../models/account.model.ts";
 import assert from "node:assert/strict";
 import { test, mock, type TestContext } from "node:test";
 import mongoose from "mongoose";
+import jwt from "jsonwebtoken";
 import { storageModels } from "../../security/storage.ts";
 import { defaultPreferences, eventInstant, remindersFor, eligible, isDue, type Preferences } from "./policy.ts";
 import { Schedule } from "../../models/schedule.model.ts";
@@ -67,11 +68,43 @@ function fixture(t: TestContext, p: Preferences | null = defaults()) {
     return { rows, sent, installations, change: (next: Preferences) => { settings = next; } };
 }
 
+test("push registration retains session fences without storing a user bearer", async t => {
+    const f = fixture(t);
+    const token = jwt.sign({ sub: account, version: 4, exp: Math.floor((now + 3600000) / 1000) }, "isolated-test-signing-key");
+    await registerDevice(account, "a".repeat(64), "mobile", token, now, "isolated-push-token-value");
+    const row = [...f.installations.values()][0]!;
+    assert.equal(row.pushToken, "isolated-push-token-value");
+    assert.equal(row.pushSessionVersion, 4);
+    assert.equal((row.pushSessionExpiresAt as Date).getTime(), now + 3600000);
+    assert.equal(JSON.stringify(row).includes(token), false);
+    await assert.rejects(registerDevice(account, "a".repeat(64), "mobile", "invalid", now, "isolated-push-token-value"));
+    await assert.rejects(registerDevice(other, "a".repeat(64), "mobile", token, now, "isolated-push-token-value"));
+    await assert.rejects(registerDevice(account, "a".repeat(64), "desktop", token, now, "isolated-push-token-value"));
+});
+
 test("legacy schedules get a ten-minute default lead reminder", () => {
     const list = remindersFor(event(), defaults());
     assert.equal(list.length, 1); assert.equal(list[0]!.dueAt, now);
     assert.equal(defaultPreferences().destination, "both");
     assert.equal(list[0]!.title, "Call Sam");
+});
+
+test("legacy UTC settings opt into detection while legacy custom zones stay fixed", async t => {
+    const f = fixture(t, { ...defaults(), timeZoneMode: undefined, revision: 1 });
+    assert.equal((await preferences(account)).timeZoneMode, "automatic");
+    f.change({ ...defaults(), timeZone: "Asia/Kolkata", timeZoneMode: undefined, revision: 1 });
+    assert.equal((await preferences(account)).timeZoneMode, "manual");
+});
+
+test("automatic zones persist and older clients preserve the mode unless they change the zone", async t => {
+    fixture(t, { ...defaults(), revision: 1 });
+    assert.equal(await savePreferences(account, { ...defaults(), timeZone: "Asia/Kolkata", timeZoneMode: "automatic", revision: 1 }), true);
+    assert.equal((await preferences(account)).timeZone, "Asia/Kolkata");
+    assert.equal((await preferences(account)).timeZoneMode, "automatic");
+    assert.equal(await savePreferences(account, { ...defaults(), timeZone: "Asia/Kolkata", timeZoneMode: undefined, leadMinutes: 15, revision: 2 }), true);
+    assert.equal((await preferences(account)).timeZoneMode, "automatic");
+    assert.equal(await savePreferences(account, { ...defaults(), timeZone: "UTC", timeZoneMode: undefined, revision: 3 }), true);
+    assert.equal((await preferences(account)).timeZoneMode, "manual");
 });
 test("strict legacy time parsing handles midnight, noon, 24h and invalid prose", () => {
     for (const [time, iso] of [["12 AM", "00:00"], ["12:30 PM", "12:30"], ["23:59", "23:59"], ["9 am", "09:00"]]) assert.equal(eventInstant("2026-10-17", time!, "UTC"), Date.parse(`2026-10-17T${iso}:00Z`));

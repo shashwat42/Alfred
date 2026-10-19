@@ -13,4 +13,6 @@ test("published updater manifest identifies the exact signed Windows installer",
   });
   assert.throws(() => createUpdateManifest({ ...input, signature: "" }), /signed update/);
   assert.throws(() => createUpdateManifest({ ...input, installer: "older-setup.exe" }), /match/);
+  const patch = createUpdateManifest({ ...input, version: "0.1.0-beta.5.1", installer: "Alfred_0.1.0-beta.5.1_windows_x64-setup.exe" });
+  assert.equal(patch.version, "0.1.0-beta.5.1");
 });

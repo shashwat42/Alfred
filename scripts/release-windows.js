@@ -16,7 +16,7 @@ const target = "x86_64-pc-windows-msvc";
 async function main() {
   if (process.platform !== "win32") throw new Error("Build the Windows beta on Windows with the Rust MSVC toolchain.");
   if (!process.env.TAURI_SIGNING_PRIVATE_KEY) throw new Error("Set TAURI_SIGNING_PRIVATE_KEY from the protected updater signing secret before packaging. Unsigned updates cannot be released.");
-  if (!/^\d+\.\d+\.\d+-beta\.\d+$/.test(version)) throw new Error("Expected a numbered beta version in package.json.");
+  if (!/^\d+\.\d+\.\d+-beta\.\d+(?:\.\d+)?$/.test(version)) throw new Error("Expected a numbered beta version in package.json.");
   const cargo = fs.readFileSync(path.join(root, "wrapper/Cargo.toml"), "utf8");
   const cargoVersion = cargo.match(/^version = "([^"]+)"/m)?.[1];
   const lock = readJson("package-lock.json");

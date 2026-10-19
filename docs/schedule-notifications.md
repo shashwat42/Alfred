@@ -32,14 +32,18 @@ AI calls, without requiring a successful notification write during schedule save
 Deleted, edited or disabled occurrences cannot pass a subsequent delivery check.
 No notification queue copies titles, dates or schedule content into MongoDB.
 
-Devices pull over the existing authenticated HTTPS API; there is no existing push
-transport. Desktop has an independent 15-second coordinator in the main document,
+Desktop pulls over the existing authenticated HTTPS API with a 15-second coordinator in the main document,
 including when hidden in the tray. The overlay never runs a second coordinator.
-Android uses native AlarmManager alarms plus a persisted JobScheduler job, rather
+Android uses Firebase Cloud Messaging plus native AlarmManager alarms and a persisted JobScheduler job, rather
 than assuming a WebView stays alive. Its network operations run off the UI thread.
 Alarms/jobs request a fresh server claim before showing anything. Thus remote edits,
 deletions, destination changes, session expiry and device removal are respected at
-delivery time. Different installations each receive their own eligible delivery.
+delivery time. A bounded 15-second backend worker checks registered mobile installations
+and sends due reminders as high-priority, data-only FCM messages. The receiver posts
+directly without a WebView or network fetch, checking its active account, session
+fingerprint, token expiry and reminder expiry first. Push and alarms share server
+claims and a native receipt history to prevent duplicate notifications. Different
+installations each receive their own eligible delivery.
 
 MongoDB atomic unique delivery keys include account, installation, schedule ID,
 event instant and reminder kind. Claims survive restarts and concurrent server
@@ -51,19 +55,26 @@ across MongoDB and a remote OS notification API is not transactional.
 
 Late attempts have a two-minute grace window; lead reminders never fire after the
 event begins. There is no burst catch-up after downtime. Plans use an account/date
-index and keyset pagination. No backend timer, unbounded full-table scan, or
-dashboard refresh loop is required. Native timers are cancelled on sign-out;
-backend process shutdown has no scheduler resources to clean up.
+index and keyset pagination. The backend push timer does not overlap passes, uses
+bounded indexed device pages and stops on shutdown. Native timers and credentials
+are cancelled on sign-out. The server rechecks installation and account session
+version before sending; it never stores a user bearer token for push.
 
 ## Settings and storage
 
 Settings default to Both, enabled, ten-minute lead, no additional start alert.
 Lead time accepts 0–10080 minutes. Zero lead produces one start-time alert.
 Preferences are account-scoped and revisioned to prevent concurrent lost updates.
-The account timezone defaults to the backend system IANA zone, preserving the
-existing AI prompt convention, and becomes explicit when settings are saved.
-Deploy backend instances with the same timezone for accounts still using defaults.
-An explicit zone is configurable. Legacy free-form
+New settings use automatic device time-zone detection. The main app resolves its
+IANA zone with Intl, persists it with a revision check before notification sync,
+and checks for device-zone changes while running. Settings shows Automatic with
+the detected zone; selecting a named zone opts into a fixed manual override.
+The account's most recently detected zone is shared by desktop and Android
+background delivery. Choose a fixed zone for devices in different time zones.
+Legacy UTC settings without a mode are upgraded to automatic; legacy custom
+zones remain fixed. An explicitly selected UTC zone remains manual. No location
+permission or geolocation request is needed. Older clients preserve the mode
+when editing other preferences. Legacy free-form
 times are parsed strictly as 24-hour HH:mm or 12-hour h:mm AM/PM (whole hours also
 accepted); ambiguous prose is skipped without changing the schedule. DST gaps are
 skipped; repeated wall-clock times choose the first instant.
@@ -81,7 +92,13 @@ by the existing middleware. Device registrations expire after 30 days unless ren
 
 ## Limitations and setup
 
-No Firebase, external provider, wake-word service, or battery exemption is introduced.
+FCM uses the project's free Spark plan; Analytics and a billing account are not
+required. Configure both FCM_PROJECT_ID and FCM_SERVICE_ACCOUNT_BASE64 on the
+existing API deployment to enable push. The credential belongs to a dedicated
+service account with the Firebase Cloud Messaging API Admin role, and is stored
+as an encrypted GitHub Actions secret. Never commit or bundle this private key.
+Android's public SDK configuration is source-controlled and copied by
+scripts/sync-android-assistant.js. No wake-word service or battery exemption is introduced.
 Notification permission must be granted separately from
 the account destination choice. Android 13+ uses POST_NOTIFICATIONS and an ordinary
 schedule channel. Settings offers Android 12+ “Alarms & reminders” special access
@@ -92,11 +109,14 @@ expedited JobScheduler job on Android 12+ (ordinary fallback when quota is denie
 Jobs and network may still be deferred by Doze, battery restrictions, force-stop
 or OEM policy. A delay beyond two minutes
 skips the reminder intentionally. Android jobs discover remote schedule changes
-periodically (minimum 15 minutes); running-app sync refreshes sooner. A newly
-created short-notice event on another device may be missed before the next job.
+periodically (minimum 15 minutes); running-app sync refreshes sooner. Push covers
+new short-notice events created elsewhere without waiting for that periodic sync.
 Network/backend access is required at claim time; offline delivery is deliberately
 suppressed so cancelled schedules and changed preferences cannot produce stale
-alerts. No guaranteed closed-app remote push is claimed. Reboot restores jobs;
+alerts. Push has a short TTL and the same at-most-once attempt policy; FCM and
+device delivery are not guaranteed. Open the updated app once with notification
+permission and internet access to register for push. Google Play services are
+required. Settings reports whether phone registration completed. Reboot restores jobs;
 force-stopped apps must be opened again. Desktop must remain running (tray is
 supported); quitting it stops delivery. OS focus/do-not-disturb settings may suppress
 presentation despite a successful native submission.
@@ -178,7 +198,7 @@ The test refuses application database names and cleans only its own account data
 The ordinary suite uses a repository fixture for Mongo persistence and real HTTP/JWT
 middleware for endpoint tests; it does not claim to prove live MongoDB behavior.
 
-## Verification results
+## Historical verification results (17 October 2026)
 
 - Frontend production build (including TypeScript): passed. Existing large-chunk
   and ineffective dynamic-import warnings remain.
@@ -216,3 +236,16 @@ pull/native-alarm transport.
 References used to verify platform contracts:
 - [Tauri notification API](https://v2.tauri.app/reference/javascript/notification/)
 - [Android alarm and background execution guidance](https://developer.android.com/develop/background-work/services/alarms)
+
+## Beta 5.1 verification (19 October 2026)
+
+Frontend tests, automatic IST/manual UTC UI checks, note autosave regression checks,
+Android settings checks and TypeScript checks passed. Native JVM tests cover push
+expiry/account/session checks and assistant settings fallbacks. Isolated MongoDB
+tests exercise phone registration, real indexed worker discovery, schedule claims,
+duplicate suppression and session revocation with a stub push transport. FCM's
+validation-only API accepted the dedicated sender without sending a notification.
+Physical phone notification presentation after installation remains to be confirmed.
+
+- [Firebase Android setup](https://firebase.google.com/docs/android/setup)
+- [FCM Android delivery priorities](https://firebase.google.com/docs/cloud-messaging/android-message-priority)

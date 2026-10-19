@@ -49,10 +49,8 @@ object AssistantBridge {
             when (type) {
                 "status" -> complete(AssistantAvailability.status(activity))
                 "setup" -> {
-                    val target = AssistantAvailability.settingsIntent(activity)
-                        ?: throw IllegalStateException("Assistant settings are unavailable")
-                    activity.startActivity(target)
-                    complete(JSONObject().put("opened", true))
+                    complete(if (AssistantAvailability.openSetup(activity)) JSONObject().put("opened", true)
+                        else JSONObject().put("error", "Open Android Settings → Apps → Default apps → Digital assistant to select Alfred."))
                 }
                 "checkUpdates" -> AndroidAppUpdates.check(activity, complete)
                 "downloadUpdate" -> complete(AndroidAppUpdates.openDownload(activity))

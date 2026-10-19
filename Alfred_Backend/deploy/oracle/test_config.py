@@ -1,4 +1,5 @@
 import json
+import base64
 import os
 from pathlib import Path
 import tempfile
@@ -23,6 +24,18 @@ def fixture():
 
 
 class ConfigurationTests(unittest.TestCase):
+    def test_push_credentials_are_optional_paired_and_project_scoped(self):
+        validate(fixture())
+        credential = base64.b64encode(json.dumps({"type": "service_account", "project_id": "test-push", "client_email": "test@example.invalid", "private_key": "isolated-test-key"}).encode()).decode()
+        config = {**fixture(), "FCM_PROJECT_ID": "test-push", "FCM_SERVICE_ACCOUNT_BASE64": credential}
+        with tempfile.TemporaryDirectory() as directory:
+            generate(config, Path(directory))
+            self.assertIn("FCM_SERVICE_ACCOUNT_BASE64=" + credential, (Path(directory) / "backend.env").read_text())
+            self.assertNotIn(credential, (Path(directory) / "deploy.env").read_text())
+        for bad in ({"FCM_PROJECT_ID": "test-push"}, {"FCM_SERVICE_ACCOUNT_BASE64": credential}, {"FCM_PROJECT_ID": "other", "FCM_SERVICE_ACCOUNT_BASE64": credential}):
+            with self.assertRaises(ConfigurationError):
+                validate({**fixture(), **bad})
+
     def test_raw_values_and_database_uri_are_preserved_without_interpolation(self):
         with tempfile.TemporaryDirectory() as directory:
             config = fixture()

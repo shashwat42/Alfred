@@ -37,6 +37,7 @@ import java.net.URI
 import java.net.URL
 import java.security.MessageDigest
 import java.util.concurrent.Executors
+import com.google.firebase.messaging.FirebaseMessaging
 
 /** Native scheduling owns Android delivery; neither React surface shows OS alerts. */
 object ScheduleNotifications {
@@ -71,7 +72,7 @@ object ScheduleNotifications {
                 if (!id.matches(Regex("[a-zA-Z0-9-]{1,64}"))) return@addWebMessageListener
                 val complete: (JSONObject) -> Unit = { value -> view.post { reply.postMessage(value.put("id", id).toString()) } }
                 when (request.optString("type")) {
-                    "status" -> complete(JSONObject().put("granted", granted(activity)).put("exactAlarms", exactAlarms(activity)))
+                    "status" -> complete(JSONObject().put("granted", granted(activity)).put("exactAlarms", exactAlarms(activity)).put("pushRegistered", pushRegistered(activity)))
                     "timing" -> {
                         if (Build.VERSION.SDK_INT >= 31) activity.startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:${activity.packageName}")))
                         complete(JSONObject().put("exactAlarms", exactAlarms(activity)))
@@ -92,7 +93,7 @@ object ScheduleNotifications {
                     }
                     "configure", "clear", "sync", "openTarget" -> {
                       // Revoke delivery synchronously, before a queued network sync finishes.
-                      if (request.optString("type") == "clear") prefs(activity).edit().remove("token").remove("secret").apply()
+                      if (request.optString("type") == "clear") revoke(activity)
                       executor.execute {
                         try {
                             val result = when (request.optString("type")) {
@@ -121,14 +122,47 @@ object ScheduleNotifications {
         val accountId = request.getString("accountId") // Navigation scope only; backend identity is always JWT-derived.
         require(token.length in 1..4096 && secret.matches(Regex("[a-f0-9]{64}")) && accountId.matches(Regex("[a-f0-9]{24}")))
         val previous = prefs(c).getString("token", "")
-        if (previous != token) cancelAlarms(c)
+        if (previous != token) { cancelAlarms(c); prefs(c).edit().remove("pushSession").remove("delivered").commit() }
         prefs(c).edit().putString("base", base).putString("token", token).putString("secret", secret).putString("account", accountId).commit()
         val job = JobInfo.Builder(JOB_ID, ComponentName(c, ScheduleNotificationJob::class.java))
             .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY).setPeriodic(15 * 60 * 1000L).setPersisted(true).build()
         check(c.getSystemService(JobScheduler::class.java).schedule(job) == JobScheduler.RESULT_SUCCESS)
+        refreshPush(c)
     }
 
-    private fun request(c: Context, path: String, body: JSONObject): JSONObject? {
+    private fun refreshPush(c: Context) {
+        try { FirebaseMessaging.getInstance().token.addOnSuccessListener { registerPush(c, it) } }
+        catch (_: Exception) { /* Existing alarms remain available; sync retries registration. */ }
+    }
+    fun registerPush(c: Context, pushToken: String) {
+        executor.execute {
+            try {
+                val p = prefs(c)
+                val secret = p.getString("secret", null) ?: return@execute
+                val activeToken = p.getString("token", null) ?: return@execute
+                if (!granted(c) || !p.contains("token")) return@execute
+                val registered = request(c, "/devices", JSONObject().put("secret", secret).put("platform", "mobile").put("pushToken", pushToken), true)
+                if (registered != null && p.getString("token", null) == activeToken) p.edit().putString("pushSession", digest(activeToken)).commit()
+            } catch (_: Exception) { /* Retry on next native sync or app configure. */ }
+        }
+    }
+    private fun pushRegistered(c: Context): Boolean {
+        val p = prefs(c)
+        val token = p.getString("token", null) ?: return false
+        return p.getString("pushSession", null) == digest(token)
+    }
+    fun receivePush(c: Context, data: Map<String, String>) {
+        try {
+            val p = prefs(c)
+            val token = p.getString("token", null) ?: return
+            val claims = JSONObject(String(android.util.Base64.decode(token.split('.')[1], android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP), Charsets.UTF_8))
+            val now = System.currentTimeMillis()
+            if (!SchedulePushPolicy.accepts(data, p.getString("account", "")!!, digest(token), claims.optLong("exp") * 1000, now)) return
+            if (p.getString("token", null) == token) post(c, data.getValue("key"), JSONObject(data), token)
+        } catch (_: Exception) { /* Malformed/revoked pushes never crash delivery. */ }
+    }
+
+    private fun request(c: Context, path: String, body: JSONObject, acceptEmpty: Boolean = false): JSONObject? {
         val p = prefs(c)
         val base = p.getString("base", null) ?: return null
         val token = p.getString("token", null) ?: return null
@@ -142,7 +176,7 @@ object ScheduleNotifications {
             connection.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
             val status = connection.responseCode
             if (status == 401 || status == 403) { clear(c); return null }
-            if (status == 204) return null
+            if (status == 204) return if (acceptEmpty) JSONObject() else null
             check(status == 200) { "Notification request failed" }
             // Bound network input, including a malformed or compromised upstream.
             val bytes = connection.inputStream.use { it.readBytesBounded(1024 * 1024) }
@@ -170,7 +204,11 @@ object ScheduleNotifications {
         }
         prefs(c).edit().remove("keys").commit()
     }
-    private fun clear(c: Context) {
+    @Synchronized private fun revoke(c: Context) {
+        prefs(c).edit().remove("token").remove("secret").commit()
+        c.getSystemService(NotificationManager::class.java).cancelAll()
+    }
+    @Synchronized private fun clear(c: Context) {
         cancelAlarms(c)
         c.getSystemService(JobScheduler::class.java).cancel(JOB_ID)
         c.getSystemService(NotificationManager::class.java).cancelAll()
@@ -181,6 +219,7 @@ object ScheduleNotifications {
         val secret = prefs(c).getString("secret", null) ?: return
         val activeToken = prefs(c).getString("token", null) ?: return
         if (!granted(c)) { cancelAlarms(c); return }
+        refreshPush(c)
         val reminders = mutableListOf<JSONObject>()
         var cursor: String? = null
         var pages = 0
@@ -218,6 +257,13 @@ object ScheduleNotifications {
         val activeToken = p.getString("token", null) ?: return
         val reminder = request(c, "/claim", JSONObject().put("secret", secret).put("key", key)) ?: return
         if (p.getString("token", null) != activeToken) return
+        post(c, key, reminder, activeToken)
+    }
+
+    @Synchronized private fun post(c: Context, key: String, reminder: JSONObject, activeToken: String) {
+        val p = prefs(c)
+        val delivered = JSONObject(p.getString("delivered", "{}")!!)
+        if (delivered.has(key)) return
         val manager = c.getSystemService(NotificationManager::class.java)
         val chime = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
         val audio = AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_NOTIFICATION_EVENT)
@@ -228,7 +274,7 @@ object ScheduleNotifications {
         launch.data = Uri.parse("alfred://schedule/${reminder.getString("scheduleId")}")
         launch.putExtra("alfred_schedule_id", reminder.getString("scheduleId"))
         launch.putExtra("alfred_schedule_date", reminder.getString("date"))
-        launch.putExtra("alfred_schedule_session", digest(p.getString("token", "")!!))
+        launch.putExtra("alfred_schedule_session", digest(activeToken))
         val tap = PendingIntent.getActivity(c, 0, launch, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         @Suppress("DEPRECATION")
         val builder = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(c, CHANNEL) else Notification.Builder(c)
@@ -237,7 +283,14 @@ object ScheduleNotifications {
             .setContentTitle(reminder.getString("title")).setContentText(reminder.getString("body"))
             .setContentIntent(tap).setAutoCancel(true).setVisibility(Notification.VISIBILITY_PRIVATE).setCategory(Notification.CATEGORY_EVENT).build()
         // Permission can be revoked during the request; never crash the receiver.
-        if (granted(c)) manager.notify(digest(key), 1, notification)
+        if (granted(c) && p.getString("token", null) == activeToken) {
+            // Bound receipt history to the retry window. Both alarm and FCM use it.
+            val cutoff = System.currentTimeMillis() - GRACE
+            delivered.keys().asSequence().toList().filter { delivered.optLong(it) < cutoff }.forEach { delivered.remove(it) }
+            delivered.put(key, System.currentTimeMillis())
+            p.edit().putString("delivered", delivered.toString()).commit()
+            manager.notify(digest(key), 1, notification)
+        }
     }
 
     fun enqueueSync(c: Context, complete: () -> Unit = {}) {

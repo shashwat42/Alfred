@@ -24,6 +24,12 @@ test("application persistence uses the scoped repository; global access has expl
             for (const match of text.matchAll(/\b(Task|Note|Schedule|NotificationSettings|NotificationDevice|NotificationDelivery|Account|AuthTicket|OAuthState)\s*\.\s*(\w+)\s*\(/g)) {
                 const [, receiver, method] = match;
                 if (["createIndexes", "init"].includes(method!)) continue;
+                // Background push enumerates installation metadata, checks current
+                // account/session fences, and prunes an exact invalid FCM token.
+                // Schedule content/claims still go through the scoped repository.
+                if (relative === "modules/schedule-notifications/pushService.ts" &&
+                    ((receiver === "NotificationDevice" && ["find", "exists", "updateOne"].includes(method!)) ||
+                     (receiver === "Account" && method === "exists"))) continue;
                 if (!(relative === "modules/schedule-notifications/service.ts" && receiver === "NotificationDevice" && method === "findOneAndUpdate")) violations.push(`${relative}: ${receiver}.${method}`);
             }
             if (/\.(aggregate|bulkWrite|insertMany|replaceOne|findOneAndReplace|save|populate)\s*\(/.test(text)) violations.push(`${relative}: unsupported persistence method`);

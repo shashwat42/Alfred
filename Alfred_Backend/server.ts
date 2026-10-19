@@ -15,10 +15,12 @@ import { env } from "./src/config/env.ts";
 import { apiRateLimiter } from "./src/middleware/rateLimit.middleware.ts";
 import notificationRouter from "./src/modules/schedule-notifications/route.ts";
 import { initializeSecurityIndexes, requireTransactionTopology } from "./src/security/indexes.ts";
+import { startSchedulePush } from "./src/modules/schedule-notifications/pushService.ts";
 
 const app = express();
 let server: Server | undefined;
 let draining = false;
+let stopPush = () => {};
 app.set("trust proxy", 1);
 app.use(cors({ origin: env.allowedOrigins }));
 
@@ -57,6 +59,7 @@ async function startServer(): Promise<void> {
         await reconcileAiRequests();
         void initializeAiService();
         if (draining) { await disconnectDatabase(); return; }
+        stopPush = startSchedulePush();
         server = app.listen(env.port, () => {
             console.log(`Server listening on port ${env.port}`);
         });
@@ -69,6 +72,7 @@ async function startServer(): Promise<void> {
 async function shutdown(): Promise<void> {
     if (draining) return;
     draining = true;
+    stopPush();
     const deadline = setTimeout(() => { server?.closeAllConnections(); process.exit(1); }, 35_000);
     deadline.unref();
     try {

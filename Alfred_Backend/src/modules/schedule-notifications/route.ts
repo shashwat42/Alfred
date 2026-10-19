@@ -8,10 +8,12 @@ export const preferenceSchema = z.object({
     destination: z.enum(["mobile", "desktop", "both"]), enabled: z.boolean(),
     leadMinutes: z.number().int().min(0).max(10080), atStart: z.boolean(),
     timeZone: z.string().max(100).refine(zone => { try { new Intl.DateTimeFormat("en", { timeZone: zone }); return true; } catch { return false; } }),
+    timeZoneMode: z.enum(["automatic", "manual"]).optional(),
     revision: z.number().int().min(0),
 }).strict();
 const secretSchema = z.string().regex(/^[a-f0-9]{64}$/);
-const registrationSchema = z.object({ secret: secretSchema, platform: z.enum(["mobile", "desktop"]) }).strict();
+const registrationSchema = z.object({ secret: secretSchema, platform: z.enum(["mobile", "desktop"]), pushToken: z.string().min(20).max(4096).regex(/^[\x21-\x7e]+$/).optional() }).strict()
+    .refine(value => !value.pushToken || value.platform === "mobile");
 const keySchema = z.string().regex(/^[a-f0-9]{24}:\d{10,16}:(lead|start)$/);
 const router = Router();
 router.use(authMiddleware);
@@ -30,7 +32,7 @@ router.put("/preferences", run(async (req, res) => {
 router.post("/devices", run(async (req, res) => {
     const parsed = registrationSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: "Invalid device registration." });
-    await registerDevice(req.accountId!, parsed.data.secret, parsed.data.platform, token(req));
+    await registerDevice(req.accountId!, parsed.data.secret, parsed.data.platform, token(req), Date.now(), parsed.data.pushToken);
     return res.sendStatus(204);
 }));
 router.delete("/devices", run(async (req, res) => {

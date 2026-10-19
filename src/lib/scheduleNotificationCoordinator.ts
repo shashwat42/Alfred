@@ -1,5 +1,5 @@
 import { API_BASE_URL, AUTH_STORAGE_KEY, dispatchAuthChange, getSession, type AuthSession } from "../auth/auth.ts";
-import { androidNotificationRequest, deliverDesktopReminder, installationSecret, isAndroid, notificationPermission, notificationPlatform, notificationRequest, NOTIFICATION_SETTINGS_EVENT, NOTIFICATION_TAP_EVENT, openScheduleTarget, setNotificationDeliveryStatus, type NotificationPlan, type ScheduleReminder } from "./scheduleNotifications.ts";
+import { androidNotificationRequest, deliverDesktopReminder, detectedTimeZone, syncDetectedTimeZone, installationSecret, isAndroid, notificationPermission, notificationPlatform, notificationRequest, NOTIFICATION_SETTINGS_EVENT, NOTIFICATION_TAP_EVENT, openScheduleTarget, setNotificationDeliveryStatus, type NotificationPlan, type ScheduleReminder } from "./scheduleNotifications.ts";
 
 /** Exactly one coordinator: mounted only in the normal main document, never overlays. */
 export function startScheduleNotificationCoordinator(session: AuthSession | null) {
@@ -13,6 +13,7 @@ export function startScheduleNotificationCoordinator(session: AuthSession | null
     setNotificationDeliveryStatus("Connecting to schedule notifications…");
     const controller = new AbortController();
     let stopped = false, busy = false, registered = false;
+    let syncedZone: string | null | undefined;
     let secret: string;
     try { secret = installationSecret(); } catch { return stopAccountSync; }
     let actionListener: { unregister: () => Promise<void> } | undefined;
@@ -35,6 +36,12 @@ export function startScheduleNotificationCoordinator(session: AuthSession | null
       if (!stillCurrent() || busy) return;
       busy = true;
       try {
+        const zone = detectedTimeZone();
+        if (zone !== syncedZone) {
+          await syncDetectedTimeZone(accountId, controller.signal);
+          if (!stillCurrent()) return;
+          syncedZone = zone;
+        }
         if (!registered) {
           await notificationRequest("/devices", accountId, { secret, platform }, "POST", controller.signal);
           if (!stillCurrent()) return;
@@ -74,11 +81,12 @@ export function startScheduleNotificationCoordinator(session: AuthSession | null
     void tick();
     const timer = window.setInterval(() => { void tick(); }, 15_000);
     const refresh = () => { void tick(); };
+    const settingsChanged = () => { syncedZone = undefined; void tick(); };
     const tap = () => { void androidNotificationRequest("openTarget").then(target => { if (stillCurrent()) openScheduleTarget(target); }).catch(() => {}); };
     window.addEventListener(NOTIFICATION_TAP_EVENT, tap);
     window.addEventListener("online", refresh);
     window.addEventListener("focus", refresh);
-    window.addEventListener(NOTIFICATION_SETTINGS_EVENT, refresh);
+    window.addEventListener(NOTIFICATION_SETTINGS_EVENT, settingsChanged);
     window.addEventListener("alfred:action_executed", refresh);
     return () => {
       if (stopped) return;
@@ -86,7 +94,7 @@ export function startScheduleNotificationCoordinator(session: AuthSession | null
       stopped = true; controller.abort(); window.clearInterval(timer);
       window.removeEventListener("online", refresh); window.removeEventListener("focus", refresh);
       window.removeEventListener(NOTIFICATION_TAP_EVENT, tap);
-      window.removeEventListener(NOTIFICATION_SETTINGS_EVENT, refresh); window.removeEventListener("alfred:action_executed", refresh);
+      window.removeEventListener(NOTIFICATION_SETTINGS_EVENT, settingsChanged); window.removeEventListener("alfred:action_executed", refresh);
       void actionListener?.unregister();
       // StrictMode cleanup must not remove the next registration for the same session.
       if (getSession()?.token !== session.token) {

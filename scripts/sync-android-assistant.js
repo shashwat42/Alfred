@@ -13,6 +13,9 @@ function patch(relative, update) {
 }
 patch("settings.gradle", (text) => text.includes("include ':alfred-assistant'") ? text : `${text}\n// Alfred's source-controlled assistant module (not generated Tauri bindings).\ninclude ':alfred-assistant'\nproject(':alfred-assistant').projectDir = new File(settingsDir, '../../android/assistant')\n`);
 patch("app/build.gradle.kts", (text) => text.includes('implementation(project(":alfred-assistant"))') ? text : text.replace("dependencies {", 'dependencies {\n    implementation(project(":alfred-assistant"))'));
+patch("build.gradle.kts", text => text.includes('com.google.gms:google-services:') ? text : text.replace('dependencies {', 'dependencies {\n        classpath("com.google.gms:google-services:4.5.0")'));
+patch("app/build.gradle.kts", text => text.includes('id("com.google.gms.google-services")') ? text : text.replace('plugins {', 'plugins {\n    id("com.google.gms.google-services")'));
+fs.copyFileSync(path.join(root, "wrapper/android/google-services.json"), path.join(android, "app/google-services.json"));
 patch("app/build.gradle.kts", (text) => {
   if (!text.includes('testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"')) text = text.replace("defaultConfig {", 'defaultConfig {\n        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"');
   if (!text.includes('androidTestImplementation("androidx.test:runner:1.5.0")')) text = text.replace("dependencies {", 'dependencies {\n    androidTestImplementation("androidx.test:runner:1.5.0")');

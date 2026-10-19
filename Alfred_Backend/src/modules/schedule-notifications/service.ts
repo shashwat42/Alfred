@@ -2,6 +2,7 @@ import { withTenantWrite } from "../../security/tenantWrite.ts";
 import { tenantRepository, assertSafeFields } from "../../security/tenantRepository.ts";
 import { createHash } from "node:crypto";
 import mongoose from "mongoose";
+import jwt from "jsonwebtoken";
 import { Schedule } from "../../models/schedule.model.ts";
 import { NotificationSettings, NotificationDevice, NotificationDelivery } from "./models.ts";
 import { defaultPreferences, eligible, remindersFor, isDue, GRACE_MS, HORIZON_MS, type Preferences, type Platform } from "./policy.ts";
@@ -9,10 +10,16 @@ import { defaultPreferences, eligible, remindersFor, isDue, GRACE_MS, HORIZON_MS
 export const hash = (value: string) => createHash("sha256").update(value).digest("hex");
 export async function preferences(accountId: string): Promise<Preferences> {
     const doc = await tenantRepository(NotificationSettings, accountId).findOne();
-    return doc ? { destination: doc.destination as Preferences["destination"], enabled: doc.enabled, leadMinutes: doc.leadMinutes, atStart: doc.atStart, timeZone: doc.timeZone, revision: doc.revision, ...(doc.effectiveFrom ? { effectiveFrom: doc.effectiveFrom.getTime() } : {}) } : defaultPreferences();
+    return doc ? { destination: doc.destination as Preferences["destination"], enabled: doc.enabled, leadMinutes: doc.leadMinutes, atStart: doc.atStart, timeZone: doc.timeZone, timeZoneMode: doc.timeZoneMode ?? (doc.timeZone === "UTC" ? "automatic" : "manual"), revision: doc.revision, ...(doc.effectiveFrom ? { effectiveFrom: doc.effectiveFrom.getTime() } : {}) } : defaultPreferences();
 }
 export async function savePreferences(accountId: string, input: Preferences): Promise<boolean> {
     assertSafeFields(input);
+    // Older clients omit the mode. Preserve it when they edit other settings;
+    // a deliberate zone change from an older client remains a manual override.
+    if (!input.timeZoneMode) {
+        const previous = await preferences(accountId);
+        input = { ...input, timeZoneMode: previous.timeZone === input.timeZone ? previous.timeZoneMode : "manual" };
+    }
     // Optimistic concurrency: never overwrite another device's changes silently.
     if (input.revision === 0) {
         try {
@@ -23,11 +30,21 @@ export async function savePreferences(accountId: string, input: Preferences): Pr
     const result = await tenantRepository(NotificationSettings, accountId).updateOne({ revision: input.revision }, { ...input, revision: input.revision + 1, effectiveFrom: new Date(Date.now()) });
     return result.modifiedCount === 1;
 }
-export async function registerDevice(accountId: string, secret: string, platform: Platform, token: string, now = Date.now()) {
+export async function registerDevice(accountId: string, secret: string, platform: Platform, token: string, now = Date.now(), pushToken?: string) {
+    // token has already passed authMiddleware. Retain only its expiry/version and
+    // fingerprint so the background dispatcher never stores a bearer credential.
+    const payload = jwt.decode(token);
+    const tokenSession = payload && typeof payload !== "string" && payload.sub === accountId && typeof payload.exp === "number" ? payload : null;
+    if (pushToken && (platform !== "mobile" || !tokenSession || tokenSession.exp! * 1000 <= now)) throw new Error("Invalid push registration context");
     // Possession of the unguessable installation secret permits account transfer on login.
     await withTenantWrite(accountId, session => NotificationDevice.findOneAndUpdate({ _id: hash(secret) }, { $set: {
         accountId, platform, sessionHash: hash(token), expiresAt: new Date(now + 30 * 86400_000),
-    } }, { upsert: true, ...(session ? { session } : {}) }));
+        ...(platform === "mobile" ? {
+            pushSessionExpiresAt: tokenSession ? new Date(tokenSession.exp! * 1000) : null,
+            pushSessionVersion: tokenSession?.version ?? 0,
+        } : {}),
+        ...(pushToken ? { pushToken } : {}),
+    }, ...(platform === "desktop" ? { $unset: { pushToken: "", pushSessionExpiresAt: "", pushSessionVersion: "" } } : {}) }, { upsert: true, ...(session ? { session } : {}) }));
 }
 export async function device(accountId: string, secret: string, token: string, now = Date.now()) {
     return tenantRepository(NotificationDevice, accountId).findOne({ _id: hash(secret), sessionHash: hash(token), expiresAt: { $gt: new Date(now) } });

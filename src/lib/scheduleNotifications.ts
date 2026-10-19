@@ -4,6 +4,34 @@ import { getSession, isTauri } from "../auth/auth.ts";
 export interface ScheduleNotificationPreferences {
   destination: "mobile" | "desktop" | "both";
   enabled: boolean; leadMinutes: number; atStart: boolean; timeZone: string; revision: number;
+  timeZoneMode?: "automatic" | "manual";
+}
+
+export function detectedTimeZone(): string | null {
+  try { return Intl.DateTimeFormat().resolvedOptions().timeZone || null; }
+  catch { return null; }
+}
+
+export function automaticTimeZone(value: ScheduleNotificationPreferences): boolean {
+  return value.timeZoneMode === "automatic" || (!value.timeZoneMode && (value.revision === 0 || value.timeZone === "UTC"));
+}
+
+/** Persist the detected IANA zone so every delivery path uses the same instant. */
+export async function syncDetectedTimeZone(accountId: string, signal?: AbortSignal): Promise<ScheduleNotificationPreferences | null> {
+  const zone = detectedTimeZone();
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const saved = await notificationRequest<ScheduleNotificationPreferences>("/preferences", accountId, undefined, "GET", signal);
+    if (!saved || !zone || !automaticTimeZone(saved) || (saved.timeZone === zone && saved.timeZoneMode === "automatic")) return saved;
+    const { destination, enabled, leadMinutes, atStart, revision } = saved;
+    try {
+      return await notificationRequest<ScheduleNotificationPreferences>("/preferences", accountId,
+        { destination, enabled, leadMinutes, atStart, revision, timeZone: zone, timeZoneMode: "automatic" }, "PUT", signal);
+    } catch (error) {
+      // Re-read after a race; never overwrite a newer manual choice or settings.
+      if ((error as { status?: number }).status !== 409 || attempt === 1) throw error;
+    }
+  }
+  return null;
 }
 export interface ScheduleReminder {
   key: string; scheduleId: string; date: string; title: string; body: string;

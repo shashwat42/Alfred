@@ -5,6 +5,7 @@ const settings = new Schema({
     destination: { type: String, enum: ["mobile", "desktop", "both"], default: "both" },
     enabled: { type: Boolean, default: true }, leadMinutes: { type: Number, default: 10 },
     atStart: { type: Boolean, default: false }, timeZone: { type: String, required: true },
+    timeZoneMode: { type: String, enum: ["automatic", "manual"] },
     revision: { type: Number, default: 0 },
     effectiveFrom: { type: Date },
 });
@@ -14,8 +15,12 @@ const devices = new Schema({
     accountId: { type: Schema.Types.ObjectId, required: true, index: true },
     platform: { type: String, enum: ["mobile", "desktop"], required: true },
     sessionHash: { type: String, required: true },
+    pushToken: { type: String, select: false },
+    pushSessionExpiresAt: { type: Date },
+    pushSessionVersion: { type: Number },
     expiresAt: { type: Date, required: true, expires: 0 },
 });
+devices.index({ platform: 1, _id: 1 }, { partialFilterExpression: { pushToken: { $type: "string" } } });
 const deliveries = new Schema({
     _id: { type: String, required: true },
     accountId: { type: Schema.Types.ObjectId, required: true },
