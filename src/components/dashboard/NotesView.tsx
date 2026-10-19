@@ -78,6 +78,11 @@ export function NotesView({
 
     const editorRef = useRef<HTMLDivElement | null>(null);
     const isDeletingRef = useRef(false);
+    const savingRef = useRef(false);
+    const [saveRevision, setSaveRevision] = useState(0);
+    const editorSessionRef = useRef(0);
+    const latestEditRef = useRef({ title, content });
+    useEffect(() => { latestEditRef.current = { title, content }; }, [title, content]);
 
     // Keep track of the last persisted values to avoid false "unsaved" flags on still notes
     const lastSavedRef = useRef<{ id?: string; title: string; content: string }>({
@@ -122,7 +127,7 @@ export function NotesView({
 
     // Synchronize local state with activeNote during render when activeNote changes
     const [prevActiveNote, setPrevActiveNote] = useState<NoteItem | null>(activeNote);
-    if (activeNote !== prevActiveNote) {
+    if (activeNote?._id !== prevActiveNote?._id || Boolean(activeNote) !== Boolean(prevActiveNote)) {
         setPrevActiveNote(activeNote);
         setEditId(activeNote?._id);
         setTitle(activeNote?.title || "");
@@ -132,26 +137,27 @@ export function NotesView({
 
     // Keep DOM and lastSavedRef in sync when activeNote changes
     useEffect(() => {
+        editorSessionRef.current++;
         lastSavedRef.current = {
-            id: activeNote?._id,
-            title: activeNote?.title || "",
-            content: activeNote?.content || "",
+            id: prevActiveNote?._id,
+            title: prevActiveNote?.title || "",
+            content: prevActiveNote?.content || "",
         };
         if (editorRef.current) {
-            const noteContent = activeNote?.content || "";
+            const noteContent = prevActiveNote?.content || "";
             if (editorRef.current.innerHTML !== noteContent) {
                 editorRef.current.innerHTML = noteContent;
             }
         }
-    }, [activeNote]);
+    }, [prevActiveNote]);
 
     // Debounced auto-save when user edits
     const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     useEffect(() => {
-        if (!isEditorOpen || isDeletingRef.current) return;
+        if (!isEditorOpen || isDeletingRef.current || savingRef.current) return;
 
         const isChanged =
-            title !== lastSavedRef.current.title ||
+            title.trim() !== lastSavedRef.current.title ||
             content !== lastSavedRef.current.content;
 
         if (!isChanged) {
@@ -169,13 +175,18 @@ export function NotesView({
         }
 
         saveTimeoutRef.current = setTimeout(async () => {
-            if (isDeletingRef.current) return;
+            if (isDeletingRef.current || savingRef.current) return;
+            savingRef.current = true;
+            const editorSession = editorSessionRef.current;
             setSaveStatus("saving");
             const result = await onSaveNote({
                 id: editId,
                 title: title.trim(),
                 content,
             });
+            savingRef.current = false;
+            if (result || editorSession !== editorSessionRef.current) setSaveRevision(value => value + 1);
+            if (editorSession !== editorSessionRef.current) return;
             if (result && !isDeletingRef.current) {
                 if (!editId) {
                     setEditId(result._id);
@@ -185,7 +196,7 @@ export function NotesView({
                     title: title.trim(),
                     content,
                 };
-                setSaveStatus("saved");
+                setSaveStatus(latestEditRef.current.title === title && latestEditRef.current.content === content ? "saved" : "unsaved");
             } else {
                 setSaveStatus("unsaved");
             }
@@ -196,7 +207,7 @@ export function NotesView({
                 clearTimeout(saveTimeoutRef.current);
             }
         };
-    }, [title, content, editId, isEditorOpen, onSaveNote]);
+    }, [title, content, editId, isEditorOpen, onSaveNote, saveRevision]);
 
     const handleEditorInput = () => {
         if (editorRef.current) {
@@ -297,6 +308,7 @@ export function NotesView({
     };
 
     const handleManualSave = async () => {
+        if (savingRef.current) return;
         if (saveTimeoutRef.current) {
             clearTimeout(saveTimeoutRef.current);
         }
@@ -307,12 +319,17 @@ export function NotesView({
             return;
         }
 
+        savingRef.current = true;
+        const editorSession = editorSessionRef.current;
         setSaveStatus("saving");
         const result = await onSaveNote({
             id: editId,
             title: title.trim(),
             content,
         });
+        savingRef.current = false;
+        if (result || editorSession !== editorSessionRef.current) setSaveRevision(value => value + 1);
+        if (editorSession !== editorSessionRef.current) return;
         if (result) {
             if (!editId) {
                 setEditId(result._id);
@@ -322,7 +339,7 @@ export function NotesView({
                 title: title.trim(),
                 content,
             };
-            setSaveStatus("saved");
+            setSaveStatus(latestEditRef.current.title === title && latestEditRef.current.content === content ? "saved" : "unsaved");
         } else {
             setSaveStatus("unsaved");
         }

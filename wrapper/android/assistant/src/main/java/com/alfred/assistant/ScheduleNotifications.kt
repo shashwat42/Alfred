@@ -22,6 +22,9 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.PersistableBundle
+import android.os.Handler
+import android.os.Looper
+import android.os.ResultReceiver
 import android.provider.Settings
 import android.webkit.WebView
 import androidx.webkit.WebViewCompat
@@ -55,6 +58,7 @@ object ScheduleNotifications {
     private fun exactAlarms(c: Context) = Build.VERSION.SDK_INT < 31 || c.getSystemService(AlarmManager::class.java).canScheduleExactAlarms()
 
     fun install(activity: Activity, view: WebView) {
+        ensureChannel(activity)
         mainView = WeakReference(view)
         if (!WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) return
         WebViewCompat.addWebMessageListener(view, "AlfredScheduleNotifications", setOf(AssistantBridge.ORIGIN)) { _, message, source, mainFrame, reply ->
@@ -73,8 +77,12 @@ object ScheduleNotifications {
                         complete(JSONObject().put("exactAlarms", exactAlarms(activity)))
                     }
                     "permission" -> {
-                        activity.startActivity(Intent(activity, ScheduleNotificationPermissionActivity::class.java))
-                        complete(JSONObject().put("granted", granted(activity)))
+                        val receiver = object : ResultReceiver(Handler(Looper.getMainLooper())) {
+                            override fun onReceiveResult(resultCode: Int, resultData: Bundle?) {
+                                complete(JSONObject().put("granted", granted(activity)))
+                            }
+                        }
+                        activity.startActivity(Intent(activity, ScheduleNotificationPermissionActivity::class.java).putExtra("result", receiver))
                     }
                     "settings" -> {
                         val intent = if (Build.VERSION.SDK_INT >= 26) Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, activity.packageName)
@@ -214,12 +222,7 @@ object ScheduleNotifications {
         val chime = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
         val audio = AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_NOTIFICATION_EVENT)
             .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build()
-        if (Build.VERSION.SDK_INT >= 26) {
-            val channel = NotificationChannel(CHANNEL, "Schedule events", NotificationManager.IMPORTANCE_DEFAULT)
-            channel.setSound(chime, audio)
-            // Keep the existing channel ID: Android preserves the user's sound/mute choice.
-            manager.createNotificationChannel(channel)
-        }
+        ensureChannel(c)
         val launch = c.packageManager.getLaunchIntentForPackage(c.packageName) ?: return
         launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
         launch.data = Uri.parse("alfred://schedule/${reminder.getString("scheduleId")}")
@@ -239,6 +242,15 @@ object ScheduleNotifications {
 
     fun enqueueSync(c: Context, complete: () -> Unit = {}) {
         executor.execute { try { sync(c.applicationContext) } catch (_: Exception) { /* Next job retries safely. */ } finally { complete() } }
+    }
+    private fun ensureChannel(c: Context) {
+        if (Build.VERSION.SDK_INT < 26) return
+        val channel = NotificationChannel(CHANNEL, "Schedule events", NotificationManager.IMPORTANCE_DEFAULT)
+        channel.setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION),
+            AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_NOTIFICATION_EVENT)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
+        // Reusing the channel preserves the user's sound and mute choices.
+        c.getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
     }
     fun enqueueAlarm(c: Context, key: String, complete: () -> Unit) {
         executor.execute { try { deliver(c.applicationContext, key) } catch (_: Exception) { /* No stale catch-up or ambiguous delivery retries. */ } finally { complete() } }
@@ -295,13 +307,20 @@ class ScheduleNotificationJob : JobService() {
     override fun onStopJob(params: JobParameters): Boolean = true
 }
 class ScheduleNotificationPermissionActivity : Activity() {
+    private fun complete() {
+        @Suppress("DEPRECATION")
+        val receiver = intent.getParcelableExtra<ResultReceiver>("result")
+        receiver?.send(Activity.RESULT_OK, Bundle())
+        ScheduleNotifications.enqueueSync(this)
+        finish()
+    }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 901)
-        else finish()
+        else complete()
     }
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        finish()
+        complete()
     }
 }

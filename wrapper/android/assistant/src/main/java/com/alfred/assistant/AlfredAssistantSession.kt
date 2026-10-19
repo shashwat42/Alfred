@@ -117,7 +117,7 @@ class AlfredAssistantSession(context: Context) : VoiceInteractionSession(context
                 "cancelVoice" -> { nativePermission = null; voiceCapture?.cancel(); JSONObject().put("ok", true) }
                 "dismiss" -> { Handler(Looper.getMainLooper()).post { finish() }; JSONObject().put("ok", true) }
                 "openApp" -> {
-                    context.packageManager.getLaunchIntentForPackage(context.packageName)?.let { launchAssistantActivity(it) }
+                    openMainApp()
                     Handler(Looper.getMainLooper()).post { finish() }
                     JSONObject().put("ok", true)
                 }
@@ -168,8 +168,8 @@ class AlfredAssistantSession(context: Context) : VoiceInteractionSession(context
             setTextColor(Color.WHITE); setBackgroundColor(Color.rgb(24, 24, 24))
             setPadding(dp(20), dp(20), dp(20), dp(20))
             setOnClickListener {
-                context.packageManager.getLaunchIntentForPackage(context.packageName)?.let { launchAssistantActivity(it) }
-                finish()
+                try { openMainApp(); finish() }
+                catch (_: Exception) { text = "Android could not open Alfred. Tap to retry." }
             }
         }, panelParams(dp(180)))
     }
@@ -234,6 +234,15 @@ class AlfredAssistantSession(context: Context) : VoiceInteractionSession(context
     private fun launchAssistantActivity(intent: Intent) {
         if (Build.VERSION.SDK_INT >= 26) startAssistantActivity(intent)
         else context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+
+    private fun openMainApp() {
+        val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)
+            ?: throw IllegalStateException("Alfred's launcher activity is unavailable")
+        // The regular app must survive dismissal of this voice session. Assistant
+        // activities belong to the session's special task layer instead.
+        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        context.startActivity(intent)
     }
 
     override fun onComputeInsets(outInsets: Insets) {

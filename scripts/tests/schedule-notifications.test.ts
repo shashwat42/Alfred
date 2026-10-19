@@ -57,6 +57,22 @@ test("Android permissions and native failures are separate from destination sett
   granted = true; assert.equal(await notificationPermission(), "granted");
   await assert.rejects(androidNotificationRequest("sync"), /native failed/);
 });
+
+test("Android notification permission waits for the native result with time for the user to respond", async () => {
+  const { win } = browser("Android");
+  let id = "", timeoutMs = 0;
+  const realTimeout = win.setTimeout;
+  Object.assign(win, { setTimeout: (callback: () => void, ms: number) => { timeoutMs = ms; return realTimeout(callback, ms); } });
+  const bridge = { onmessage: null as null | ((e: { data: string }) => void), postMessage(text: string) { id = JSON.parse(text).id; } };
+  Object.assign(win, { AlfredScheduleNotifications: bridge });
+  let completed = false;
+  const request = notificationPermission(true).then(result => { completed = true; return result; });
+  await Promise.resolve();
+  assert.equal(completed, false);
+  assert.equal(timeoutMs, 120_000);
+  bridge.onmessage!({ data: JSON.stringify({ id, granted: true }) });
+  assert.equal(await request, "granted");
+});
 test("desktop adapter respects denied permission and invokes native delivery with a schedule action", async () => {
   const { win } = browser(); win.isTauri = true;
   const permission = { permission: "denied" };

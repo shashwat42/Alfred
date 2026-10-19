@@ -57,7 +57,7 @@ export function androidNotificationRequest(type: "status" | "permission" | "sett
     try { const value = JSON.parse(event.data); pending.get(value.id)?.(value); } catch { /* Ignore malformed native replies. */ }
   };
   return new Promise((resolve, reject) => {
-    const timeout = window.setTimeout(() => { pending.delete(id); reject(new Error("Android notification service did not respond.")); }, 15_000);
+    const timeout = window.setTimeout(() => { pending.delete(id); reject(new Error("Android notification service did not respond.")); }, type === "permission" ? 120_000 : 15_000);
     pending.set(id, value => { clearTimeout(timeout); pending.delete(id); if (value.error) reject(new Error(String(value.error))); else resolve(value); });
     try { bridge.postMessage(JSON.stringify({ ...data, id, type })); }
     catch { clearTimeout(timeout); pending.delete(id); reject(new Error("Native Android notifications are unavailable.")); }

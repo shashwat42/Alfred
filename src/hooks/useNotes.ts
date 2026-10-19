@@ -76,7 +76,7 @@ export function useNotes(accountId: string | undefined) {
         };
     }, [accountId, refreshNotes]);
 
-    const saveNote = async (payload: { id?: string; title?: string; content?: string }): Promise<NoteItem | null> => {
+    const saveNote = useCallback(async (payload: { id?: string; title?: string; content?: string }): Promise<NoteItem | null> => {
         setNotesError("");
 
         const cleanTitle = (payload.title ?? "").trim();
@@ -123,17 +123,15 @@ export function useNotes(accountId: string | undefined) {
                 return [savedNote, ...filtered].slice(0, 4);
             });
 
-            if (activeNote?._id === savedNote._id || !activeNote?._id) {
-                setActiveNote(savedNote);
-            }
-
+            // Saving updates the lists. The open editor owns its live draft and
+            // persisted ID; replacing its selection here resets in-progress edits.
             return savedNote;
         } catch (err) {
             console.error("Error saving note:", err);
             setNotesError(err instanceof Error ? err.message : "Failed to save note");
             return null;
         }
-    };
+    }, []);
 
     const deleteNote = async (id: string): Promise<boolean> => {
         try {
