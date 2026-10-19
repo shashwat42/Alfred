@@ -194,12 +194,16 @@ test("failed adoption keeps the account enabled and retains local content throug
 
 test("preference reconciliation cannot reverse a later account opt-out or change a switched account", async () => {
   login(); const original = globalThis.fetch; let uploads = 0;
+  await request("tasks", "POST", { task: "Keep pending content during opt-out race" });
+  await updateLocalWorkspace(account, workspace => { workspace.pendingCloudData = structuredClone(workspace.data); workspace.data = emptyWorkspace(); });
   globalThis.fetch = async (url, init) => {
     if (init?.method === "PUT") uploads++;
     return String(url).endsWith("/preference") ? Response.json({ enabled: true }) : Response.json({ enabled: false, data: emptyWorkspace(), revision: 1 });
   };
   try {
     await reconcileCloudSync(account); assert.equal(cloudSyncEnabled(account), false); assert.equal(uploads, 0);
+    assert.equal((await readLocalWorkspace(account)).data.tasks[0].task, "Keep pending content during opt-out race");
+    assert.equal((await readLocalWorkspace(account)).pendingCloudData, undefined);
     globalThis.fetch = async () => { login(other); return Response.json({ enabled: true }); };
     await assert.rejects(reconcileCloudSync(account), /account changed/);
     assert.equal(cloudSyncEnabled(account), false); assert.equal(cloudSyncEnabled(other), false);

@@ -37,7 +37,7 @@ export async function changeCloudSync(accountId: string, enabled: boolean, adopt
     const remote = await fetchCloudSnapshot(accountId);
     accountEnabled = remote.enabled;
     if (adoptAccountPreference && !remote.enabled) {
-      if (getSession()?.account.id === accountId) { setCloudSyncEnabled(accountId, false); refreshWorkspace(); }
+      if (getSession()?.account.id === accountId) { await activateLocalStorage(accountId, true); refreshWorkspace(); }
       return;
     }
     const local = mergeWorkspace(start.data, start.pendingCloudData ?? emptyWorkspace());

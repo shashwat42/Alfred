@@ -52,11 +52,11 @@ export async function updateLocalWorkspace<T>(accountId: string, update: (worksp
   });
 }
 export const readLocalWorkspace = (accountId: string) => updateLocalWorkspace(accountId, workspace => workspace, false);
-export async function activateLocalStorage(accountId: string) {
+export async function activateLocalStorage(accountId: string, maintenance = false) {
   await updateLocalWorkspace(accountId, workspace => {
     if (getSession()?.account.id !== accountId) throw new Error("Your account changed.");
     if (workspace.pendingCloudData) { workspace.data = mergeWorkspace(workspace.data, workspace.pendingCloudData); delete workspace.pendingCloudData; }
-  });
+  }, true, maintenance);
   setCloudSyncEnabled(accountId, false);
 }
 export async function copyGuestWorkspace(sourceId: string, targetId: string) {
