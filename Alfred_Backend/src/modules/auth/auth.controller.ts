@@ -145,6 +145,7 @@ export async function googleAuthCallback(req: Request, res: Response): Promise<v
         let ticket = "";
         const issueTicket = async (session?: import("mongoose").ClientSession) => {
             ticket = await createIssuedTicket({ accountId: account._id, accountVersion: account.sessionVersion ?? 0, codeChallenge: pendingState.codeChallenge,
+                googleProfile: { name: userProfile.name, picture: userProfile.picture },
                 flow: pendingState.flow, state: cleanState, ...(session ? { session } : {}) });
         };
         if (initiator.type === "guest") {

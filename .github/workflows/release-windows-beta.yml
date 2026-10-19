@@ -50,6 +50,7 @@ jobs:
           npm run test:overlay-lifecycle
           npm run test:assistant-controls-ui
           npm run test:storage-ui
+          npm run test:profile-ui
           npm run build:development
 
   package:

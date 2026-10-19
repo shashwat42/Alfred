@@ -1,4 +1,5 @@
 import { Account } from "../models/account.model.ts";
+import { CloudProfile } from "../models/profile.model.ts";
 import { OAuthState } from "../models/oauthState.model.ts";
 import { AuthTicket } from "../models/authTicket.model.ts";
 import { Task } from "../models/task.model.ts";
@@ -8,7 +9,7 @@ import { NotificationSettings, NotificationDevice, NotificationDelivery } from "
 import mongoose from "mongoose";
 import { AiRequest, AiWindow } from "./aiUsage.ts";
 
-export const tenantModels = [Task, Note, Schedule, NotificationSettings, NotificationDevice, NotificationDelivery];
+export const tenantModels = [Task, Note, Schedule, CloudProfile, NotificationSettings, NotificationDevice, NotificationDelivery];
 
 export async function requireTransactionTopology() {
     const hello = await mongoose.connection.db!.admin().command({ hello: 1 });

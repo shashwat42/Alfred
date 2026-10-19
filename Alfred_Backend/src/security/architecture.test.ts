@@ -22,7 +22,7 @@ test("application persistence uses the scoped repository; global access has expl
             const text = await readFile(full, "utf8");
             // Review guard, not a runtime sandbox: deliberate aliasing/new driver
             // imports still require code review. The runtime boundary is the repository.
-            for (const match of text.matchAll(/\b(Task|Note|Schedule|NotificationSettings|NotificationDevice|NotificationDelivery|Account|AuthTicket|OAuthState)\s*\.\s*(\w+)\s*\(/g)) {
+            for (const match of text.matchAll(/\b(CloudProfile|Task|Note|Schedule|NotificationSettings|NotificationDevice|NotificationDelivery|Account|AuthTicket|OAuthState)\s*\.\s*(\w+)\s*\(/g)) {
                 const [, receiver, method] = match;
                 if (["createIndexes", "init"].includes(method!)) continue;
                 // Background push enumerates installation metadata, checks current

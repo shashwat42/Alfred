@@ -50,6 +50,13 @@ fields. Older profile metadata is not silently purged. “Cloud storage” label
 to the existing content quota; this is not a claim that the entire Atlas database
 contains only a single account-ID field.
 
+Beta 6 adds an editable account name and profile photo in Settings. Google name
+and photo arrive through a short-lived sign-in ticket whose profile fields are
+cleared on consumption. Guests default to Guest. Custom profiles remain in the
+device workspace until Cloud Sync is enabled; cloud profiles count toward the
+same storage quota and are downloaded before cloud opt-out. Uploaded photos are
+cropped and resized on the device and kept out of local AI workspace requests.
+
 Validate with `MODE=development`: `npm test`, `npm run lint`,
 `npm --prefix Alfred_Backend run check`, `npm --prefix Alfred_Backend test`,
 `node scripts/verify-storage-ui.ts` and `npm run build:development`.

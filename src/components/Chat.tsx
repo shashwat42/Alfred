@@ -1,3 +1,4 @@
+import { useAccountProfile } from "../hooks/useAccountProfile.ts";
 import { ErrorNotice } from "./reliability/Notifications";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { StateControl } from "./reliability/StateControl";
@@ -211,10 +212,8 @@ export default function Chat({
   const { session, loginWithGoogle } = useAuth();
   const [signInError, setSignInError] = useState("");
   const isGoogleUser = session?.account?.type === "user";
-  const displayName =
-    session?.account?.name ||
-    session?.account?.email?.split("@")[0] ||
-    (isGoogleUser ? "Google account" : "Guest");
+  const profile = useAccountProfile(session);
+  const displayName = profile.name;
 
   // In-memory conversation state (ephemeral; cleared on reload)
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -1262,9 +1261,9 @@ export default function Chat({
       {/* Unaltered Bottom Profile and Settings Bar */}
       <div className="chat-bottom-bar">
         <div className="user-bar-profile">
-          {isGoogleUser && session.account.picture ? (
+          {profile.picture ? (
             <img
-              src={session.account.picture}
+              src={profile.picture ?? undefined}
               alt={displayName}
               className="user-bar-avatar-img"
             />

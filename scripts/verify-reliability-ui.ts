@@ -30,6 +30,6 @@ try {
   const html = renderToStaticMarkup(createElement(Usage, { data: { onboardingCompleted: true, storage: { usedBytes: 1_234_567, limitBytes: 10_000_000, remainingBytes: 8_765_433, overQuota: false }, ai: { daily: { used: 17, limit: 50, remaining: 33, resetAt: "2026-10-18T00:00:00Z" }, monthly: { used: 231, limit: 1000, remaining: 769, resetAt: "2026-11-01T00:00:00Z" } } } }));
   assert.ok(html.includes("17 / 50")); assert.ok(html.includes("231 / 1000")); assert.ok(html.includes("8.765 MB available"));
   const unlimited = renderToStaticMarkup(createElement(Usage, { data: { onboardingCompleted: true, storage: { usedBytes: 20_000_000, limitBytes: null, remainingBytes: null, overQuota: false }, ai: { daily: { used: 2001, limit: null, remaining: null, resetAt: "2026-10-19T00:00:00Z" }, monthly: { used: 2001, limit: null, remaining: null, resetAt: "2026-11-01T00:00:00Z" } } } }));
-  assert.ok(unlimited.includes("Storage and AI limits are disabled.")); assert.doesNotMatch(unlimited, /<progress|exhausted|remaining|of 10 MB/);
+  assert.ok(unlimited.includes("Cloud storage and AI limits are disabled.")); assert.doesNotMatch(unlimited, /<progress|exhausted|remaining|of 10 MB/);
   console.log("PASS: Normal, seven toast states and Start Screen; no offline mode or auth/persistence overrides.");
 } finally { await server.close(); }

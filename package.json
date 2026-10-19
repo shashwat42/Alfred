@@ -1,7 +1,7 @@
 {
   "name": "alfred-frontend",
   "private": true,
-  "version": "0.1.0-beta.5.2",
+  "version": "0.1.0-beta.6",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -14,6 +14,7 @@
     "test:overlay-lifecycle": "node scripts/verify-overlay-lifecycle.ts",
     "test:assistant-controls-ui": "node scripts/verify-assistant-controls-ui.ts",
     "test:storage-ui": "node scripts/verify-storage-ui.ts",
+    "test:profile-ui": "node scripts/verify-profile-ui.ts",
     "lint": "eslint .",
     "preview": "vite preview",
     "tauri": "tauri",

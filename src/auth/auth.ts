@@ -265,6 +265,8 @@ export async function restoreAuthSession(existing: AuthSession): Promise<AuthSes
   const restored = await response.json() as AuthSession;
   if (!restored.token || restored.account?.id !== existing.account.id || restored.account.type !== existing.account.type) throw new Error("The server returned an invalid session.");
   if (getSession()?.token !== existing.token) throw new Error("Your account changed. Please try again.");
+  restored.account.name ??= existing.account.name;
+  restored.account.picture ??= existing.account.picture;
   setSession(restored);
   return restored;
 }

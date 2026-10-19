@@ -1,3 +1,5 @@
+import { ProfileEditor } from "./ProfileEditor.tsx";
+import { useAccountProfile } from "../../hooks/useAccountProfile.ts";
 import { ErrorNotice } from "../reliability/Notifications";
 import { memo, useEffect, useState } from "react";
 import { AccountPanel } from "../reliability/AccountPanel";
@@ -34,10 +36,8 @@ function SettingsViewComponent() {
     return () => { active = false; };
   }, [isNative]);
   const isGoogleUser = session?.account?.type === "user";
-  const displayName =
-    session?.account?.name ||
-    session?.account?.email?.split("@")[0] ||
-    (isGoogleUser ? "Google account" : "Guest");
+  const profile = useAccountProfile(session);
+  const displayName = profile.name;
 
   const [silenceTimeout, setSilenceTimeout] = useState(getSilenceTimeout);
 
@@ -62,15 +62,15 @@ function SettingsViewComponent() {
           </h3>
           <div className="settings-profile-card">
             <div className="settings-profile-top">
-              {isGoogleUser && session.account.picture ? (
+              {profile.picture ? (
                 <img
-                  src={session.account.picture}
+                  src={profile.picture ?? undefined}
                   alt={displayName}
                   className="settings-profile-avatar-img"
                 />
               ) : (
                 <div className="settings-profile-avatar-circle">
-                  {isGoogleUser ? displayName[0]?.toUpperCase() : "G"}
+                  {displayName[0]?.toUpperCase() || "G"}
                 </div>
               )}
               <div className="settings-profile-meta">
@@ -113,6 +113,7 @@ function SettingsViewComponent() {
         </section>
 
         {/* Assistant & Audio Section */}
+        <ProfileEditor />
         {isAndroid && <AndroidAssistantSetup />}
         <section className="settings-card-group">
           <h3 className="settings-group-header">

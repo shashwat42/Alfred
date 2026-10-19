@@ -1,7 +1,7 @@
 import "./testEnvironment.ts";
 import assert from "node:assert/strict";
 import { before, after, test } from "node:test";
-import { randomUUID } from "node:crypto";
+import { randomUUID, createHash } from "node:crypto";
 import mongoose from "mongoose";
 import express from "express";
 import { MongoMemoryReplSet } from "mongodb-memory-server";
@@ -22,6 +22,9 @@ import { findOrCreateGoogleAccount } from "../modules/auth/auth.service.ts";
 import { generateChatCompletion } from "../modules/ai/service.ts";
 import { env } from "../config/env.ts";
 import { AiRequest } from "./aiUsage.ts";
+import { CloudProfile } from "../models/profile.model.ts";
+import { saveCloudProfile } from "./cloudStorage.ts";
+import { createIssuedTicket, atomicConsumeTicket } from "../modules/auth/auth.service.ts";
 
 let database: MongoMemoryReplSet;
 let server: ReturnType<express.Express["listen"]>;
@@ -50,6 +53,34 @@ test("new Google accounts persist identity without profile fields or cloud opt-i
   const account = await findOrCreateGoogleAccount({ googleId: randomUUID(), email: "local-profile@example.test", name: "Local profile", picture: "https://example.test/avatar.png" });
   assert.equal(account.email, undefined); assert.equal(account.name, undefined); assert.equal(account.picture, undefined);
   assert.equal(account.cloudSyncEnabled, false);
+});
+
+test("Google identity name and photo reach the device through a single-use, cleared handoff", async () => {
+  const account = await user(), verifier = "isolated-profile-verifier";
+  const challenge = createHash("sha256").update(verifier).digest("base64url");
+  const ticket = await createIssuedTicket({ accountId: account._id, accountVersion: 0, flow: "desktop", codeChallenge: challenge, googleProfile: { name: "Google Default", picture: "https://example.test/google.png" } });
+  const response = await atomicConsumeTicket({ ticket, codeVerifier: verifier });
+  assert.equal(response?.account.name, "Google Default"); assert.equal(response?.account.picture, "https://example.test/google.png");
+  assert.equal((await Account.findById(account._id))?.name, undefined);
+  const { AuthTicket } = await import("../models/authTicket.model.ts");
+  const consumed = await AuthTicket.findOne({ ticket });
+  assert.equal(consumed?.profileName, undefined); assert.equal(consumed?.profilePicture, undefined);
+});
+
+test("cloud profiles require opt-in, count toward quota, and download before removal", async () => {
+  const account = await user(), id = String(account._id);
+  const profile = { name: "My profile", picture: "data:image/png;base64,aGVsbG8=", updatedAt: new Date().toISOString() };
+  await assert.rejects(saveCloudProfile(id, profile), code("CLOUD_SYNC_DISABLED"));
+  assert.equal(await CloudProfile.countDocuments({ accountId: id }), 0);
+  const snapshot = await cloudSnapshot(id); await setCloudStorage(id, true, snapshot.revision, emptyWorkspace(), profile);
+  assert.equal((await cloudSnapshot(id)).profile?.name, "My profile");
+  const previous = { enforce: policy.enforceQuotas, bytes: policy.storageBytes };
+  policy.enforceQuotas = true; policy.storageBytes = 1;
+  try { await assert.rejects(saveCloudProfile(id, { ...profile, picture: "data:image/png;base64," + "a".repeat(1000) }), code("STORAGE_QUOTA_EXCEEDED")); }
+  finally { policy.enforceQuotas = previous.enforce; policy.storageBytes = previous.bytes; }
+  assert.equal((await CloudProfile.findOne({ accountId: id }))?.picture, profile.picture);
+  const downloaded = await cloudSnapshot(id); await setCloudStorage(id, false, downloaded.revision);
+  assert.equal(downloaded.profile?.name, "My profile"); assert.equal(await CloudProfile.countDocuments({ accountId: id }), 0);
 });
 
 test("enable uploads a validated snapshot; disable clears content only behind the downloaded revision", async () => {

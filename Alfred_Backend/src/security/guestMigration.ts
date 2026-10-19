@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import { AiRequest, AiWindow } from "./aiUsage.ts";
 import { measureStorage } from "./storage.ts";
 import { Account } from "../models/account.model.ts";
+import { CloudProfile } from "../models/profile.model.ts";
 import { Task } from "../models/task.model.ts";
 import { Note } from "../models/note.model.ts";
 import { Schedule } from "../models/schedule.model.ts";
@@ -36,6 +37,7 @@ export async function migrateGuest(sourceId: mongoose.Types.ObjectId, targetId: 
         await transfer(Note);
         await transfer(Schedule);
         const existingSettings = await NotificationSettings.exists({ accountId: targetId }).session(session);
+        if (!await CloudProfile.exists({ accountId: targetId }).session(session)) await CloudProfile.updateOne({ accountId: sourceId }, { $set: { accountId: targetId } }, { session });
         if (!existingSettings) await NotificationSettings.updateOne({ accountId: sourceId, guestId: { $exists: false } }, { $set: { accountId: targetId } }, { session });
         // On a preference collision preserve the old guest preferences as an
         // inaccessible archived record; never overwrite the existing user's choice.

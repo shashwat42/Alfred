@@ -5,10 +5,11 @@ import { Schedule } from "../models/schedule.model.ts";
 import { NotificationSettings } from "../modules/schedule-notifications/models.ts";
 import { policy } from "../config/policy.ts";
 import { PolicyError } from "./errors.ts";
+import { CloudProfile } from "../models/profile.model.ts";
 
 // Full serialized BSON documents, including ownership, IDs and timestamps. Operational
 // identities, leases, delivery claims and quota ledgers are excluded (see reliability.md).
-export const storageModels = [Task, Note, Schedule, NotificationSettings];
+export const storageModels = [Task, Note, Schedule, NotificationSettings, CloudProfile];
 export async function measureStorage(accountId: string, session: mongoose.ClientSession): Promise<number> {
     let bytes = 0;
     for (const model of storageModels as unknown as mongoose.Model<Record<string, unknown>>[]) {

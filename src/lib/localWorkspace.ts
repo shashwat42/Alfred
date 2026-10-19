@@ -1,9 +1,10 @@
 import { emptyWorkspace, mergeWorkspace, workspaceRequest, type WorkspaceData } from "../../Alfred_Backend/src/workspace/data.ts";
 import { getSession } from "../auth/auth.ts";
+import type { AccountProfile } from "../../Alfred_Backend/src/workspace/profile.ts";
 
 export const STORAGE_MODE_EVENT = "alfred:storage-mode";
 export const WORKSPACE_CHANGED_EVENT = "alfred:workspace-changed";
-export interface LocalWorkspace { data: WorkspaceData; revision: number; transitioning?: number; sourceAccounts?: string[] }
+export interface LocalWorkspace { data: WorkspaceData; revision: number; transitioning?: number; sourceAccounts?: string[]; profile?: AccountProfile }
 export const cloudSyncEnabled = (accountId?: string): boolean => {
   if (!accountId) return false;
   try { return localStorage.getItem(`alfred_cloud_sync_${accountId}`) === "true"; } catch { return false; }
@@ -20,6 +21,7 @@ function openDatabase(): Promise<IDBDatabase> {
     channel.onmessage = event => {
       if (event.data?.accountId !== getSession()?.account.id) return;
       window.dispatchEvent(new CustomEvent("alfred:action_executed", { detail: { actions: [{ type: "task_updated" }, { type: "note_updated" }, { type: "schedule_cleared" }] } }));
+      window.dispatchEvent(new Event("alfred:profile-changed"));
     };
   }
   if (!database) database = new Promise<IDBDatabase>((resolve, reject) => {
@@ -54,6 +56,7 @@ export async function copyGuestWorkspace(sourceId: string, targetId: string) {
   const source = await readLocalWorkspace(sourceId);
   await updateLocalWorkspace(targetId, workspace => {
     workspace.data = mergeWorkspace(workspace.data, source.data);
+    workspace.profile ??= source.profile;
     workspace.sourceAccounts = [...new Set([...(workspace.sourceAccounts ?? []), sourceId, ...(source.sourceAccounts ?? [])])];
   });
   // Keep the source copy for recovery. Google sign-in never opts into cloud uploads.

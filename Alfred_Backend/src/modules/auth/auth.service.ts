@@ -91,6 +91,7 @@ export async function createIssuedTicket(params: {
     flow: "browser" | "desktop";
     state?: string | undefined;
     session?: mongoose.ClientSession;
+    googleProfile?: { name: string | null; picture: string | null };
 }): Promise<string> {
     const ticket = crypto.randomBytes(32).toString("hex");
     const expiresAt = new Date(Date.now() + 90 * 1000); // 90 seconds TTL
@@ -109,6 +110,8 @@ export async function createIssuedTicket(params: {
     if (params.state) {
         doc.state = params.state;
     }
+    if (params.googleProfile?.name) doc.profileName = params.googleProfile.name.trim().slice(0, 100);
+    if (params.googleProfile?.picture?.startsWith("https://") && params.googleProfile.picture.length <= 4096) doc.profilePicture = params.googleProfile.picture;
 
     if (params.session) await AuthTicket.create([doc], { session: params.session });
     else await withTenantWrite(String(params.accountId), session => AuthTicket.create([doc], { session: session! }));
@@ -155,6 +158,7 @@ export async function atomicConsumeTicketByState(params: {
                 status: "consumed",
                 consumedAt: new Date(),
             },
+            $unset: { profileName: "", profilePicture: "" },
         },
         { returnDocument: "before" }
     );
@@ -169,7 +173,7 @@ export async function atomicConsumeTicketByState(params: {
     }
 
     const token = generateAuthToken(account);
-    return formatAuthResponse(account, token);
+    return formatAuthResponse(account, token, { name: consumed.profileName, picture: consumed.profilePicture });
 }
 
 /**
@@ -228,6 +232,7 @@ export async function atomicConsumeTicket(params: {
                 status: "consumed",
                 consumedAt: new Date(),
             },
+            $unset: { profileName: "", profilePicture: "" },
         },
         { returnDocument: "before" }
     );
@@ -242,7 +247,7 @@ export async function atomicConsumeTicket(params: {
     }
 
     const token = generateAuthToken(account);
-    return formatAuthResponse(account, token);
+    return formatAuthResponse(account, token, { name: consumed.profileName, picture: consumed.profilePicture });
 }
 
 export function generateAuthToken(account: IAccount): string {
@@ -280,7 +285,7 @@ export async function renewGuestAccount(token: string): Promise<AuthSessionRespo
     });
 }
 
-export function formatAuthResponse(account: IAccount, token: string): AuthSessionResponse {
+export function formatAuthResponse(account: IAccount, token: string, profile?: { name?: string | undefined; picture?: string | undefined }): AuthSessionResponse {
     return {
         token,
         account: {
@@ -288,8 +293,8 @@ export function formatAuthResponse(account: IAccount, token: string): AuthSessio
             type: account.type,
             guestId: account.guestId,
             email: account.email,
-            name: account.name,
-            picture: account.picture,
+            name: profile?.name ?? account.name,
+            picture: profile?.picture ?? account.picture,
             createdAt: account.createdAt,
         },
     };

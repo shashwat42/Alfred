@@ -1,4 +1,10 @@
 import { z } from "zod";
+import { validProfileName, validProfilePicture } from "./profile.ts";
+export const profileSchema = z.object({
+  name: z.string().trim().min(1).max(100).refine(validProfileName).optional(),
+  picture: z.union([z.string(), z.null()]).refine(validProfilePicture, "Choose a PNG, JPEG or WebP photo, or a secure HTTPS image.").optional(),
+  updatedAt: z.iso.datetime(),
+}).strict();
 
 const base = { _id: z.string().regex(/^[a-f0-9]{24}$/), createdAt: z.iso.datetime(), updatedAt: z.iso.datetime() };
 export const workspaceSchema = z.object({
