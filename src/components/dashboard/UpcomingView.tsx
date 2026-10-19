@@ -115,7 +115,7 @@ function UpcomingViewComponent({
                                     );
                                 })
                             ) : (
-                                <div className="upcoming-empty-hint" role="status"><span className="empty-illustration" aria-hidden="true">▤</span>Your day has room. Add a schedule to plan ahead.</div>
+                                <div className="upcoming-empty-hint" role="status"><span className="empty-text-art" aria-hidden="true">( ˘ᴗ˘ )</span><span>No upcoming schedules</span></div>
                             )}
                         </div>
                     </div>
@@ -141,7 +141,7 @@ function UpcomingViewComponent({
                                     </div>
                                 ))
                             ) : (
-                                <div className="upcoming-empty-hint" role="status"><span className="empty-illustration" aria-hidden="true">☑</span>All clear. Add a task when something needs your attention.</div>
+                                <div className="upcoming-empty-hint" role="status"><span className="empty-text-art" aria-hidden="true">( •ᴗ• )</span><span>No priority tasks</span></div>
                             )}
                         </div>
                     </div>
@@ -192,8 +192,9 @@ function UpcomingViewComponent({
 
             {/* Bottom Notes Quick Bar */}
             <div className="upcoming-notes-bar">
-                <span className="upcoming-notes-tag">notes</span>
+                <label className="upcoming-notes-tag" htmlFor="upcoming-quick-note">notes</label>
                 <input
+                    id="upcoming-quick-note"
                     type="text"
                     className="upcoming-notes-input"
                     placeholder="Capture an idea or reminder..."

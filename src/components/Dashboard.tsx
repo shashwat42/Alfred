@@ -289,6 +289,33 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
                 <>
                     <div className={`dashboard-main-card is-view-${activeView} ${["schedule", "notes", "mails", "tasks", "todo", "settings"].includes(activeView) ? "is-section-workspace" : ""} ${isAbsorbing ? "is-absorbing" : isExpanding ? "is-expanding" : ""}`}>
                 <div className="dashboard-content-area">
+                    {activeView === "home" && (
+                    <div className={`dashboard-top-bar ${isAbsorbing ? "is-absorbing" : ""}`}>
+                        <div className="dashboard-date-banner">
+                            <div className="date-banner-text">
+                                <span className="date-banner-weekday">{todayWeekdayLabel}</span>
+                                <span className="date-banner-day">{todayMonthDayLabel}</span>
+                            </div>
+                        </div>
+                        <span className="desktop-focus-divider" aria-hidden="true" />
+                        <button
+                            type="button"
+                            className={`focus-session-btn ${focusSession.isRunning ? "is-running-badge" : ""}`}
+                            onClick={handleOpenFocusSession}
+                            title="Open Focus Session"
+                        >
+                            <Timer className="desktop-focus-icon" size={18} aria-hidden="true" />
+                            {focusSession.isRunning ? (
+                                <span className="focus-btn-running-content">
+                                    <span className="focus-btn-pulse-dot" />
+                                    <span>Focus Session ({formatTimeMMSS(focusSession.remainingSeconds)})</span>
+                                </span>
+                            ) : (
+                                "Focus Session"
+                            )}
+                        </button>
+                    </div>
+                    )}
                     <DashboardHeader
                         activeView={activeView}
                         handleViewChange={handleViewChange}
@@ -318,33 +345,6 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
                     />
 
                     <div className="dashboard-section-body">
-                    {activeView === "home" && (
-                    <div className={`dashboard-top-bar ${isAbsorbing ? "is-absorbing" : ""}`}>
-                        <div className="dashboard-date-banner">
-                            <div className="date-banner-text">
-                                <span className="date-banner-weekday">{todayWeekdayLabel}</span>
-                                <span className="date-banner-day">{todayMonthDayLabel}</span>
-                            </div>
-                        </div>
-                        <span className="desktop-focus-divider" aria-hidden="true" />
-                        <button
-                            type="button"
-                            className={`focus-session-btn ${focusSession.isRunning ? "is-running-badge" : ""}`}
-                            onClick={handleOpenFocusSession}
-                            title="Open Focus Session"
-                        >
-                            <Timer className="desktop-focus-icon" size={18} aria-hidden="true" />
-                            {focusSession.isRunning ? (
-                                <span className="focus-btn-running-content">
-                                    <span className="focus-btn-pulse-dot" />
-                                    <span>Focus Session ({formatTimeMMSS(focusSession.remainingSeconds)})</span>
-                                </span>
-                            ) : (
-                                "Focus Session"
-                            )}
-                        </button>
-                    </div>
-                    )}
                     {(tasksLoading || scheduleLoading || notesLoading) && (
                         (activeView === "home" && !(tasksLoaded && scheduleLoaded && notesLoaded)) ||
                         (activeView === "schedule" && !scheduleLoaded) ||

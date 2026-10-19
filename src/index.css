@@ -7336,7 +7336,7 @@ body.is-overlay .overlay-root {
 .settings-feature-card, .settings-profile-card, .settings-info-card { padding:14px; }
 .settings-feature-row { padding-block:8px; gap:12px; }
 .settings-feature-desc { font-size:12px; line-height:1.5; }
-.dashboard-section-body > .dashboard-top-bar { position:static; display:flex; flex-wrap:wrap; margin:0 0 16px; padding:12px; border-radius:14px; background:#ffffff05; justify-content:space-between; }
+.dashboard-content-area > .dashboard-top-bar { position:static; display:flex; flex-wrap:wrap; margin:0 0 20px; padding:0; border:0; border-radius:0; background:transparent; box-shadow:none; }
 .content-header-title-row { width:100%; }
 .dashboard-content-header { position:relative; }
 .dashboard-content-header > .dashboard-refresh-btn { position:absolute; top:4px; right:0; margin:0; }
@@ -7344,10 +7344,20 @@ body.is-overlay .overlay-root {
 @media(min-width:769px) { .App:not(.is-android) .dashboard-content-header { padding-right:40px; } .App:not(.is-android) .content-header-title-row { padding-right:0; } }
 .note-editor-bottom-bar { background:transparent; border:0; box-shadow:none; flex-wrap:wrap; }
 .note-editor-bottom-bar[hidden] { display:none; }
-.note-format-toggle { display:flex; align-items:center; align-self:flex-end; gap:6px; background:transparent; border:0; color:#d4d4d8; padding:10px; cursor:pointer; }
+.note-format-toggle { display:flex; align-items:center; align-self:flex-end; gap:8px; background:#34313e; border:1px solid #ffffff14; border-radius:999px; color:#e2dced; padding:10px 18px; min-height:44px; cursor:pointer; transition:background .15s; }
+.note-format-toggle:hover, .note-format-toggle[aria-expanded="true"] { background:#454051; }
+.note-format-toggle:focus-visible { outline:2px solid #c4b5d8; outline-offset:3px; }
 .note-copy-feedback { font-size:12px; color:#a1a1aa; margin:0; }
 .note-copy-feedback:empty { display:none; }
 .upcoming-notes-bar, .upcoming-notes-bar:focus-within { background:transparent; box-shadow:none; border:0; }
+.upcoming-notes-bar { padding:4px 0; gap:14px; border-radius:0; }
+.upcoming-notes-tag { display:inline-flex; align-items:center; justify-content:center; padding:9px 18px; min-height:40px; box-sizing:border-box; border-radius:999px; background:#393344; color:#e2d8ef; cursor:text; }
+.upcoming-notes-input { min-width:0; }
+.upcoming-notes-bar:focus-within .upcoming-notes-tag { background:#494057; }
+.upcoming-empty-hint, .workspace-empty-state { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; min-height:180px; padding:24px 12px; color:#a1a1aa; text-align:center; font-style:normal; }
+.workspace-empty-state { flex:1; }
+.workspace-empty-state p { margin:0; }
+.empty-text-art { display:block; font-family:ui-monospace, "Cascadia Mono", "Segoe UI Symbol", monospace; font-size:clamp(32px, 4vw, 52px); font-weight:400; font-style:normal; line-height:1.3; white-space:pre; color:#b8b1c8; user-select:none; }
 .note-preview-line { overflow:hidden; text-overflow:ellipsis; white-space:pre; min-height:1.4em; }
 .note-preview-line:last-child::after { content:"…"; }
 .recent-note-preview-text { white-space:pre-line; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
@@ -7375,7 +7385,7 @@ body.is-overlay .overlay-root {
 @media(max-width:768px) { .Chat > .mobile-account-refresh { display:flex; position:absolute; top:12px; right:16px; z-index:10; } }
 .App.is-android .Chat > .mobile-account-refresh { display:flex; position:absolute; top:12px; right:16px; z-index:10; }
 
-.timeline-empty-hint { display:flex; align-items:center; gap:12px; padding:14px; color:#a1a1aa; font-size:13px; border-bottom:1px solid #ffffff12; }
+.timeline-empty-hint { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; padding:28px 14px; color:#a1a1aa; font-size:13px; text-align:center; }
 
 .settings-details > summary { cursor:pointer; color:#c4c4cc; font-size:12px; padding-block:8px; }
 .settings-details > summary.settings-group-header { display:flex; align-items:center; gap:8px; }
