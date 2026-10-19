@@ -72,13 +72,13 @@ export async function deleteLocalWorkspace(accountId: string): Promise<void> {
   const db = await openDatabase();
   const sources = (await readLocalWorkspace(accountId)).sourceAccounts ?? [];
   await new Promise<void>((resolve, reject) => { const tx = db.transaction("accounts", "readwrite"); for (const id of [accountId, ...sources]) tx.objectStore("accounts").delete(id); tx.oncomplete = () => resolve(); tx.onerror = () => reject(tx.error); });
-  for (const id of [accountId, ...sources]) localStorage.removeItem(`alfred_cloud_sync_${id}`);
+  for (const id of [accountId, ...sources]) { localStorage.removeItem(`alfred_cloud_sync_${id}`); localStorage.removeItem(`alfred_preferences_${id}`); }
 }
-export async function localWorkspaceResponse(input: string, init: RequestInit & { _expectedAccountId?: string }): Promise<Response | null> {
+export async function localWorkspaceResponse(input: string, init: RequestInit & { _expectedAccountId?: string; _offlineRead?: boolean }): Promise<Response | null> {
   // Never intercept an unrelated absolute URL, including cross-origin API calls.
   if (!/^\/api\/(tasks|notes|schedule)(?:[/?]|$)/.test(input)) return null;
   const accountId = getSession()?.account.id;
-  if (!accountId || cloudSyncEnabled(accountId)) return null;
+  if (!accountId || (cloudSyncEnabled(accountId) && ((navigator.onLine !== false && !init._offlineRead) || (init.method ?? "GET").toUpperCase() !== "GET"))) return null;
   if (init._expectedAccountId && init._expectedAccountId !== accountId) throw new Error("Your account changed. Please try again.");
   if (init.signal?.aborted) throw init.signal.reason;
   const method = (init.method ?? "GET").toUpperCase();

@@ -45,11 +45,17 @@ export async function prepareProfilePicture(file: File): Promise<string> {
   const url = URL.createObjectURL(file);
   try {
     const image = new Image(); image.src = url; await image.decode();
-    const canvas = document.createElement("canvas"); canvas.width = 256; canvas.height = 256;
+    const canvas = document.createElement("canvas"); canvas.width = 512; canvas.height = 512;
     const context = canvas.getContext("2d"); if (!context) throw new Error("This device could not prepare the photo.");
     const side = Math.min(image.naturalWidth, image.naturalHeight);
     if (!side) throw new Error("Choose a valid photo.");
-    context.drawImage(image, (image.naturalWidth - side) / 2, (image.naturalHeight - side) / 2, side, side, 0, 0, 256, 256);
-    return canvas.toDataURL("image/png");
+    context.imageSmoothingEnabled = true; context.imageSmoothingQuality = "high";
+    context.fillStyle = "#18181b"; context.fillRect(0, 0, 512, 512);
+    context.drawImage(image, (image.naturalWidth - side) / 2, (image.naturalHeight - side) / 2, side, side, 0, 0, 512, 512);
+    for (const quality of [.92, .85, .78, .7]) {
+      const encoded = canvas.toDataURL("image/jpeg", quality);
+      if (Math.ceil((encoded.length - encoded.indexOf(",") - 1) * 3 / 4) <= 200 * 1024 && validProfilePicture(encoded)) return encoded;
+    }
+    throw new Error("This photo could not be compressed below 200 KB. Choose a simpler image.");
   } finally { URL.revokeObjectURL(url); }
 }

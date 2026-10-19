@@ -158,3 +158,22 @@ test("the full local AI tool loop returns a workspace and persists only request 
     assert.equal(ledger?.status, "completed"); assert.doesNotMatch(JSON.stringify(ledger), /Private device content|localWorkspace/);
   } finally { globalThis.fetch = previousFetch; env.llm.apiKey = previousKey; }
 });
+
+
+test("account preferences isolate tenants, merge fields and reject unknown settings", async () => {
+  const first = await user(), second = await user();
+  const request = (account: typeof first, patch?: unknown) => fetch(`${base}/api/account/preferences`, {
+    method: patch ? "PATCH" : "GET", headers: { Authorization: `Bearer ${generateAuthToken(account)}`, "Content-Type": "application/json" },
+    ...(patch ? { body: JSON.stringify(patch) } : {}),
+  });
+  assert.equal((await fetch(`${base}/api/account/preferences`)).status, 401);
+  const changed = await request(first, { overlayMode: "voice", launchOnStartup: true });
+  assert.equal(changed.status, 200);
+  assert.deepEqual(await changed.json(), { overlayMode: "voice", launchOnStartup: true, silenceTimeout: 1500, sidebarCollapsed: false });
+  await request(first, { silenceTimeout: 2500 });
+  assert.equal((await (await request(first)).json()).overlayMode, "voice");
+  const other = await request(second); assert.equal(other.headers.get("cache-control"), "no-store");
+  assert.equal((await other.json()).overlayMode, "quick_input");
+  assert.equal((await request(first, { silenceTimeout: 1 })).status, 400);
+  assert.equal((await request(first, { accountId: second.id, overlayMode: "quick_input" })).status, 400);
+});

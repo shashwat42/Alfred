@@ -1,4 +1,5 @@
 import { useAccountProfile } from "../hooks/useAccountProfile.ts";
+import { RefreshButton } from "./RefreshButton.tsx";
 import { ErrorNotice } from "./reliability/Notifications";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { StateControl } from "./reliability/StateControl";
@@ -753,6 +754,7 @@ export default function Chat({
     <section className={`Chat ${isCollapsed ? "is-collapsed" : ""} ${hasMessages ? "has-active-conversation" : ""}`}>
       <ErrorNotice message={signInError} title="Google sign-in could not start" />
       {/* Top Sidebar Header: Controls & Alfred Branding */}
+      <RefreshButton />
       <div className="chat-top-header">
         <div className="chat-actions-group">
           {onToggleCollapse && (

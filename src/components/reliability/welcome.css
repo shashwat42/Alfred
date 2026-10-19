@@ -34,3 +34,13 @@
 
 @media(max-width:760px){.welcome-intro{padding-top:26px}.welcome-intro h1{font-size:34px}.welcome-tools{gap:12px;font-size:11px}.welcome-tools span{gap:6px}.welcome-tools svg{width:15px;height:15px}}
 @media(max-width:760px) and (max-height:700px){.welcome-screen{padding:24px 20px}.welcome-story{padding:22px 26px}.welcome-intro{display:none}.welcome-entry{padding:26px 24px}.welcome-embedded{padding:0}}
+
+@media(max-width:760px) {
+ .welcome-screen { padding:max(12px,env(safe-area-inset-top)) 12px max(12px,env(safe-area-inset-bottom)); }
+ .welcome-story { padding:16px 20px; } .welcome-intro { padding:12px 0 0; }
+ .welcome-intro h1 { font-size:28px; margin:8px 0; } .welcome-tools { margin-top:8px; }
+ .welcome-entry { padding:18px 20px; } .welcome-entry h2 { font-size:24px; margin:8px 0; }
+ .welcome-actions { margin-top:16px; gap:10px; } .welcome-entry-content .welcome-guest-hint { margin:12px 0; }
+ .welcome-reassurance { padding:8px; } .welcome-legal { margin-top:12px; }
+}
+@media(max-width:760px) and (max-height:700px) { .welcome-intro { display:none; } .welcome-entry-content .welcome-guest-hint br { display:none; } }

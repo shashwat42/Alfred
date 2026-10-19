@@ -1,3 +1,4 @@
+import { getSavedOverlayMode } from "../lib/overlayMode.ts";
 import { ErrorNotice } from "../components/reliability/Notifications";
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { AudioLines, SendHorizontal, Mic, MicOff, LoaderCircle, ExternalLink, Square, Trash2, X, Sparkles } from "lucide-react";
@@ -22,9 +23,9 @@ function ModeSwitchButton({ voice, disabled, onClick }: { voice: boolean; disabl
   return <button type="button" className="android-assistant-mode-switch" aria-label={voice ? "Switch to text mode" : "Switch to voice mode"} title={voice ? "Switch to text mode" : "Switch to voice mode"} disabled={disabled} onClick={onClick}>{voice ? <X size={36} strokeWidth={2.5} /> : <AudioLines size={24} />}</button>;
 }
 
-function AssistantLogo({ state, level = 0 }: { state: State; level?: number }) {
+function AssistantLogo({ state }: { state: State }) {
   const phase = state.toLowerCase().replaceAll(" ", "-");
-  return <span className={`android-assistant-logo state-${phase}`} style={{ "--voice-level": state === "Listening" ? level : 0 } as CSSProperties} aria-hidden="true"><img src={Logo} alt="" /></span>;
+  return <span className={`android-assistant-logo state-${phase}`} style={{ "--voice-level": 0 } as CSSProperties} aria-hidden="true"><img src={Logo} alt="" /></span>;
 }
 
 /** Dedicated document inside Android's system-assistant session. No Tauri IPC or stored conversation. */
@@ -182,6 +183,13 @@ export default function AndroidAssistantApp() {
     } finally { if (turn === generation.current) stop(); }
   };
 
+  const startVoiceRef = useRef(toggleVoice);
+  useEffect(() => { startVoiceRef.current = toggleVoice; });
+  useEffect(() => {
+    if (getSavedOverlayMode() === "voice") void startVoiceRef.current();
+  }, []);
+  useEffect(() => audioRecorder.addLevelListener(setAudioLevel), []);
+
   const native = (type: "dismiss" | "openApp") => {
     stop();
     void androidAssistantRequest(type).catch((err: unknown) => setError(err instanceof Error ? err.message : "Android action failed."));
@@ -200,9 +208,9 @@ export default function AndroidAssistantApp() {
   return <main className={`android-assistant${voice ? " is-voice" : ""}`} aria-label="Alfred floating assistant">
     {voice && <div className="android-assistant-dock">
       <div className="android-assistant-voice-bar">
-        <button className="android-assistant-logo-button" aria-label="Assistant options" aria-expanded={menuOpen} aria-haspopup="menu" onClick={() => setMenuOpen(!menuOpen)}><AssistantLogo state={state} level={audioLevel} /></button>
+        <button className="android-assistant-logo-button" aria-label="Assistant options" aria-expanded={menuOpen} aria-haspopup="menu" onClick={() => setMenuOpen(!menuOpen)}><AssistantLogo state={state} /></button>
         <span className="android-assistant-activity" role="status" aria-label={state}>
-          {state === "Thinking" || state === "Preparing audio" || state === "Preparing voice" ? <LoaderCircle className="android-assistant-spinner" size={30} /> : <span className={`android-assistant-wave${state === "Listening" && !micMuted ? " is-recording" : ""}`} style={{ "--voice-level": audioLevel } as CSSProperties} aria-hidden="true">{[12, 25, 17, 34, 24, 40, 28, 18, 30, 14].map((height, index) => <i key={index} style={{ height, animationDelay: `${index * -0.09}s` }} />)}</span>}
+          {state === "Thinking" || state === "Preparing audio" || state === "Preparing voice" ? <LoaderCircle className="android-assistant-spinner" size={30} /> : <span className={`android-assistant-wave${state === "Listening" && !micMuted ? " is-recording" : ""}`} style={{ "--voice-level": state === "Listening" && !micMuted ? Math.min(1, audioLevel * 4) : 0 } as CSSProperties} aria-hidden="true">{[12, 25, 17, 34, 24, 40, 28, 18, 30, 14].map((height, index) => <i key={index} style={{ height, animationDelay: `${index * -0.09}s` }} />)}</span>}
         </span>
         <button className="android-assistant-mic" aria-label={micMuted || state === "Paused" ? "Turn microphone on" : "Turn microphone off"} aria-pressed={!micMuted && state !== "Paused"} onClick={toggleMic}>{micMuted || state === "Paused" ? <MicOff size={28} /> : <Mic size={28} />}</button>
       </div>

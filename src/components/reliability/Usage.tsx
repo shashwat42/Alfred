@@ -1,4 +1,4 @@
-import { HardDrive, RefreshCw, Sparkles } from "lucide-react";
+import { HardDrive, Sparkles } from "lucide-react";
 import { Loader, ErrorState } from "./States";
 import "./usage.css";
 export interface UsageWindow { used: number; limit: number | null; remaining: number | null; resetAt: string }
@@ -13,7 +13,7 @@ export function Usage({ data, loading, error, refresh }: { data?: AccountStatus 
   const unlimited = data && data.storage.limitBytes === null && data.ai.daily.limit === null && data.ai.monthly.limit === null;
   return <section className="settings-card-group account-usage">
     <div className="account-usage-header"><h3 className="settings-group-header"><HardDrive size={16} className="settings-group-icon" />Cloud storage & AI usage</h3>
-      {refresh && <button className="account-usage-refresh" type="button" disabled={loading} onClick={refresh} aria-label="Refresh usage" title="Refresh usage"><RefreshCw size={15} className={loading ? "account-usage-spinning" : ""} /></button>}
+
     </div>
     <div className="settings-feature-card account-usage-card">
       {unlimited && <div className="account-usage-development"><span>DEVELOPMENT</span><p>Cloud storage and AI limits are disabled.</p></div>}

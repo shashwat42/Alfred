@@ -1,10 +1,11 @@
+import { getAccountPreferences, saveAccountPreferences } from "./accountPreferences.ts";
 export type DesktopOverlayMode = "quick_input" | "voice";
 
 export const OVERLAY_MODE_STORAGE_KEY = "alfred_overlay_mode";
 export const OVERLAY_MODE_CHANGED_EVENT = "alfred:overlay_mode_changed";
 
 /**
- * Gets the current desktop overlay mode from localStorage.
+ * Gets the current account’s overlay preference from its offline cache.
  * Defaults strictly to "quick_input" if unset, invalid, or during storage access errors.
  */
 export function getSavedOverlayMode(): DesktopOverlayMode {
@@ -12,7 +13,7 @@ export function getSavedOverlayMode(): DesktopOverlayMode {
     return "quick_input";
   }
   try {
-    const saved = localStorage.getItem(OVERLAY_MODE_STORAGE_KEY);
+    const saved = getAccountPreferences().overlayMode;
     if (saved === "voice" || saved === "quick_input") {
       return saved;
     }
@@ -23,12 +24,12 @@ export function getSavedOverlayMode(): DesktopOverlayMode {
 }
 
 /**
- * Saves the desktop overlay mode preference to localStorage and broadcasts the change.
+ * Saves this account’s overlay preference and broadcasts the change.
  */
 export function setSavedOverlayMode(mode: DesktopOverlayMode): boolean {
   if (typeof window === "undefined") return false;
   try {
-    localStorage.setItem(OVERLAY_MODE_STORAGE_KEY, mode);
+    saveAccountPreferences({ overlayMode: mode });
     window.dispatchEvent(new CustomEvent(OVERLAY_MODE_CHANGED_EVENT, { detail: { mode } }));
     return true;
   } catch (err) {

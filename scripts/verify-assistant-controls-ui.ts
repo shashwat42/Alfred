@@ -20,7 +20,7 @@ const mocks: Record<string, string> = {
   '/auth/auth.ts': 'export const AUTH_CHANGE_EVENT="auth-change", AUTH_STORAGE_KEY="auth"; export const isTauri=()=>true; export const getSession=()=>({account:{id:"isolated-test"}});',
   '/lib/api.ts': 'export const ensureToken=async()=>{};',
   '/lib/aiChat.ts': prefix + 'export const MAX_MESSAGE_CHAR_LIMIT=10000; export const boundVoiceResources=x=>x; export const buildSafeChatContext=x=>x; export const sendChatMessage=()=>new Promise(resolve=>{h.resolveReply=resolve;});',
-  '/lib/audioRecorder.ts': prefix + 'export const audioRecorder={cancel(){h.cancels++; h.rejectRecording?.(new Error("Recording cancelled")); h.rejectRecording=undefined;}};',
+  '/lib/audioRecorder.ts': prefix + 'export const audioRecorder={addLevelListener(){return ()=>{};},cancel(){h.cancels++; h.rejectRecording?.(new Error("Recording cancelled")); h.rejectRecording=undefined;}};',
   '/android/voiceCapture.ts': prefix + 'export const recordAssistantSpeech=()=>{h.recordings++; return new Promise((resolve,reject)=>{h.resolveRecording=resolve;h.rejectRecording=reject;});};',
   '/android/assistantBridge.ts': prefix + 'export const ASSISTANT_VOICE_LEVEL_EVENT="voice-level"; export const hasAndroidAssistantBridge=()=>true; export const announceAndroidActions=()=>{}; export const androidAssistantRequest=async(type)=>{h.commands.push(type);};',
   '@tauri-apps/api/core': prefix + 'export async function invoke(command,args){h.commands.push(command); if(command==="get_launch_on_startup")return h.enabled; if(h.failWrite)throw new Error("Test registration denied"); h.enabled=args.enabled;return h.enabled;}',

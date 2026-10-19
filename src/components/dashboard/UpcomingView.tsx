@@ -1,3 +1,4 @@
+import { notePlainText } from "../../lib/noteText.ts";
 import { useState, useMemo, memo, type KeyboardEvent } from "react";
 import { Clock } from "lucide-react";
 import type { ScheduleItem, TaskItem } from "../../types/dashboard.ts";
@@ -114,7 +115,7 @@ function UpcomingViewComponent({
                                     );
                                 })
                             ) : (
-                                <div className="upcoming-empty-hint" role="status">Your day has room. Add a schedule to plan ahead.</div>
+                                <div className="upcoming-empty-hint" role="status"><span className="empty-illustration" aria-hidden="true">▤</span>Your day has room. Add a schedule to plan ahead.</div>
                             )}
                         </div>
                     </div>
@@ -140,7 +141,7 @@ function UpcomingViewComponent({
                                     </div>
                                 ))
                             ) : (
-                                <div className="upcoming-empty-hint" role="status">All clear. Add a task when something needs your attention.</div>
+                                <div className="upcoming-empty-hint" role="status"><span className="empty-illustration" aria-hidden="true">☑</span>All clear. Add a task when something needs your attention.</div>
                             )}
                         </div>
                     </div>
@@ -157,13 +158,7 @@ function UpcomingViewComponent({
                                 const formattedDate = dateStr
                                     ? new Date(dateStr).toLocaleDateString("en-US", { day: "numeric", month: "short" })
                                     : "";
-                                const cleanPreview = (note.content || "")
-                                    .replace(/<br\s*\/?>/gi, " ")
-                                    .replace(/<\/?[^>]+(>|$)/g, " ")
-                                    .replace(/\*\*/g, "")
-                                    .replace(/\*/g, "")
-                                    .replace(/\s+/g, " ")
-                                    .trim();
+                                const cleanPreview = notePlainText(note.content || "").split("\n").slice(0, 3).join("\n");
 
                                 return (
                                     <div
@@ -188,7 +183,7 @@ function UpcomingViewComponent({
                             })
                         ) : (
                             <div className="upcoming-recent-notes-empty">
-                                <span>No recently opened notes</span>
+                                <span className="empty-illustration" aria-hidden="true">▧</span><span>No recently opened notes</span>
                             </div>
                         )}
                     </div>

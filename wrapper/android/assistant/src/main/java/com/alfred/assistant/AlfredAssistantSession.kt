@@ -130,6 +130,10 @@ class AlfredAssistantSession(context: Context) : VoiceInteractionSession(context
             return
         }
         view.webViewClient = object : WebViewClient() {
+            override fun onPageFinished(v: WebView, url: String) {
+                resizePanel()
+                v.post { v.animate().alpha(1f).setDuration(180).start() }
+            }
             override fun shouldOverrideUrlLoading(v: WebView, request: WebResourceRequest): Boolean = true
             override fun shouldInterceptRequest(v: WebView, request: WebResourceRequest): WebResourceResponse? {
                 if (!AssistantBridge.trusted(request.url)) return null // Authenticated backend fetches; CSP forbids remote documents/scripts.
@@ -156,6 +160,7 @@ class AlfredAssistantSession(context: Context) : VoiceInteractionSession(context
                 if (pendingPermission === request) pendingPermission = null
             }
         }
+        view.alpha = 0f
         root?.addView(view, panelParams(ViewGroup.LayoutParams.MATCH_PARENT))
         view.loadUrl("${AssistantBridge.ORIGIN}/index.html?window=android-assistant")
     }

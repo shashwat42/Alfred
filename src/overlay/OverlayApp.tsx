@@ -1,6 +1,7 @@
 import { ErrorNotice } from "../components/reliability/Notifications";
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { positionOverlayAtTop } from "../lib/overlayWindow.ts";
 import { isTauri } from "../auth/auth.ts";
 import {
   type ChatMessage,
@@ -45,31 +46,6 @@ async function dismissOverlayWindow(): Promise<void> {
       await win.close();
     } catch (e) {
       console.warn("Failed to close overlay window:", e);
-    }
-  }
-}
-
-/**
- * Positions the overlay window horizontally centered and near the top of the screen.
- */
-async function positionOverlayAtTop(): Promise<void> {
-  if (isTauri()) {
-    try {
-      const win = getCurrentWebviewWindow();
-      const { PhysicalPosition } = await import("@tauri-apps/api/dpi");
-      const { currentMonitor } = await import("@tauri-apps/api/window");
-      const monitor = await currentMonitor();
-      if (monitor) {
-        const outerSize = await win.outerSize();
-        const screenWidth = monitor.size.width;
-        const screenX = monitor.position.x;
-        const screenY = monitor.position.y;
-        const targetX = screenX + Math.round((screenWidth - outerSize.width) / 2);
-        const targetY = screenY + 8; // Anchored near very top of monitor
-        await win.setPosition(new PhysicalPosition(targetX, targetY));
-      }
-    } catch (e) {
-      console.warn("Failed to position overlay at top:", e);
     }
   }
 }
@@ -615,24 +591,6 @@ export function VoiceOverlay({
     };
   }, [stopVoice, isMuted, setMessages, onUserActivity, sessionVersion]);
 
-  const scale =
-    voiceState === "listening" && !isMuted
-      ? 1 + Math.min(0.18, audioLevel * 0.35)
-      : voiceState === "thinking"
-      ? 1.05
-      : 1;
-
-  const glowColor =
-    voiceState === "error"
-      ? "rgba(239, 68, 68, 0.7)"
-      : voiceState === "thinking"
-      ? "rgba(220, 38, 38, 0.75)"
-      : voiceState === "transcribing"
-      ? "rgba(239, 68, 68, 0.7)"
-      : isMuted
-      ? "rgba(113, 113, 122, 0.4)"
-      : `rgba(220, 38, 38, ${0.4 + Math.min(0.6, audioLevel * 0.6)})`;
-
   const isThinkingOrTranscribing = voiceState === "thinking" || voiceState === "transcribing";
 
   return (
@@ -640,11 +598,11 @@ export function VoiceOverlay({
       <div className="desktop-overlay-dock">
         <ClearChatButton onClick={onClearSession} />
         <div className="desktop-overlay-pill desktop-overlay-voice">
-          <span className={`desktop-overlay-logo state-${voiceState}${isMuted ? " is-muted" : ""}`} style={{ transform: `scale(${scale})`, borderColor: isMuted ? "#71717a" : glowColor, filter: `drop-shadow(0 0 ${10 + Math.round(audioLevel * 14)}px ${glowColor})` }}>
+          <span className={`desktop-overlay-logo state-${voiceState}${isMuted ? " is-muted" : ""}`}>
             <img src={Logo} alt="Alfred" />
           </span>
           <span className="desktop-overlay-activity" role="status" aria-label={isMuted ? "Microphone muted" : voiceState}>
-            {!isMuted && (isThinkingOrTranscribing || voiceState === "starting") ? <Loader2 size={30} className="desktop-overlay-spinner" /> : <span className={`desktop-overlay-wave${voiceState === "listening" && !isMuted ? " is-recording" : ""}`} style={{ "--voice-level": audioLevel } as React.CSSProperties} aria-hidden="true">{[12, 25, 17, 34, 24, 40, 28, 18, 30, 14].map((height, index) => <i key={index} style={{ height, animationDelay: `${index * -0.09}s` }} />)}</span>}
+            {!isMuted && (isThinkingOrTranscribing || voiceState === "starting") ? <Loader2 size={30} className="desktop-overlay-spinner" /> : <span className={`desktop-overlay-wave${voiceState === "listening" && !isMuted ? " is-recording" : ""}`} style={{ "--voice-level": voiceState === "listening" && !isMuted ? Math.min(1, audioLevel * 4) : 0 } as React.CSSProperties} aria-hidden="true">{[12, 25, 17, 34, 24, 40, 28, 18, 30, 14].map((height, index) => <i key={index} style={{ height, animationDelay: `${index * -0.09}s` }} />)}</span>}
           </span>
           <button type="button" className="desktop-overlay-mic" onClick={handleToggleMute} aria-pressed={!isMuted} title={isMuted ? "Unmute microphone" : "Mute microphone"} aria-label={isMuted ? "Unmute microphone" : "Mute microphone"}>
             {isMuted ? <MicOff size={28} /> : <Mic size={28} />}
@@ -676,7 +634,8 @@ export function VoiceOverlay({
 export default function OverlayApp() {
   const [mode, setMode] = useState<DesktopOverlayMode>(() => getSavedOverlayMode());
   const [sessionVersion, setSessionVersion] = useState(0);
-  const [visible, setVisible] = useState(() => !document.hidden);
+  const [visible, setVisible] = useState(false);
+  const [appearance, setAppearance] = useState(0);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const lastActivityTimeRef = useRef<number>(0);
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -742,8 +701,7 @@ export default function OverlayApp() {
         };
         await subscribe("alfred:overlay-hidden", () => setVisible(false));
         await subscribe("alfred:overlay-summon", () => {
-          setVisible(true);
-          void positionOverlayAtTop();
+          void positionOverlayAtTop().then(() => { if (!disposed) { setVisible(true); setAppearance(value => value + 1); } });
           const now = Date.now();
           if (now - lastActivityTimeRef.current >= IDLE_TIMEOUT_MS) {
             resetSession();
@@ -756,7 +714,10 @@ export default function OverlayApp() {
       }
     };
     void setupSummonListener();
-    void positionOverlayAtTop();
+    void positionOverlayAtTop().then(async () => {
+      if (disposed) return;
+      setVisible(true);
+    });
     return () => {
       disposed = true;
       document.removeEventListener("visibilitychange", visibilityChanged);
@@ -777,7 +738,7 @@ export default function OverlayApp() {
   }, [mode, recordUserActivity]);
 
   return (
-    <div className="overlay-root w-screen h-screen flex flex-col items-center justify-start pt-2 px-4 pb-4 bg-transparent overflow-hidden pointer-events-none">
+    <div key={appearance} style={{ visibility: visible ? "visible" : "hidden" }} className="overlay-root w-screen h-screen flex flex-col items-center justify-start pt-2 px-4 pb-4 bg-transparent overflow-hidden pointer-events-none">
       {mode === "quick_input" ? (
         <QuickInputOverlay
           key={sessionVersion}

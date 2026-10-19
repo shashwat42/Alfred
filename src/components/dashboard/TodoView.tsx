@@ -54,7 +54,7 @@ export function TodoView({
                                     ) : null}
                                 </button>
                                 <div className="todo-item-main">
-                                <span className="todo-item-text">{item.task}</span>
+                                <span className="todo-item-text" title={item.task} tabIndex={0}>{item.task}</span>
                                 {item.priority && item.priority !== "normal" && (
                                     <span className={`todo-item-priority priority-${item.priority}`}>
                                         {item.priority}

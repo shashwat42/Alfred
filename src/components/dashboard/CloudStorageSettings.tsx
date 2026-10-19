@@ -18,14 +18,14 @@ export function CloudStorageSettings({ refresh }: { refresh: () => void }) {
     <div className="settings-feature-card">
       <div className="settings-feature-row"><div className="settings-feature-info">
         <label className="settings-feature-title" htmlFor="cloud-sync-enabled">Cloud Sync</label>
-        <p className="settings-feature-desc">Cloud Sync is an account-wide preference shared by all devices signed into this account. It is off by default. Enable it to store tasks, notes and schedules in your account’s cloud storage. Cloud storage limits apply only to uploaded content.</p>
-      </div><input id="cloud-sync-enabled" type="checkbox" checked={enabled} disabled={busy} onChange={event => {
+        <p className="settings-feature-desc">Needed for cross-platform usage. Sync tasks, notes, schedules and preferences across devices signed into this account. Off by default.</p>
+      </div><input id="cloud-sync-enabled" type="checkbox" role="switch" checked={enabled} disabled={busy} onChange={event => {
         const next = event.target.checked;
         setBusy(true); setError("");
         void changeCloudSync(accountId, next).then(refresh).catch((e: unknown) => setError(e instanceof Error ? e.message : "Could not change Cloud Sync.")).finally(() => setBusy(false));
       }} /></div>
       <p className="settings-feature-desc" role="status">{busy ? "Saving a device copy and updating Cloud Sync…" : enabled ? "Cloud Sync is enabled for your account on all devices. Internet access is required for cloud changes." : "Local storage is active. Clearing app data or uninstalling can remove this device’s content. Account identity and AI usage records are still kept online."}</p>
-      <p className="settings-feature-desc">Turning Cloud Sync off applies to the whole account. It downloads your cloud content to this device, then removes the account’s cloud workspace and cloud reminder registrations. Other devices switch to their saved device copies when they reconnect; only this device is guaranteed to receive the final download.</p>
+      <details className="settings-details"><summary>How Cloud Sync works</summary><p className="settings-feature-desc">Cloud storage limits apply to uploaded content. Turning Cloud Sync off applies to the whole account. It downloads your cloud content to this device, then removes the account’s cloud workspace and cloud reminder registrations. Other devices switch to their saved device copies when they reconnect; only this device is guaranteed to receive the final download.</p></details>
       {enabled && <button type="button" className="settings-action-btn" disabled={busy} onClick={() => {
         setBusy(true); setError(""); void changeCloudSync(accountId, true).then(refresh).catch((e: unknown) => setError(e instanceof Error ? e.message : "Could not sync device content.")).finally(() => setBusy(false));
       }}>Sync this device’s saved content</button>}

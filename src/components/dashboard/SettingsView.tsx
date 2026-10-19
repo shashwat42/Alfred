@@ -1,10 +1,11 @@
+import { PREFERENCES_CHANGED_EVENT } from "../../lib/accountPreferences.ts";
 import { ProfileEditor } from "./ProfileEditor.tsx";
 import { useAccountProfile } from "../../hooks/useAccountProfile.ts";
 import { ErrorNotice } from "../reliability/Notifications";
 import { memo, useEffect, useState } from "react";
 import { AccountPanel } from "../reliability/AccountPanel";
 import { useAuth } from "../../auth/authContext.ts";
-import { User, LogIn, LogOut, Mic, Shield, Smartphone } from "lucide-react";
+import { User, LogIn, LogOut, Mic, Smartphone } from "lucide-react";
 import { isTauri } from "../../auth/auth.ts";
 import { getSilenceTimeout, saveSilenceTimeout } from "../../lib/voicePreferences.ts";
 import { AndroidAssistantSetup } from "../../android/AndroidAssistantSetup.tsx";
@@ -45,12 +46,18 @@ function SettingsViewComponent() {
     getSavedOverlayMode()
   );
 
+  useEffect(() => {
+    const changed = () => { setSilenceTimeout(getSilenceTimeout()); setOverlayMode(getSavedOverlayMode()); };
+    changed(); window.addEventListener(PREFERENCES_CHANGED_EVENT, changed);
+    return () => window.removeEventListener(PREFERENCES_CHANGED_EVENT, changed);
+  }, [session?.account.id]);
+
   return (
     <div className="settings-view-container">
       <div className="settings-view-scrollable">
         <div className="settings-intro">
-          <p>Manage your account and how Alfred responds to your voice.</p>
-          <span>Voice and overlay preferences save on this device. Schedule notification settings save to your account.</span>
+          <p>Account, assistant & devices.</p>
+          <span>Settings belong to your account.</span>
           <p className="settings-save-feedback" role="status">{feedback}</p>
           <ErrorNotice message={saveError || error} />
         </div>
@@ -154,7 +161,7 @@ function SettingsViewComponent() {
                   try {
                     saveSilenceTimeout(val);
                     setSilenceTimeout(val);
-                    setFeedback("Voice pause saved on this device.");
+                    setFeedback("Voice pause saved for this account.");
                   } catch { setSaveError("Could not save your voice preference. Check whether device storage is available."); }
                 }}
                 className="settings-select-input"
@@ -165,11 +172,11 @@ function SettingsViewComponent() {
                 <option value={2500}>2.5s (Long pause)</option>
               </select>
             </div>
-            {isNative && !isAndroid && <div className="settings-feature-row">
+            {(isNative || isAndroid) && <div className="settings-feature-row">
               <div className="settings-feature-info">
                 <label htmlFor="desktop-overlay-mode" className="settings-feature-title">Quick overlay opens in</label>
                 <span className="settings-feature-desc">
-                  Choose what opens when you press Alt+Space or select Quick Overlay in the system tray.
+                  Choose text or voice when opening the floating assistant on PC or Android.
                 </span>
               </div>
               <select
@@ -196,23 +203,6 @@ function SettingsViewComponent() {
         {/* System & Privacy Section */}
         <ScheduleNotificationSettings />
         <StartupSettings />
-        <section className="settings-card-group">
-          <h3 className="settings-group-header">
-            <Shield size={16} className="settings-group-icon" />
-            Data & storage
-          </h3>
-          <div className="settings-feature-card">
-            <div className="settings-feature-row">
-              <div className="settings-feature-info">
-                <span className="settings-feature-title">Device preferences</span>
-                <span className="settings-feature-desc">
-                  Voice and overlay preferences are saved in this device’s local storage. Your sign-in session is also stored here. Account content is retrieved from the Alfred server.
-                </span>
-              </div>
-            </div>
-          </div>
-        </section>
-
         {/* App Info Section */}
         <AccountPanel key={session?.account.id} />
         {isAndroid ? <AndroidAppUpdateSettings /> : <AppUpdateSettings />}

@@ -1,0 +1,68 @@
+import assert from "node:assert/strict";
+import { act, createElement } from "react";
+import { Window } from "happy-dom";
+import { createServer } from "vite";
+
+const dom = new Window({ url: "http://localhost:5173/" });
+const names = ["window", "document", "navigator", "Event", "CustomEvent", "HTMLElement", "Node", "IS_REACT_ACT_ENVIRONMENT"] as const;
+const saved = new Map(names.map(name => [name, Object.getOwnPropertyDescriptor(globalThis, name)]));
+const originalFetch = globalThis.fetch;
+for (const name of names) Object.defineProperty(globalThis, name, { configurable: true, writable: true, value: name === "IS_REACT_ACT_ENVIRONMENT" ? true : dom[name as keyof Window] });
+Object.defineProperty(document, "queryCommandState", { value: () => false });
+let copied = "";
+Object.defineProperty(navigator, "clipboard", { value: { writeText: async (text: string) => { copied = text; } } });
+const server = await createServer({ mode: "development", cacheDir: "node_modules/.vite-workspace-ui", optimizeDeps: { noDiscovery: true, entries: [], include: [] }, server: { middlewareMode: true, hmr: false }, appType: "custom" });
+const { createRoot } = await import("react-dom/client");
+document.body.innerHTML = '<div id="root"></div>'; const root = createRoot(document.getElementById("root")!);
+const settle = () => act(async () => { await new Promise(resolve => setTimeout(resolve, 30)); });
+try {
+  const { NotesView } = await server.ssrLoadModule("/src/components/dashboard/NotesView.tsx");
+  const note = { _id: "one", title: "Test", content: "<p>Today I wanted</p><p>Hello</p><p>Third line</p><p>Hidden line</p>" };
+  let left = 0, saves = 0, fail = true;
+  const props = { notes: [note], activeNote: note, onSelectNote() {}, onDeleteNote: async () => true, onBackToList: () => { left++; }, onSaveNote: async (value: { content: string }) => { saves++; return fail ? null : { ...note, ...value }; } };
+  await act(async () => root.render(createElement(NotesView, props))); await settle();
+  const formatting = () => document.querySelector<HTMLElement>("#note-formatting")!;
+  assert.equal(formatting().hidden, true);
+  await act(async () => document.querySelector<HTMLButtonElement>(".note-format-toggle")!.click());
+  assert.equal(formatting().hidden, false);
+  await act(async () => document.querySelector<HTMLButtonElement>('button[aria-label="Copy content"]')!.click());
+  assert.equal(copied, "Today I wanted\nHello\nThird line\nHidden line");
+  const editor = document.querySelector<HTMLElement>(".note-editor-rich-canvas")!;
+  await act(async () => { editor.innerHTML = "<p>Unsaved edit</p>"; editor.dispatchEvent(new dom.Event("input", { bubbles: true })); });
+  await act(async () => window.dispatchEvent(new Event("alfred:back", { cancelable: true }))); await settle();
+  assert.equal(saves, 1); assert.equal(left, 0, "A failed save keeps the editor open");
+  fail = false;
+  await act(async () => window.dispatchEvent(new Event("alfred:back", { cancelable: true }))); await settle();
+  assert.equal(left, 1, "Back waits for a successful save");
+  await act(async () => root.render(createElement(NotesView, { ...props, activeNote: null }))); await settle();
+  const lines = [...document.querySelectorAll(".note-preview-line")].map(line => line.textContent);
+  assert.deepEqual(lines, ["Today I wanted", "Hello", "Third line"]);
+  const { Onboarding } = await server.ssrLoadModule("/src/components/reliability/OnboardingTour.tsx");
+  let destination = "", completed = 0;
+  const navigate = (event: Event) => { destination = (event as CustomEvent<string>).detail; };
+  window.addEventListener("alfred:tour-navigate", navigate);
+  await act(async () => root.render(createElement(Onboarding, { complete: async () => { completed++; }, legal() {} })));
+  await act(async () => [...document.querySelectorAll("button")].find(button => button.textContent === "Skip tour")!.click());
+  assert.equal(completed, 1); assert.equal(destination, "home");
+  window.removeEventListener("alfred:tour-navigate", navigate);
+  const { ConnectionStatus } = await server.ssrLoadModule("/src/components/reliability/ConnectionStatus.tsx");
+  Object.defineProperty(navigator, "onLine", { configurable: true, value: false });
+  globalThis.fetch = async () => new Response(null, { status: 503 });
+  await act(async () => root.render(createElement("div", null, createElement("input", { defaultValue: "Preserved draft" }), createElement(ConnectionStatus)))); await settle();
+  assert.ok(document.querySelector("dialog[open]")); assert.match(document.body.textContent!, /offline/);
+  await act(async () => [...document.querySelectorAll("button")].find(button => button.textContent === "Continue with saved content")!.click());
+  assert.equal(document.querySelector("dialog[open]"), null); assert.equal(document.querySelector("input")!.value, "Preserved draft");
+  Object.defineProperty(navigator, "onLine", { configurable: true, value: true });
+  await act(async () => { window.dispatchEvent(new Event("online")); window.dispatchEvent(new CustomEvent("alfred:server-unavailable", { detail: true })); }); await settle();
+  assert.match(document.body.textContent!, /temporarily unavailable/);
+  globalThis.fetch = async () => new Response(null, { status: 200 });
+  await act(async () => [...document.querySelectorAll("button")].find(button => button.textContent === "Try again")!.click()); await settle();
+  assert.equal(document.querySelector("dialog[open]"), null); assert.equal(document.querySelector("input")!.value, "Preserved draft");
+  const { NotFound } = await server.ssrLoadModule("/src/components/reliability/States.tsx");
+  await act(async () => root.render(createElement(NotFound))); assert.match(document.body.textContent!, /404/);
+  console.log("PASS: collapsed formatting, multiline copy/previews, save-before-back, failed-save protection, tutorial return, offline/server recovery, preserved drafts and 404.");
+} finally {
+  await act(async () => root.unmount()); await server.close(); await dom.happyDOM.abort();
+  globalThis.fetch = originalFetch;
+  for (const [name, descriptor] of saved) { if (descriptor) Object.defineProperty(globalThis, name, descriptor); else Reflect.deleteProperty(globalThis, name); }
+}

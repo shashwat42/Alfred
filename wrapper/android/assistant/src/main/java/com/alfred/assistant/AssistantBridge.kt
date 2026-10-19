@@ -44,11 +44,19 @@ object AssistantBridge {
 
     fun installMain(activity: Activity, view: WebView) {
         mainView = WeakReference(view)
+        activity.window.setSoftInputMode(if (android.os.Build.VERSION.SDK_INT >= 30) android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING else android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+        if (android.os.Build.VERSION.SDK_INT >= 30) view.setOnApplyWindowInsetsListener { _, insets ->
+            val keyboard = insets.getInsets(android.view.WindowInsets.Type.ime()).bottom
+            val system = insets.getInsets(android.view.WindowInsets.Type.systemBars()).bottom
+            val cssPixels = ((keyboard - system).coerceAtLeast(0) / view.resources.displayMetrics.density).toInt()
+            view.evaluateJavascript("document.documentElement.style.setProperty('--keyboard-inset', '${cssPixels}px')", null)
+            insets
+        }
         ScheduleNotifications.install(activity, view)
         installAsync(view) { type, _, complete ->
             when (type) {
                 "status" -> complete(AssistantAvailability.status(activity))
-                "setup" -> {
+                "setup" -> activity.runOnUiThread {
                     complete(if (AssistantAvailability.openSetup(activity)) JSONObject().put("opened", true)
                         else JSONObject().put("error", "Open Android Settings → Apps → Default apps → Digital assistant to select Alfred."))
                 }

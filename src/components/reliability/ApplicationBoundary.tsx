@@ -9,6 +9,7 @@ import { AccountPanel } from "./AccountPanel";
 import { AppStateContext } from "./appStateContext";
 import { StateControl } from "./StateControl";
 import Logo from "../../assets/Alfred_Logo.svg";
+import { ConnectionStatus } from "./ConnectionStatus.tsx";
 const StateToast = __DEV_PREVIEW__ ? lazy(() => import("../../dev/AppStates")) : null;
 const StateSelector = __DEV_PREVIEW__ ? lazy(() => import("../../dev/AppStates").then(module => ({ default: module.AppStateSelector }))) : null;
 
@@ -33,6 +34,7 @@ export function ApplicationBoundary({ children }: { children: ReactNode }) {
   const selector = enabled ? <Suspense fallback={null}><StateSelector state={selected} onChange={setSelected} /></Suspense> : null;
   const brand = <div className="app-state-brand"><img src={Logo} alt="Alfred" /><strong>ALFRED</strong><StateControl /></div>;
   return <AppStateContext.Provider value={enabled ? { selected: startScreen ? selected : "", selector } : null}>
+    <ConnectionStatus />
     {/* Toasts leave the live app visible. Start Screen hides it without
         unmounting the account, navigation or open drafts. */}
     <div className="live-app-surface" hidden={startScreen}>

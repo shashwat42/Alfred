@@ -21,7 +21,7 @@ function ProfileEditorForm() {
   useEffect(() => () => { generation.current++; }, []);
   if (!session) return null;
   return <section className="settings-card-group profile-editor">
-    <h3 className="settings-group-header"><User size={16} className="settings-group-icon" />Edit profile</h3>
+    <details className="settings-details"><summary className="settings-group-header"><User size={16} className="settings-group-icon" />Edit profile</summary>
     <form className="settings-feature-card" onSubmit={event => {
       event.preventDefault(); if (busy) return; setBusy(true); setError(""); setFeedback("");
       const current = generation.current;
@@ -29,6 +29,7 @@ function ProfileEditorForm() {
     }}>
       <label htmlFor="profile-name" className="settings-feature-title">Account name</label>
       <input id="profile-name" className="settings-select-input" autoComplete="nickname" maxLength={100} required value={name} disabled={busy} onChange={event => { setName(event.target.value); setFeedback(""); }} />
+      <p className="settings-feature-desc">PNG, JPEG or WebP up to 8 MB. Photos are cropped to 512 × 512 and compressed below 200 KB.</p>
       <div className="profile-photo-edit">
         {picture ? <img src={picture} alt="Profile photo preview" className="settings-profile-avatar-img" /> : <div className="settings-profile-avatar-circle">{name.trim()[0]?.toUpperCase() || "G"}</div>}
         <label className="settings-action-btn profile-photo-picker"><Camera size={16} />Choose photo<input aria-label="Choose profile photo" type="file" accept="image/png,image/jpeg,image/webp" disabled={busy} onChange={event => {
@@ -42,5 +43,6 @@ function ProfileEditorForm() {
       <button type="submit" className="settings-action-btn" disabled={busy || !dirty || !name.trim()}>{busy ? "Saving…" : "Save profile"}</button>
       <p className="settings-save-feedback" role={error ? "alert" : "status"}>{error || feedback}</p>
     </form>
+    </details>
   </section>;
 }

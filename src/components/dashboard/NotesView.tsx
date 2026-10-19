@@ -1,6 +1,9 @@
 import { ErrorNotice } from "../reliability/Notifications";
+import { notePlainText } from "../../lib/noteText.ts";
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import {
+    Copy,
+    Type,
     ChevronLeft,
     Search,
     Plus,
@@ -32,19 +35,8 @@ interface NotesViewProps {
 const PRESET_FONT_SIZES = [12, 14, 15, 16, 18, 20, 24];
 
 function sanitizeForPreview(htmlOrText: string): string[] {
-    if (!htmlOrText) return [];
-    return htmlOrText
-        .replace(/<br\s*\/?>/gi, "\n")
-        .replace(/<\/p>/gi, "\n")
-        .replace(/<\/div>/gi, "\n")
-        .replace(/<\/li>/gi, "\n")
-        .replace(/<[^>]*>/g, "")
-        .replace(/\*\*/g, "")
-        .replace(/\*/g, "")
-        .split("\n")
-        .map((l) => l.trim())
-        .filter((l) => l.length > 0)
-        .slice(0, 8);
+    const plain = notePlainText(htmlOrText);
+    return plain ? plain.split("\n").map(line => line.trim()).slice(0, 3) : [];
 }
 
 export function NotesView({
@@ -65,6 +57,9 @@ export function NotesView({
     const [content, setContent] = useState(activeNote?.content ?? "");
     const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "unsaved">("saved");
     const [currentFontSize, setCurrentFontSize] = useState<number>(15);
+    const [formatOpen, setFormatOpen] = useState(false);
+    const [copyFeedback, setCopyFeedback] = useState("");
+    const selectedRange = useRef<Range | null>(null);
     const [isFontSizeMenuOpen, setIsFontSizeMenuOpen] = useState(false);
 
     // Track active formatting states (bold, italic, underline, list)
@@ -93,6 +88,20 @@ export function NotesView({
 
     const isEditorOpen = Boolean(activeNote);
 
+    useEffect(() => {
+        window.dispatchEvent(new CustomEvent("alfred:note-open", { detail: isEditorOpen }));
+        return () => { window.dispatchEvent(new CustomEvent("alfred:note-open", { detail: false })); };
+    }, [isEditorOpen]);
+    const rememberSelection = () => {
+        const selection = window.getSelection();
+        if (selection?.rangeCount && editorRef.current?.contains(selection.anchorNode)) selectedRange.current = selection.getRangeAt(0).cloneRange();
+    };
+    const restoreSelection = () => {
+        const selection = window.getSelection();
+        if (selectedRange.current && selection && editorRef.current?.contains(selectedRange.current.startContainer)) {
+            selection.removeAllRanges(); selection.addRange(selectedRange.current);
+        }
+    };
     // Check active formatting at cursor position
     const checkActiveFormats = useCallback(() => {
         try {
@@ -221,9 +230,10 @@ export function NotesView({
     const execCommand = (command: string, value: string | undefined = undefined) => {
         if (!editorRef.current) return;
         editorRef.current.focus();
+        restoreSelection();
         document.execCommand(command, false, value);
         handleEditorInput();
-        checkActiveFormats();
+        checkActiveFormats(); rememberSelection();
     };
 
     // Apply font size specifically to the active selection or current paragraph/line
@@ -232,6 +242,7 @@ export function NotesView({
         setIsFontSizeMenuOpen(false);
         if (!editorRef.current) return;
         editorRef.current.focus();
+        restoreSelection();
 
         const selection = window.getSelection();
         if (!selection || !selection.rangeCount) return;
@@ -345,6 +356,22 @@ export function NotesView({
         }
     };
 
+    const leaveEditor = async (after?: () => void) => {
+        if (savingRef.current) return;
+        await handleManualSave();
+        const latest = latestEditRef.current, saved = lastSavedRef.current;
+        if (latest.title.trim() === saved.title && latest.content === saved.content) { if (after) after(); else onBackToList(); }
+    };
+    const leaveRef = useRef(leaveEditor);
+    useEffect(() => { leaveRef.current = leaveEditor; });
+    useEffect(() => {
+        if (!isEditorOpen) return;
+        const back = (event: Event) => { if (document.querySelector("dialog[open]")) return; event.preventDefault(); void leaveRef.current(); };
+        const navigate = (event: Event) => { event.preventDefault(); void leaveRef.current((event as CustomEvent<() => void>).detail); };
+        window.addEventListener("alfred:back", back, true); window.addEventListener("alfred:before-navigate", navigate);
+        return () => { window.removeEventListener("alfred:back", back, true); window.removeEventListener("alfred:before-navigate", navigate); };
+    }, [isEditorOpen]);
+
     const handleDeleteCurrentNote = async () => {
         if (editId) {
             const confirmed = window.confirm("Delete this note?");
@@ -438,7 +465,7 @@ export function NotesView({
                         <button
                             type="button"
                             className="note-editor-icon-btn"
-                            onClick={onBackToList}
+                            onClick={() => void leaveEditor()}
                             title="Back to notes"
                         >
                             <ChevronLeft size={24} />
@@ -494,22 +521,26 @@ export function NotesView({
                         className="note-editor-rich-canvas"
                         onInput={handleEditorInput}
                         onKeyDown={handleEditorKeyDown}
-                        onKeyUp={checkActiveFormats}
-                        onMouseUp={checkActiveFormats}
+                        onKeyUp={() => { checkActiveFormats(); rememberSelection(); }}
+                        onMouseUp={() => { checkActiveFormats(); rememberSelection(); }}
                         data-placeholder="Start typing your note here..."
                     />
                 </div>
 
                 {/* Editor Bottom Formatting Bar */}
-                <div className="note-editor-bottom-bar">
+                <button type="button" className="note-format-toggle" aria-expanded={formatOpen} aria-controls="note-formatting" onPointerDown={rememberSelection} onClick={() => setFormatOpen(!formatOpen)}><Type size={18} />Formatting</button>
+                <p className="note-copy-feedback" role="status">{copyFeedback}</p>
+                <div id="note-formatting" className="note-editor-bottom-bar" hidden={!formatOpen}>
+                    <button type="button" className="note-format-btn" title="Copy content" aria-label="Copy content" onClick={() => {
+                        if (!navigator.clipboard?.writeText) { setCopyFeedback("Copy is unavailable. Please select and copy the text."); return; }
+                        void navigator.clipboard.writeText(notePlainText(content)).then(() => setCopyFeedback("Copied content.")).catch(() => setCopyFeedback("Could not copy. Please select and copy the text."));
+                    }}><Copy size={17} /></button>
                     {/* Bold */}
                     <button
                         type="button"
                         className={`note-format-btn ${activeFormats.bold ? "is-active" : ""}`}
-                        onMouseDown={(e) => {
-                            e.preventDefault();
-                            execCommand("bold");
-                        }}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => execCommand("bold")}
                         title="Bold"
                     >
                         <Bold size={17} />
@@ -519,10 +550,8 @@ export function NotesView({
                     <button
                         type="button"
                         className={`note-format-btn ${activeFormats.italic ? "is-active" : ""}`}
-                        onMouseDown={(e) => {
-                            e.preventDefault();
-                            execCommand("italic");
-                        }}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => execCommand("italic")}
                         title="Italic"
                     >
                         <Italic size={17} />
@@ -532,10 +561,8 @@ export function NotesView({
                     <button
                         type="button"
                         className={`note-format-btn ${activeFormats.underline ? "is-active" : ""}`}
-                        onMouseDown={(e) => {
-                            e.preventDefault();
-                            execCommand("underline");
-                        }}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => execCommand("underline")}
                         title="Underline"
                     >
                         <Underline size={17} />
@@ -547,10 +574,8 @@ export function NotesView({
                     <button
                         type="button"
                         className={`note-format-btn ${activeFormats.bullet ? "is-active" : ""}`}
-                        onMouseDown={(e) => {
-                            e.preventDefault();
-                            execCommand("insertUnorderedList");
-                        }}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => execCommand("insertUnorderedList")}
                         title="Bullet List"
                     >
                         <List size={18} />
@@ -560,10 +585,8 @@ export function NotesView({
                     <button
                         type="button"
                         className={`note-format-btn ${activeFormats.numbered ? "is-active" : ""}`}
-                        onMouseDown={(e) => {
-                            e.preventDefault();
-                            execCommand("insertOrderedList");
-                        }}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => execCommand("insertOrderedList")}
                         title="Numbered List"
                     >
                         <ListOrdered size={18} />
@@ -624,10 +647,8 @@ export function NotesView({
                     <button
                         type="button"
                         className="note-format-btn"
-                        onMouseDown={(e) => {
-                            e.preventDefault();
-                            execCommand("undo");
-                        }}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => execCommand("undo")}
                         title="Undo"
                     >
                         <Undo2 size={17} />
@@ -637,10 +658,8 @@ export function NotesView({
                     <button
                         type="button"
                         className="note-format-btn"
-                        onMouseDown={(e) => {
-                            e.preventDefault();
-                            execCommand("redo");
-                        }}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => execCommand("redo")}
                         title="Redo"
                     >
                         <Redo2 size={17} />
@@ -750,7 +769,7 @@ export function NotesView({
                                             onClick={() => onSelectNote(note)}
                                         >
                                             {/* Preview Card Box */}
-                                            <div className="note-card-box">
+                                            <div className="note-card-box" data-details={`${displayTitle}\n${sanitizeForPreview(note.content || "").join("\n")}`}>
                                                 <div className="note-card-content-preview">
                                                     {previewLines.length > 0 ? (
                                                         previewLines.map((line, idx) => (

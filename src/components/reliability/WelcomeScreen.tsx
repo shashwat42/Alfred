@@ -25,7 +25,7 @@ export function WelcomeScreen({ guest, google, message, errorMessage, embedded =
     finally { lock.current = false; setBusy(null); }
   };
   return <main className={`welcome-screen ${embedded ? "welcome-embedded" : ""}`}>
-    {!embedded && <Header />}
+    {!embedded && !/Android/i.test(navigator.userAgent) && <Header />}
     <div className="welcome-layout">
       <section className="welcome-story" aria-label="About Alfred">
         <div className="welcome-brand"><img src={Logo} alt="" /><span>ALFRED</span>{!embedded && <StateControl />}</div>

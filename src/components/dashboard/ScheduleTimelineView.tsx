@@ -1,4 +1,5 @@
 import React from "react";
+import { CalendarDays } from "lucide-react";
 import type { ScheduleItem } from "../../types/dashboard.ts";
 import { EVENT_PALETTE, parseTimeToMinutes, TIMELINE_HOURS } from "../../utils/scheduleUtils.ts";
 
@@ -24,6 +25,7 @@ export function ScheduleTimelineView({
 
     return (
         <div className="schedule-timeline-container">
+            {activeTimelineSchedule.length === 0 && <div className="timeline-empty-hint" role="status"><CalendarDays size={28} aria-hidden="true" /><span>Your schedule is clear. Add an event to plan this day.</span></div>}
             <div className="timeline-grid">
                 {TIMELINE_HOURS.map((hour) => {
                     const hourLabel =

@@ -1,5 +1,5 @@
 import { ErrorNotice } from "./components/reliability/Notifications";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import Chat, { VoiceModeHeaderIndicator, type VoiceHeaderState } from "./components/Chat";
 import Dashboard from "./components/Dashboard";
 import type { DashboardView } from "./types/dashboard.ts";
@@ -7,13 +7,18 @@ import Header from "./components/Header";
 import { MobileBottomNav, type MobileNavDestination } from "./components/MobileBottomNav";
 import { useAuth } from "./auth/authContext.ts";
 import { audioRecorder } from "./lib/audioRecorder";
+import { getAccountPreferences, saveAccountPreferences, PREFERENCES_CHANGED_EVENT } from "./lib/accountPreferences.ts";
 import Logo from "./assets/Alfred_Logo.svg";
 import { StateControl } from "./components/reliability/StateControl";
 import { NOTIFICATION_OPEN_EVENT } from "./lib/scheduleNotifications.ts";
+import { HoldDetails } from "./components/HoldDetails.tsx";
 
 type MobileTab = "assistant" | "dashboard";
 const mobileNavOrder = ["assistant", "dashboard", "schedule", "tasks", "notes"] as const;
 type SwipeDestination = (typeof mobileNavOrder)[number];
+function navigateSafely(proceed: () => void) {
+  if (window.dispatchEvent(new CustomEvent("alfred:before-navigate", { cancelable: true, detail: proceed }))) proceed();
+}
 
 const App = () => {
   const isAndroidDevice = typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent);
@@ -22,7 +27,7 @@ const App = () => {
   const [mobileTab, setMobileTab] = useState<MobileTab>("assistant");
   const [voiceHeaderState, setVoiceHeaderState] = useState<VoiceHeaderState | null>(null);
   useEffect(() => {
-    const open = () => { setMobileTab("dashboard"); setCurrentView("schedule"); };
+    const open = () => navigateSafely(() => { setMobileTab("dashboard"); setCurrentView("schedule"); });
     window.addEventListener(NOTIFICATION_OPEN_EVENT, open);
     return () => window.removeEventListener(NOTIFICATION_OPEN_EVENT, open);
   }, []);
@@ -35,31 +40,53 @@ const App = () => {
       audioRecorder.cancel();
     }
   }, [mobileTab, voiceHeaderState]);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem("alfred_sidebar_collapsed") === "true";
-    } catch {
-      return false;
-    }
-  });
-
-  const handleToggleSidebar = () => {
-    setIsSidebarCollapsed((prev) => {
-      const next = !prev;
-      try {
-        localStorage.setItem("alfred_sidebar_collapsed", String(next));
-      } catch {
-        // ignore storage errors
-      }
-      return next;
-    });
-  };
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => getAccountPreferences().sidebarCollapsed);
+  useEffect(() => {
+    const changed = () => setIsSidebarCollapsed(getAccountPreferences().sidebarCollapsed);
+    changed(); window.addEventListener(PREFERENCES_CHANGED_EVENT, changed);
+    window.addEventListener("storage", changed);
+    return () => { window.removeEventListener(PREFERENCES_CHANGED_EVENT, changed); window.removeEventListener("storage", changed); };
+  }, [session?.account.id]);
+  const handleToggleSidebar = useCallback(() => {
+    const next = !isSidebarCollapsed;
+    saveAccountPreferences({ sidebarCollapsed: next }); setIsSidebarCollapsed(next);
+  }, [isSidebarCollapsed]);
+  const navigation = useRef<{ tab: MobileTab; view: DashboardView }[]>([]);
+  const lastScreen = useRef({ tab: mobileTab, view: currentView });
+  const returning = useRef(false);
+  const [noteOpen, setNoteOpen] = useState(false);
+  useEffect(() => {
+    navigation.current = [];
+  }, [session?.account.id]);
+  useEffect(() => {
+    const last = lastScreen.current;
+    if (last.tab === mobileTab && last.view === currentView) return;
+    if (!returning.current) navigation.current.push(last);
+    returning.current = false; lastScreen.current = { tab: mobileTab, view: currentView };
+  }, [mobileTab, currentView]);
+  useEffect(() => {
+    const back = (event: Event) => {
+      if (event.defaultPrevented) return;
+      const dialog = document.querySelector<HTMLDialogElement>("dialog[open]");
+      if (dialog) { dialog.dispatchEvent(new Event("cancel", { cancelable: true })); event.preventDefault(); return; }
+      const previous = navigation.current.pop();
+      const target = previous ?? { tab: "dashboard", view: "home" };
+      returning.current = lastScreen.current.tab !== target.tab || lastScreen.current.view !== target.view;
+      setMobileTab(target.tab); setCurrentView(target.view);
+      event.preventDefault();
+    };
+    const note = (event: Event) => setNoteOpen((event as CustomEvent<boolean>).detail);
+    window.addEventListener("alfred:back", back); window.addEventListener("alfred:note-open", note);
+    return () => { window.removeEventListener("alfred:back", back); window.removeEventListener("alfred:note-open", note); };
+  }, []);
 
   useEffect(() => {
     const navigate = (event: Event) => {
       const view = (event as CustomEvent<string>).detail;
-      if (view === "assistant") { setMobileTab("assistant"); setIsSidebarCollapsed(false); }
-      else if (["home", "tasks", "notes", "schedule"].includes(view)) { setMobileTab("dashboard"); setCurrentView(view as DashboardView); }
+      navigateSafely(() => {
+        if (view === "assistant") { setMobileTab("assistant"); setIsSidebarCollapsed(false); }
+        else if (["home", "tasks", "notes", "schedule"].includes(view)) { setMobileTab("dashboard"); setCurrentView(view as DashboardView); }
+      });
     };
     window.addEventListener("alfred:tour-navigate", navigate);
     return () => window.removeEventListener("alfred:tour-navigate", navigate);
@@ -72,7 +99,7 @@ const App = () => {
     if (isSidebarCollapsed) {
       setIsSidebarCollapsed(false);
       try {
-        localStorage.setItem("alfred_sidebar_collapsed", "false");
+        saveAccountPreferences({ sidebarCollapsed: false });
       } catch {
         // ignore storage errors
       }
@@ -88,7 +115,7 @@ const App = () => {
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [handleToggleSidebar]);
 
   // Listen for tray navigation commands (e.g., Settings) and in-app settings events
   useEffect(() => {
@@ -98,8 +125,7 @@ const App = () => {
         const { listen } = await import("@tauri-apps/api/event");
         unlisten = await listen<string>("alfred:navigate", (event) => {
           if (event.payload === "settings") {
-            setMobileTab("dashboard");
-            setCurrentView("settings");
+            navigateSafely(() => { setMobileTab("dashboard"); setCurrentView("settings"); });
           }
         });
       } catch {
@@ -109,8 +135,7 @@ const App = () => {
     void setupTauriListener();
 
     const handleLocalSettingsOpen = () => {
-      setMobileTab("dashboard");
-      setCurrentView("settings");
+      navigateSafely(() => { setMobileTab("dashboard"); setCurrentView("settings"); });
     };
     window.addEventListener("alfred:open_settings", handleLocalSettingsOpen);
 
@@ -121,17 +146,18 @@ const App = () => {
   }, []);
 
   const handleGoHome = () => {
-    setCurrentView("home");
-    setMobileTab("dashboard");
+    navigateSafely(() => { setCurrentView("home"); setMobileTab("dashboard"); });
   };
 
   const handleMobileNavigate = (destination: MobileNavDestination) => {
+    navigateSafely(() => {
     if (destination === "assistant") {
       setMobileTab("assistant");
     } else {
       setMobileTab("dashboard");
       setCurrentView(destination === "dashboard" ? "home" : destination);
     }
+    });
   };
 
   const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
@@ -146,7 +172,7 @@ const App = () => {
     if (!target) return false;
     if (
       target.closest(
-        "input, textarea, select, button, [role='button'], [role='slider'], [role='dialog'], dialog, .dialog-backdrop, .chat-composer-box, .chat-prompt-input-wrapper, .timeline-event-chip"
+        "input, textarea, select, button, [contenteditable], [role='button'], [role='slider'], [role='dialog'], dialog, .dialog-backdrop, .chat-composer-box, .chat-prompt-input-wrapper, .timeline-event-chip"
       )
     ) {
       return true;
@@ -173,6 +199,7 @@ const App = () => {
   };
 
   const handleTouchStart = (e: React.TouchEvent) => {
+    if (noteOpen) return;
     if (e.touches.length !== 1) {
       touchStartRef.current = null;
       return;
@@ -238,10 +265,11 @@ const App = () => {
       onTouchEnd={handleTouchEnd}
       onTouchCancel={handleTouchCancel}
     >
-      <Header onGoHome={handleGoHome} />
+      {!isAndroidDevice && <Header onGoHome={handleGoHome} />}
+      <HoldDetails />
 
       {/* Top Black Header with Alfred Branding (Android/Mobile only, consistent across all 6 destinations) */}
-      <header className="mobile-top-header" role="banner">
+      {!isAndroidDevice && <header className="mobile-top-header" role="banner">
         {voiceHeaderState && voiceHeaderState.voiceModeState !== "off" && !voiceHeaderState.isLogoCentered ? (
           <VoiceModeHeaderIndicator
             voiceModeState={voiceHeaderState.voiceModeState}
@@ -259,7 +287,7 @@ const App = () => {
             <StateControl />
           </div>
         )}
-      </header>
+      </header>}
 
       <ErrorNotice message={error} retry={retry} />
       {loading && !session ? (
@@ -286,13 +314,12 @@ const App = () => {
               isActiveView={mobileTab === "assistant"}
               onVoiceStateChange={setVoiceHeaderState}
               onOpenSettings={() => {
-                setMobileTab("dashboard");
-                setCurrentView("settings");
+                navigateSafely(() => { setMobileTab("dashboard"); setCurrentView("settings"); });
               }}
             />
             <Dashboard key={session?.account.id} currentView={currentView} onViewChange={setCurrentView} />
           </main>
-          <MobileBottomNav
+          {!noteOpen && <MobileBottomNav
             activeDestination={
               mobileTab === "assistant"
                 ? "assistant"
@@ -307,7 +334,7 @@ const App = () => {
                 : "other"
             }
             onNavigate={handleMobileNavigate}
-          />
+          />}
         </>
       )}
     </div>

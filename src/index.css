@@ -7323,3 +7323,62 @@ body.is-overlay .overlay-root {
 .profile-photo-picker { position: relative; display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
 .profile-photo-picker input { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: pointer; }
 .profile-photo-picker:focus-within { outline: 2px solid #f87171; outline-offset: 3px; }
+
+/* Account settings and compact workspaces. */
+.settings-view-container input[role="switch"] { appearance:none; -webkit-appearance:none; width:40px; height:24px; border:1px solid #666; border-radius:999px; background:#3f3f46; position:relative; flex-shrink:0; cursor:pointer; transition:background .18s; }
+.settings-view-container input[role="switch"]::before { content:""; position:absolute; width:16px; height:16px; border-radius:50%; background:white; top:3px; left:3px; transition:transform .18s; }
+.settings-view-container input[role="switch"]:checked { background:#b91c1c; border-color:#b91c1c; }
+.settings-view-container input[role="switch"]:checked::before { transform:translateX(16px); }
+.settings-view-container input[role="switch"]:focus-visible { outline:2px solid #f87171; outline-offset:3px; }
+.settings-view-container input[role="switch"]:disabled { opacity:.5; cursor:wait; }
+.settings-view-scrollable { gap:14px; }
+.settings-card-group { margin-bottom:14px; }
+.settings-feature-card, .settings-profile-card, .settings-info-card { padding:14px; }
+.settings-feature-row { padding-block:8px; gap:12px; }
+.settings-feature-desc { font-size:12px; line-height:1.5; }
+.dashboard-section-body > .dashboard-top-bar { position:static; display:flex; flex-wrap:wrap; margin:0 0 16px; padding:12px; border-radius:14px; background:#ffffff05; justify-content:space-between; }
+.content-header-title-row { width:100%; }
+.dashboard-content-header { position:relative; }
+.dashboard-content-header > .dashboard-refresh-btn { position:absolute; top:4px; right:0; margin:0; }
+.content-header-title-row { padding-right:40px; }
+@media(min-width:769px) { .App:not(.is-android) .dashboard-content-header { padding-right:40px; } .App:not(.is-android) .content-header-title-row { padding-right:0; } }
+.note-editor-bottom-bar { background:transparent; border:0; box-shadow:none; flex-wrap:wrap; }
+.note-editor-bottom-bar[hidden] { display:none; }
+.note-format-toggle { display:flex; align-items:center; align-self:flex-end; gap:6px; background:transparent; border:0; color:#d4d4d8; padding:10px; cursor:pointer; }
+.note-copy-feedback { font-size:12px; color:#a1a1aa; margin:0; }
+.note-copy-feedback:empty { display:none; }
+.upcoming-notes-bar, .upcoming-notes-bar:focus-within { background:transparent; box-shadow:none; border:0; }
+.note-preview-line { overflow:hidden; text-overflow:ellipsis; white-space:pre; min-height:1.4em; }
+.note-preview-line:last-child::after { content:"…"; }
+.recent-note-preview-text { white-space:pre-line; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+.empty-illustration { display:block; margin:12px auto; color:#a1a1aa; }
+.connection-screen { position:fixed; inset:0; z-index:10000; background:#111; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:24px; gap:12px; color:#fafafa; text-align:center; }
+.connection-screen button { padding:10px 20px; border-radius:10px; background:#27272a; color:#fafafa; border:1px solid #52525b; }
+.tuxedo-loader { position:relative; display:inline-block; width:44px; height:56px; border-radius:8px 8px 14px 14px; background:#18181b; border:1px solid #52525b; overflow:hidden; flex-shrink:0; }
+.tuxedo-lapel { position:absolute; top:0; width:20px; height:36px; background:#e4e4e7; }
+.tuxedo-lapel.left { left:1px; clip-path:polygon(0 0,100% 0,100% 100%); }
+.tuxedo-lapel.right { right:1px; clip-path:polygon(0 0,100% 0,0 100%); }
+.tuxedo-bow { position:absolute; width:18px; height:9px; top:5px; left:12px; background:#b91c1c; clip-path:polygon(0 0,50% 35%,100% 0,100% 100%,50% 65%,0 100%); }
+.tuxedo-button { position:absolute; left:20px; width:4px; height:4px; border-radius:50%; background:#f87171; animation:tuxedo-button 1.6s ease-in-out infinite; }
+@keyframes tuxedo-button { 0%,15%,100% { transform:translateX(10px); opacity:.2; } 40%,75% { transform:translateX(0); opacity:1; } }
+.hold-details { position:fixed; bottom:max(90px,env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%); max-width:min(90vw,420px); z-index:11000; border:1px solid #52525b; background:#18181b; color:#fafafa; padding:12px 16px; border-radius:12px; white-space:pre-line; box-shadow:0 8px 25px #0008; }
+.App.is-android { padding-top:env(safe-area-inset-top,12px); height:calc(100svh - var(--keyboard-inset,0px)); min-height:0; overflow:hidden; }
+.App.is-android .Main { min-height:0; padding-top:12px; overflow:hidden; }
+.App.is-android .mobile-top-header { display:none; }
+@media(max-width:760px) { .settings-feature-card,.settings-profile-card,.settings-info-card { padding:10px; } .settings-feature-row { flex-wrap:wrap; } .note-editor-bottom-bar { gap:4px; padding:4px 0; } }
+@media(prefers-reduced-motion:reduce) { .tuxedo-button { animation:none; } .settings-view-container input[role="switch"],.settings-view-container input[role="switch"]::before { transition:none; } }
+
+.connection-screen { width:100%; height:100%; max-width:none; max-height:none; margin:0; border:0; box-sizing:border-box; }
+.connection-screen:not([open]) { display:none; }
+
+.mobile-account-refresh { display:none; }
+@media(max-width:768px) { .Chat > .mobile-account-refresh { display:flex; position:absolute; top:12px; right:16px; z-index:10; } }
+.App.is-android .Chat > .mobile-account-refresh { display:flex; position:absolute; top:12px; right:16px; z-index:10; }
+
+.timeline-empty-hint { display:flex; align-items:center; gap:12px; padding:14px; color:#a1a1aa; font-size:13px; border-bottom:1px solid #ffffff12; }
+
+.settings-details > summary { cursor:pointer; color:#c4c4cc; font-size:12px; padding-block:8px; }
+.settings-details > summary.settings-group-header { display:flex; align-items:center; gap:8px; }
+.settings-details > summary::after { content:"+"; margin-left:auto; }
+.settings-details[open] > summary::after { content:"−"; }
+.settings-details > summary:focus-visible { outline:2px solid #f87171; outline-offset:3px; }

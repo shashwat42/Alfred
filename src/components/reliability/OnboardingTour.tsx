@@ -25,7 +25,7 @@ export function Onboarding({ complete, legal, interactive = false }: {
   const finish = async () => {
     if (lock.current) return;
     lock.current = true; setBusy(true); setError("");
-    try { await complete(); }
+    try { await complete(); window.dispatchEvent(new CustomEvent("alfred:tour-navigate", { detail: "home" })); }
     catch (e) { setError(e instanceof Error ? e.message : "Could not save your tour progress. Please retry."); }
     finally { lock.current = false; setBusy(false); }
   };

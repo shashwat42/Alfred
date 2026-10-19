@@ -91,8 +91,22 @@ export async function apiFetch(
     });
   } catch (error) {
     if (init.signal?.aborted) throw error;
+    window.dispatchEvent(new CustomEvent("alfred:server-unavailable", { detail: navigator.onLine }));
+    if (/^\/api\/(tasks|notes|schedule)(?:[/?]|$)/.test(input) && (init.method ?? "GET").toUpperCase() === "GET") {
+      const { localWorkspaceResponse } = await import("./localWorkspace.ts");
+      const cached = await localWorkspaceResponse(input, { ...init, _expectedAccountId: requestAccountId, _offlineRead: true });
+      if (cached) return cached;
+    }
     if (error instanceof DOMException && error.name === "TimeoutError") throw new Error("The request timed out. Please retry; your input is preserved.", { cause: error });
     throw new Error(typeof navigator !== "undefined" && !navigator.onLine ? "You’re offline. Check your connection and retry." : "The Alfred server could not be reached. Please retry.", { cause: error });
+  }
+  if (response.status >= 502 && response.status <= 504) {
+    window.dispatchEvent(new CustomEvent("alfred:server-unavailable", { detail: true }));
+    if (/^\/api\/(tasks|notes|schedule)(?:[/?]|$)/.test(input) && (init.method ?? "GET").toUpperCase() === "GET") {
+      const { localWorkspaceResponse } = await import("./localWorkspace.ts");
+      const cached = await localWorkspaceResponse(input, { ...init, _expectedAccountId: requestAccountId, _offlineRead: true });
+      if (cached) return cached;
+    }
   }
   if (requestAccountId && getSession()?.account.id !== requestAccountId) throw new Error("Your account changed. Please try again.");
   if (response.status === 401 && token) {

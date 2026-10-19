@@ -67,8 +67,8 @@ function DashboardHeaderComponent({
                     <button
                         type="button"
                         className="dashboard-back-btn"
-                        onClick={() => handleViewChange("home")}
-                        aria-label="Back to Homepage"
+                        onClick={() => { const event = new Event("alfred:back", { cancelable: true }); if (window.dispatchEvent(event)) handleViewChange("home"); }}
+                        aria-label="Back to previous screen"
                     >
                         <ArrowLeft size={18} aria-hidden="true" />
                     </button>
@@ -80,19 +80,6 @@ function DashboardHeaderComponent({
                     {(activeView === "notes" || activeView === "mails") && "NOTES"}
                     {activeView === "settings" && "SETTINGS"}
                 </h2>
-
-                {onRefresh && (
-                    <button
-                        type="button"
-                        className={`dashboard-refresh-btn ${isRefreshing ? "is-refreshing" : ""}`}
-                        onClick={onRefresh}
-                        disabled={isRefreshing}
-                        aria-label="Refresh dashboard data"
-                        title={isRefreshing ? "Refreshing..." : formattedLastRefresh}
-                    >
-                        <RefreshCw size={15} className={isRefreshing ? "animate-spin text-red-500" : ""} />
-                    </button>
-                )}
 
                 {activeView === "home" && (
                     <button
@@ -110,6 +97,20 @@ function DashboardHeaderComponent({
             <div className="desktop-dashboard-navigation">
                 <DashboardNav activeView={activeView} handleViewChange={handleViewChange} />
             </div>
+                {onRefresh && (
+                    <button
+                        type="button"
+                        className={`dashboard-refresh-btn ${isRefreshing ? "is-refreshing" : ""}`}
+                        onClick={onRefresh}
+                        disabled={isRefreshing}
+                        aria-label="Refresh dashboard data"
+                        title={isRefreshing ? "Refreshing..." : formattedLastRefresh}
+                    >
+                        <RefreshCw size={15} className={isRefreshing ? "animate-spin text-red-500" : ""} />
+                    </button>
+                )}
+
+
 
             {activeView === "schedule" && (
                 <div className="schedule-header-actions">

@@ -27,10 +27,10 @@ export function AndroidAssistantSetup() {
     <div className="settings-feature-card">
       <div className="settings-feature-info">
         <span className="settings-feature-title">{status?.active ? "Alfred is your active assistant" : "Use Alfred over your current app"}</span>
-        <p className="settings-feature-desc">Choose Alfred as your default digital assistant in Android settings. Then use your device’s supported assistant gesture or shortcut to open a floating conversation. Gestures depend on your device and launcher.</p>
-        <p className="settings-feature-desc">No draw-over-other-apps permission or always-listening microphone is needed. You can keep using Alfred normally if your device does not offer assistant selection.</p>
+        <details className="settings-details"><summary>Setup help</summary><p className="settings-feature-desc">Choose Alfred as your default digital assistant in Android settings. Then use your device’s supported assistant gesture or shortcut to open a floating conversation. Gestures depend on your device and launcher.</p>
+        <p className="settings-feature-desc">No draw-over-other-apps permission or always-listening microphone is needed. You can keep using Alfred normally if your device does not offer assistant selection.</p></details>
       </div>
-      {available ? <button className="settings-action-btn is-login" disabled={busy || !status || !status.supported || (!status.roleAvailable && !status.settingsAvailable)} onClick={async () => {
+      {available ? <button className="settings-action-btn is-login" disabled={busy || status?.supported === false} onClick={async () => {
         setBusy(true); setError("");
         try { await androidAssistantRequest("setup"); }
         catch (err) { setError(err instanceof Error ? err.message : "Could not open Android settings."); }

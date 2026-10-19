@@ -47,3 +47,17 @@ patch("app/src/main/java/com/alfred/app/MainActivity.kt", (text) => {
   }
   return text;
 });
+
+patch("app/src/main/java/com/alfred/app/MainActivity.kt", text => {
+  if (text.includes("onBackPressedDispatcher.addCallback")) return text;
+  return text.replace("com.alfred.assistant.AssistantBridge.installMain(this, webView)", `com.alfred.assistant.AssistantBridge.installMain(this, webView)
+    onBackPressedDispatcher.addCallback(this, object : androidx.activity.OnBackPressedCallback(true) {
+      override fun handleOnBackPressed() {
+        if (android.os.Build.VERSION.SDK_INT >= 30 && webView.rootWindowInsets?.isVisible(android.view.WindowInsets.Type.ime()) == true) {
+          webView.windowInsetsController?.hide(android.view.WindowInsets.Type.ime())
+          return
+        }
+        webView.evaluateJavascript("window.dispatchEvent(new Event('alfred:back', {cancelable:true}))", null)
+      }
+    })`);
+});

@@ -7,6 +7,14 @@ import { AiRequest, AiWindow } from "./aiUsage.ts";
 import { withTenantWrite } from "./tenantWrite.ts";
 import { measureStorage, storageUsage } from "./storage.ts";
 import { PolicyError } from "./errors.ts";
+import { defaultPreferences, validPreferences, type AccountPreferences } from "../workspace/preferences.ts";
+
+export async function updateAccountPreferences(accountId: string, patch: Partial<AccountPreferences>) {
+    const updated = await withTenantWrite(accountId, session => Account.findByIdAndUpdate(accountId,
+        { $set: Object.fromEntries(Object.entries(patch).map(([key, value]) => [`preferences.${key}`, value])) },
+        { returnDocument: "after", session: session! }));
+    return { ...defaultPreferences, ...validPreferences(updated?.preferences) };
+}
 
 export async function accountState(accountId: string) {
     // Reconciliation and reads share the same fence as writes and deletion.

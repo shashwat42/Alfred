@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { loadAccountProfile, PROFILE_CHANGED_EVENT } from "../lib/accountProfile.ts";
+import { syncAccountPreferences } from "../lib/accountPreferences.ts";
 
 /** Configurable polling interval in milliseconds, defaulting to 60,000ms (60 seconds) */
 export const DEFAULT_DASHBOARD_REFRESH_INTERVAL_MS = 60_000;
@@ -65,15 +67,19 @@ export function useDashboardAutoRefresh({
 
         const currentSeq = ++sequenceRef.current;
         setIsRefreshing(true);
+        window.dispatchEvent(new CustomEvent("alfred:refreshing", { detail: true }));
         setRefreshError(null);
 
         const promise = (async () => {
             try {
+                window.dispatchEvent(new Event("alfred:refresh-account"));
                 // Execute all datasets in parallel using existing hook refresh mechanisms
                 await Promise.all([
                     refreshTasksRef.current(),
                     refreshScheduleRef.current(),
                     refreshNotesRef.current(),
+                    loadAccountProfile(accountId, true).then(() => window.dispatchEvent(new Event(PROFILE_CHANGED_EVENT))),
+                    syncAccountPreferences(accountId),
                 ]);
 
                 // Ensure an older request cannot overwrite newer state
@@ -93,6 +99,7 @@ export function useDashboardAutoRefresh({
                 if (currentSeq === sequenceRef.current) {
                     inFlightPromiseRef.current = null;
                     setIsRefreshing(false);
+                    window.dispatchEvent(new CustomEvent("alfred:refreshing", { detail: false }));
                 }
             }
         })();
@@ -100,6 +107,12 @@ export function useDashboardAutoRefresh({
         inFlightPromiseRef.current = promise;
         return promise;
     }, [accountId]);
+
+    useEffect(() => {
+        const refresh = () => { void executeRefresh(); };
+        window.addEventListener("alfred:refresh", refresh);
+        return () => window.removeEventListener("alfred:refresh", refresh);
+    }, [executeRefresh]);
 
     // Automatic polling interval with pause/resume on visibility and connectivity
     useEffect(() => {

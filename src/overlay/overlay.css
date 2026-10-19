@@ -27,3 +27,13 @@
     .desktop-overlay-logo, .desktop-overlay-circle { transition: none; }
     .desktop-overlay-wave.is-recording i { transform: scaleY(calc(.4 + var(--voice-level, 0) * .6)); }
 }
+
+.overlay-root { animation:overlay-appear .2s ease-out both; }
+.desktop-overlay-logo { transform:none !important; filter:none !important; border-color:#b91c1c; }
+.desktop-overlay-wave.is-recording i { animation:none; transform:scaleY(calc(.08 + var(--voice-level,0) * .92)); transition:transform 65ms linear; }
+@keyframes overlay-appear { from { opacity:0; translate:0 -6px; } to { opacity:1; translate:0 0; } }
+@media(prefers-reduced-motion:reduce) { .overlay-root { animation:none; } .desktop-overlay-wave.is-recording i { transition:none; } }
+
+.overlay-window-surface { opacity:0; }
+.overlay-window-surface.is-ready { opacity:1; transition:opacity .18s ease-out; }
+@media(prefers-reduced-motion:reduce) { .overlay-window-surface.is-ready { transition:none; } }

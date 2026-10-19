@@ -20,6 +20,21 @@ const account = "111111111111111111111111", other = "222222222222222222222222";
 const login = (id = account) => storage.setItem(AUTH_STORAGE_KEY, JSON.stringify({ token: "fixture-token", account: { id, type: "user" } }));
 const request = (path: string, method = "GET", body?: unknown) => apiFetch(`/api/${path}`, { method, ...(body ? { body: JSON.stringify(body) } : {}) });
 
+test("server outages expose cached cloud reads without accepting cloud writes locally", async () => {
+  const id = "999999999999999999999999"; login(id);
+  await updateLocalWorkspace(id, workspace => { workspace.data.tasks = [{ _id: "aaaaaaaaaaaaaaaaaaaaaaaa", task: "Saved device copy", completed: false, priority: "normal" }]; });
+  setCloudSyncEnabled(id, true); const original = fetch;
+  globalThis.fetch = async () => new Response("unavailable", { status: 503 });
+  try {
+    const response = await request("tasks"); assert.equal(response.status, 200);
+    assert.equal((await response.json())[0].task, "Saved device copy");
+    assert.equal((await request("tasks", "POST", { task: "Must not save offline" })).status, 503);
+    assert.equal((await readLocalWorkspace(id)).data.tasks.length, 1);
+    globalThis.fetch = async () => { throw new Error("network unavailable"); };
+    assert.equal((await (await request("tasks")).json())[0].task, "Saved device copy");
+  } finally { globalThis.fetch = original; }
+});
+
 test("a saved local account can reopen its device workspace during a network outage", async () => {
   login(); const original = globalThis.fetch;
   globalThis.fetch = async () => { throw new Error("offline"); };

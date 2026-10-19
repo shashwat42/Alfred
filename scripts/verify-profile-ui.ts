@@ -12,8 +12,12 @@ const originalFetch = globalThis.fetch, createUrl = URL.createObjectURL, revokeU
 globalThis.fetch = async () => { throw new Error("Local profile editing must not upload."); };
 URL.createObjectURL = () => "blob:profile-test"; URL.revokeObjectURL = () => {};
 const photo = "data:image/png;base64,aGVsbG8=";
-Object.defineProperty(dom.HTMLCanvasElement.prototype, "getContext", { value: () => ({ drawImage() {} }) });
-Object.defineProperty(dom.HTMLCanvasElement.prototype, "toDataURL", { value: () => photo });
+const prepared: { width: number; height: number; format: string; quality: number }[] = [];
+Object.defineProperty(dom.HTMLCanvasElement.prototype, "getContext", { value: () => ({ drawImage() {}, fillRect() {} }) });
+Object.defineProperty(dom.HTMLCanvasElement.prototype, "toDataURL", { value: function (format: string, quality: number) {
+  prepared.push({ width: this.width, height: this.height, format, quality });
+  return prepared.length === 1 ? `data:image/jpeg;base64,${"A".repeat(300000)}` : photo;
+} });
 const server = await createServer({ mode: "development", cacheDir: "node_modules/.vite-profile-ui", optimizeDeps: { noDiscovery: true, entries: [], include: [] }, server: { middlewareMode: true, hmr: false }, appType: "custom" });
 const { createRoot } = await import("react-dom/client");
 document.body.innerHTML = '<div id="root"></div>'; const root = createRoot(document.getElementById("root")!);
@@ -34,6 +38,7 @@ try {
   Object.defineProperty(file, "files", { configurable: true, value: [new dom.File(["png"], "avatar.png", { type: "image/png" })] });
   await act(async () => { file.dispatchEvent(new dom.Event("change", { bubbles: true })); }); await settle();
   assert.equal(document.querySelector<HTMLImageElement>('img[alt="Profile photo preview"]')?.src, photo);
+  assert.deepEqual(prepared, [{ width: 512, height: 512, format: "image/jpeg", quality: .92 }, { width: 512, height: 512, format: "image/jpeg", quality: .85 }]);
   await act(async () => { document.querySelector("form")!.dispatchEvent(new dom.Event("submit", { bubbles: true, cancelable: true })); }); await settle();
   assert.equal((await readLocalWorkspace(guest.account.id)).profile.name, "My guest account");
   assert.equal((await readLocalWorkspace(guest.account.id)).profile.picture, photo);

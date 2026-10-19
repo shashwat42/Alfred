@@ -25,7 +25,6 @@ fn toggle_overlay_inner(app: &tauri::AppHandle) -> tauri::Result<()> {
             set_memory_target(&overlay, true);
         } else {
             set_memory_target(&overlay, false);
-            overlay.center()?;
             overlay.show()?;
             overlay.unminimize()?;
             overlay.set_focus()?;
@@ -40,10 +39,9 @@ fn toggle_overlay_inner(app: &tauri::AppHandle) -> tauri::Result<()> {
     {
         // Keep the existing configured appearance and permissions, but pay for
         // the second renderer only when the user actually opens the overlay.
-        let overlay = tauri::WebviewWindowBuilder::from_config(app, config)?
-            .visible(true)
+        tauri::WebviewWindowBuilder::from_config(app, config)?
+            .visible(false)
             .build()?;
-        overlay.set_focus()?;
     }
     Ok(())
 }

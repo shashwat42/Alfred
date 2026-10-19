@@ -1,21 +1,21 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Power } from "lucide-react";
+import { getAccountPreferences, saveAccountPreferences, PREFERENCES_CHANGED_EVENT } from "../../lib/accountPreferences.ts";
 import { isTauri } from "../../auth/auth.ts";
 
 export function StartupSettings() {
   const supported = isTauri() && /Windows/i.test(navigator.userAgent);
-  const [enabled, setEnabled] = useState(false);
-  const [busy, setBusy] = useState(true);
+  const [enabled, setEnabled] = useState(() => getAccountPreferences().launchOnStartup);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   useEffect(() => {
     if (!supported) return;
     let active = true;
-    void invoke<boolean>("get_launch_on_startup")
-      .then((value) => { if (active) setEnabled(value); })
-      .catch((err: unknown) => { if (active) setError(String(err)); })
-      .finally(() => { if (active) setBusy(false); });
-    return () => { active = false; };
+    const changed = () => { if (active) setEnabled(getAccountPreferences().launchOnStartup); };
+    changed();
+    window.addEventListener(PREFERENCES_CHANGED_EVENT, changed);
+    return () => { active = false; window.removeEventListener(PREFERENCES_CHANGED_EVENT, changed); };
   }, [supported]);
   if (!supported) return null;
   return <section className="settings-card-group">
@@ -29,7 +29,7 @@ export function StartupSettings() {
         <input id="launch-on-startup" type="checkbox" role="switch" checked={enabled} disabled={busy} onChange={async (event) => {
           const next = event.target.checked;
           setBusy(true); setError("");
-          try { setEnabled(await invoke<boolean>("set_launch_on_startup", { enabled: next })); }
+          try { await invoke<boolean>("set_launch_on_startup", { enabled: next }); saveAccountPreferences({ launchOnStartup: next }); setEnabled(next); }
           catch (err) { setError(String(err)); }
           finally { setBusy(false); }
         }} />

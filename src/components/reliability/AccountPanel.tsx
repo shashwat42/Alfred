@@ -46,6 +46,11 @@ export function AccountPanel({ onboardingOnly = false }: { onboardingOnly?: bool
     finally { inFlight.current = false; setLoading(false); }
   }, [accountId]);
   useEffect(() => { const timer = window.setTimeout(() => void refresh(), 0); return () => window.clearTimeout(timer); }, [refresh]);
+  useEffect(() => {
+    const reload = () => { void refresh(); };
+    window.addEventListener("alfred:refresh-account", reload);
+    return () => window.removeEventListener("alfred:refresh-account", reload);
+  }, [refresh]);
   const complete = async () => {
     await apiJson<void>("/api/account/onboarding", { method: "PUT", body: JSON.stringify({ completed: true }), _expectedAccountId: accountId });
     setData(previous => previous ? { ...previous, onboardingCompleted: true } : previous); setDialog(null); setRevisiting(false);

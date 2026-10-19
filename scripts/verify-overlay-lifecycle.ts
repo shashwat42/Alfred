@@ -39,7 +39,7 @@ const server = await createServer({
         return () => handlers.get(name).delete(handler);
       }`;
       if (id === '\0overlay-window') return `export function getCurrentWebviewWindow() {
-        return { close: async () => { globalThis.__overlayHarness.closes++; } };
+        return { show: async () => {}, setFocus: async () => {}, close: async () => { globalThis.__overlayHarness.closes++; } };
       }`;
       if (id === '\0overlay-monitor') return 'export async function currentMonitor() { return null; }';
     },
@@ -73,10 +73,12 @@ try {
     rejectRecording?.(new Error('Test recording cancelled'));
     rejectRecording = undefined;
   };
-  localStorage.setItem('alfred_overlay_mode', 'voice');
+  localStorage.setItem('alfred_session', JSON.stringify({token:'fixture',account:{id:'111111111111111111111111',type:'guest'}}));
+  localStorage.setItem('alfred_preferences_111111111111111111111111', JSON.stringify({values:{overlayMode:'voice'},pending:{}}));
   const { default: OverlayApp } = await server.ssrLoadModule('/src/overlay/OverlayApp.tsx');
   await act(async () => { root.render(createElement(StrictMode, null, createElement(OverlayApp))); await settle(); });
-  await act(settle);
+  for (let attempt = 0; attempt < 100 && !container.querySelector('[aria-label="Mute microphone"]'); attempt++) await act(settle);
+  assert.ok(container.querySelector('[aria-label="Mute microphone"]'), 'Voice opens after initial placement');
   assert.equal(handlers.get('alfred:overlay-summon')?.size, 1, 'StrictMode must not leak native subscriptions');
   assert.equal(handlers.get('alfred:overlay-hidden')?.size, 1);
   const beforeHide = cancels;
