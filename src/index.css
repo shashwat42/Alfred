@@ -7372,7 +7372,7 @@ body.is-overlay .overlay-root {
 .tuxedo-button { position:absolute; left:20px; width:4px; height:4px; border-radius:50%; background:#f87171; animation:tuxedo-button 1.6s ease-in-out infinite; }
 @keyframes tuxedo-button { 0%,15%,100% { transform:translateX(10px); opacity:.2; } 40%,75% { transform:translateX(0); opacity:1; } }
 .hold-details { position:fixed; bottom:max(90px,env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%); max-width:min(90vw,420px); z-index:11000; border:1px solid #52525b; background:#18181b; color:#fafafa; padding:12px 16px; border-radius:12px; white-space:pre-line; box-shadow:0 8px 25px #0008; }
-.App.is-android { padding-top:env(safe-area-inset-top,12px); height:calc(100svh - var(--keyboard-inset,0px)); min-height:0; overflow:hidden; }
+.App.is-android { box-sizing:border-box; padding-top:var(--android-safe-top,max(24px,env(safe-area-inset-top,0px))); padding-bottom:var(--android-safe-bottom,env(safe-area-inset-bottom,0px)); height:var(--android-viewport-height,100dvh); min-height:0; overflow:hidden; background:#242424; --mobile-nav-clearance:76px; }
 .App.is-android .Main { min-height:0; padding-top:12px; overflow:hidden; }
 .App.is-android .mobile-top-header { display:none; }
 @media(max-width:760px) { .settings-feature-card,.settings-profile-card,.settings-info-card { padding:10px; } .settings-feature-row { flex-wrap:wrap; } .note-editor-bottom-bar { gap:4px; padding:4px 0; } }
@@ -7419,4 +7419,40 @@ body.is-overlay .overlay-root {
     .Dashboard .dashboard-content-header .content-header-title-row { min-height:40px; }
     .Dashboard .dashboard-date-banner { flex:0 1 auto; }
     .Dashboard .dashboard-top-bar { gap:8px; }
+}
+
+/* Android branding stays within the system-safe area and shares the page surface. */
+.android-app-header { display:flex; align-items:center; justify-content:center; flex:0 0 56px; min-height:56px; background:transparent; padding:4px 16px; box-sizing:border-box; }
+.android-app-header.is-assistant { background:#171717; }
+.App.is-android.is-assistant-page { background:#171717; }
+.android-header-home { display:inline-flex; align-items:center; gap:8px; padding:4px 12px; border:0; background:transparent; color:#fafafa; font-family:inherit; font-size:11px; font-weight:600; line-height:1.2; letter-spacing:1.2px; cursor:pointer; }
+.android-header-home img { width:20px; height:24px; object-fit:contain; }
+.android-header-home:focus-visible { outline:2px solid #f87171; border-radius:8px; }
+.android-app-header .chat-voice-header-indicator { margin:0 auto; max-width:320px; height:44px; padding:3px 16px 3px 3px; box-sizing:border-box; }
+.android-app-header .chat-voice-header-logo-wrap { width:36px; height:36px; min-width:36px; min-height:36px; }
+.android-app-header .chat-voice-header-logo { width:30px; height:30px; }
+.android-app-header .chat-voice-header-title { font-size:12px; }
+.android-app-header .chat-voice-header-sub { font-size:10px; }
+.App.is-android .Main { flex:1; height:auto; padding-top:0; }
+.App.is-android .Dashboard { padding-bottom:calc(var(--mobile-nav-clearance) + 8px) !important; }
+.App.is-android .Chat { padding-bottom:calc(var(--mobile-nav-clearance) + 8px) !important; }
+.App.is-android .mobile-bottom-nav { padding-bottom:max(6px,var(--android-safe-bottom,env(safe-area-inset-bottom,0px))); }
+.App.is-android.is-note-open,
+html[data-android-keyboard="true"] .App.is-android { --mobile-nav-clearance:0px; }
+html[data-android-keyboard="true"] .App.is-android .mobile-bottom-nav { display:none !important; }
+.App.is-android .note-editor-rich-canvas { min-height:100%; height:auto; }
+.App.is-android .note-editor-body { padding:8px 0; scroll-padding-block:12px; }
+.App.is-android .dashboard-content-header > .dashboard-refresh-btn { display:flex; align-items:center; justify-content:center; width:40px; height:40px; min-width:40px; min-height:40px; padding:0; margin:0; top:0; right:0; box-sizing:border-box; }
+.App.is-android .content-header-title-row { padding-right:52px; }
+
+@media(min-width:769px) {
+    .App:not(.is-android) .recent-note-preview-box { height:160px; padding:14px 16px; }
+    .App:not(.is-android) .note-card-box { height:200px; }
+    .App:not(.is-android) .upcoming-notes-input { min-height:44px; padding:10px 16px; border:1px solid #ffffff20; border-radius:14px; background:#1c1c1e; box-sizing:border-box; }
+    .App:not(.is-android) .upcoming-notes-input:focus { border-color:#b46d6d; outline:2px solid #b46d6d30; }
+    .App:not(.is-android) .upcoming-notes-tag,
+    .App:not(.is-android) .note-format-toggle { background:#432e2e; color:#f1cece; border-color:#a7656538; }
+    .App:not(.is-android) .upcoming-notes-bar:focus-within .upcoming-notes-tag,
+    .App:not(.is-android) .note-format-toggle:hover,
+    .App:not(.is-android) .note-format-toggle[aria-expanded="true"] { background:#563838; }
 }

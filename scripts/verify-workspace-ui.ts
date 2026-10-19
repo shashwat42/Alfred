@@ -92,7 +92,52 @@ try {
   await act(async () => root.render(createElement(DashboardNav, { activeView: "schedule", handleViewChange: (value: string) => { selected = value; } })));
   await act(async () => document.querySelector<HTMLButtonElement>('button[aria-label="Home"]')!.click());
   assert.equal(selected, "home");
-  console.log("PASS: shared/individual empty states, four mobile destinations, workspace links, Home, collapsed formatting, multiline copy/previews, save-before-back, tutorial return, offline/server recovery, preserved drafts and 404.");
+  const { AndroidAppHeader } = await server.ssrLoadModule("/src/components/AndroidAppHeader.tsx");
+  let homeVisits = 0;
+  const headerProps = { assistantActive: true, voice: null, onGoHome: () => { homeVisits++; } };
+  await act(async () => root.render(createElement(AndroidAppHeader, headerProps)));
+  await act(async () => document.querySelector<HTMLButtonElement>(".android-header-home")!.click());
+  assert.equal(homeVisits, 1);
+  const voice = { voiceModeState: "listening", modelLoadingText: "", voiceModeError: null, voiceModeAudioLevel: .5, isVoiceMuted: false, isLogoCentered: false, onRetry() {} };
+  await act(async () => root.render(createElement(AndroidAppHeader, { ...headerProps, voice })));
+  assert.match(document.querySelector(".android-app-header")!.textContent!, /Listening/);
+  await act(async () => root.render(createElement(AndroidAppHeader, { ...headerProps, voice: { ...voice, isVoiceMuted: true } })));
+  assert.match(document.querySelector(".android-app-header")!.textContent!, /Microphone Muted/);
+  await act(async () => root.render(createElement(AndroidAppHeader, { ...headerProps, voice: { ...voice, voiceModeState: "thinking" } })));
+  assert.match(document.querySelector(".android-app-header")!.textContent!, /Alfred is thinking/);
+  await act(async () => root.render(createElement(AndroidAppHeader, { ...headerProps, voice, assistantActive: false })));
+  assert.equal(document.querySelector(".chat-voice-header-indicator"), null, "Dashboard header does not show assistant state");
+  await act(async () => root.render(createElement(AndroidAppHeader, { ...headerProps, voice: { ...voice, voiceModeState: "off" } })));
+  assert.ok(document.querySelector(".android-header-home"), "Brand returns when voice mode ends");
+  await act(async () => root.render(createElement("div")));
+  const previousBridge = window.AlfredAndroid;
+  let viewportRequests = 0;
+  window.AlfredAndroid = { onmessage: null, postMessage(raw: string) {
+    const request = JSON.parse(raw);
+    assert.equal(request.type, "viewport"); viewportRequests++;
+    this.onmessage?.({ data: JSON.stringify({ id: request.id, updated: true }) });
+  } };
+  try {
+    await act(async () => root.render(createElement(AndroidAppHeader, headerProps)));
+    assert.equal(viewportRequests, 1, "Header requests native insets after the document mounts");
+  } finally { window.AlfredAndroid = previousBridge; }
+  const { RefreshButton } = await server.ssrLoadModule("/src/components/RefreshButton.tsx");
+  const originalAgent = Object.getOwnPropertyDescriptor(navigator, "userAgent");
+  try {
+    Object.defineProperty(navigator, "userAgent", { configurable: true, value: "Android" });
+    await act(async () => root.render(createElement(RefreshButton)));
+    assert.equal(document.querySelector(".mobile-account-refresh"), null, "No sync button on Android assistant");
+    const { DashboardHeader } = await server.ssrLoadModule("/src/components/dashboard/DashboardHeader.tsx");
+    await act(async () => root.render(createElement(DashboardHeader, { activeView: "home", handleViewChange() {}, onRefresh() {} })));
+    assert.equal(document.querySelector('button[aria-label="Settings"]'), null, "Android settings live in the navbar");
+    assert.ok(document.querySelector(".dashboard-refresh-btn"));
+    Object.defineProperty(navigator, "userAgent", { configurable: true, value: "Windows NT 10.0" });
+    await act(async () => root.render(createElement(RefreshButton)));
+    assert.ok(document.querySelector(".mobile-account-refresh"), "PC refresh remains available");
+  } finally {
+    if (originalAgent) Object.defineProperty(navigator, "userAgent", originalAgent); else Reflect.deleteProperty(navigator, "userAgent");
+  }
+  console.log("PASS: Android header/voice states and button visibility, shared/individual empty states, four mobile destinations, workspace links, Home, collapsed formatting, multiline copy/previews, save-before-back, tutorial return, offline/server recovery, preserved drafts and 404.");
 } finally {
   await act(async () => root.unmount()); await server.close(); await dom.happyDOM.abort();
   globalThis.fetch = originalFetch;

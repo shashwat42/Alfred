@@ -45,16 +45,43 @@ object AssistantBridge {
     fun installMain(activity: Activity, view: WebView) {
         mainView = WeakReference(view)
         activity.window.setSoftInputMode(if (android.os.Build.VERSION.SDK_INT >= 30) android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING else android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
-        if (android.os.Build.VERSION.SDK_INT >= 30) view.setOnApplyWindowInsetsListener { _, insets ->
-            val keyboard = insets.getInsets(android.view.WindowInsets.Type.ime()).bottom
-            val system = insets.getInsets(android.view.WindowInsets.Type.systemBars()).bottom
-            val cssPixels = ((keyboard - system).coerceAtLeast(0) / view.resources.displayMetrics.density).toInt()
-            view.evaluateJavascript("document.documentElement.style.setProperty('--keyboard-inset', '${cssPixels}px')", null)
-            insets
+        fun publishViewport() {
+            if (view.height <= 0) return
+            val insets = view.rootWindowInsets ?: return
+            val location = IntArray(2)
+            view.getLocationOnScreen(location)
+            val window = if (android.os.Build.VERSION.SDK_INT >= 30) activity.windowManager.currentWindowMetrics.bounds else {
+                val rootLocation = IntArray(2)
+                view.rootView.getLocationOnScreen(rootLocation)
+                android.graphics.Rect(rootLocation[0], rootLocation[1], rootLocation[0] + view.rootView.width, rootLocation[1] + view.rootView.height)
+            }
+            val modern = android.os.Build.VERSION.SDK_INT >= 30
+            val system = if (modern) insets.getInsets(android.view.WindowInsets.Type.systemBars() or android.view.WindowInsets.Type.displayCutout()) else null
+            val visibleFrame = android.graphics.Rect()
+            view.getWindowVisibleDisplayFrame(visibleFrame)
+            val keyboardVisible = if (modern) insets.isVisible(android.view.WindowInsets.Type.ime()) else window.bottom - visibleFrame.bottom > 100 * view.resources.displayMetrics.density
+            // Older Android versions use adjustResize, so the WebView already excludes the IME.
+            val keyboard = if (modern) insets.getInsets(android.view.WindowInsets.Type.ime()).bottom else 0
+            val bounds = mainViewportBounds(location[1], view.height, window.top, window.bottom, system?.top ?: insets.systemWindowInsetTop, system?.bottom ?: insets.systemWindowInsetBottom, keyboard, keyboardVisible)
+            val density = view.resources.displayMetrics.density
+            view.evaluateJavascript("""
+                (() => {
+                    const root = document.documentElement;
+                    if (!root) return;
+                    root.style.setProperty('--android-viewport-height', '${bounds.height / density}px');
+                    root.style.setProperty('--android-safe-top', '${bounds.safeTop / density}px');
+                    root.style.setProperty('--android-safe-bottom', '${bounds.safeBottom / density}px');
+                    root.dataset.androidKeyboard = '$keyboardVisible';
+                })()
+            """.trimIndent(), null)
         }
+        view.setOnApplyWindowInsetsListener { _, insets -> view.post { publishViewport() }; insets }
+        view.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> view.post { publishViewport() } }
+        view.post { view.requestApplyInsets(); publishViewport() }
         ScheduleNotifications.install(activity, view)
         installAsync(view) { type, _, complete ->
             when (type) {
+                "viewport" -> activity.runOnUiThread { publishViewport(); complete(JSONObject().put("updated", true)) }
                 "status" -> complete(AssistantAvailability.status(activity))
                 "setup" -> activity.runOnUiThread {
                     complete(if (AssistantAvailability.openSetup(activity)) JSONObject().put("opened", true)

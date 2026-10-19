@@ -13,7 +13,7 @@ export function hasAndroidAssistantBridge() { return typeof window !== "undefine
 
 export const ASSISTANT_VOICE_LEVEL_EVENT = "alfred:assistant_voice_level";
 
-export function androidAssistantRequest(type: "status" | "setup" | "checkUpdates" | "downloadUpdate" | "dismiss" | "openApp" | "recordVoice" | "cancelVoice", silenceMs?: number): Promise<Record<string, unknown>> {
+export function androidAssistantRequest(type: "status" | "setup" | "viewport" | "checkUpdates" | "downloadUpdate" | "dismiss" | "openApp" | "recordVoice" | "cancelVoice", silenceMs?: number): Promise<Record<string, unknown>> {
   const bridge = window.AlfredAndroid;
   if (!bridge) return Promise.reject(new Error("The Android assistant bridge is unavailable. Open the installed Android app."));
   if (type === "cancelVoice") {

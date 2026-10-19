@@ -12,6 +12,7 @@ import Logo from "./assets/Alfred_Logo.svg";
 import { StateControl } from "./components/reliability/StateControl";
 import { NOTIFICATION_OPEN_EVENT } from "./lib/scheduleNotifications.ts";
 import { HoldDetails } from "./components/HoldDetails.tsx";
+import { AndroidAppHeader } from "./components/AndroidAppHeader.tsx";
 
 type MobileTab = "assistant" | "dashboard";
 const mobileNavOrder = ["assistant", "dashboard", "workspace", "settings"] as const;
@@ -255,12 +256,13 @@ const App = () => {
 
   return (
     <div
-      className={`App ${isAndroidDevice ? "is-android" : ""}`}
+      className={`App ${isAndroidDevice ? "is-android" : ""} ${noteOpen ? "is-note-open" : ""} ${mobileTab === "assistant" ? "is-assistant-page" : ""}`}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
       onTouchCancel={handleTouchCancel}
     >
       {!isAndroidDevice && <Header onGoHome={handleGoHome} />}
+      {isAndroidDevice && <AndroidAppHeader assistantActive={mobileTab === "assistant"} voice={voiceHeaderState} onGoHome={handleGoHome} />}
       <HoldDetails />
 
       {/* Top Black Header with Alfred Branding (Android/Mobile only, consistent across destinations) */}

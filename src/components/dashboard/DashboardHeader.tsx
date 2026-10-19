@@ -82,7 +82,7 @@ function DashboardHeaderComponent({
                     {activeView === "settings" && "SETTINGS"}
                 </h2>
 
-                {activeView === "home" && (
+                {activeView === "home" && !/Android/i.test(navigator.userAgent) && (
                     <button
                         type="button"
                         className="dashboard-settings-btn"
