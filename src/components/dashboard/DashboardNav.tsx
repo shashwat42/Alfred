@@ -1,4 +1,5 @@
 import { memo } from "react";
+import { House } from "lucide-react";
 import type { DashboardView } from "../../types/dashboard.ts";
 
 function DashboardNavComponent({
@@ -14,6 +15,10 @@ function DashboardNavComponent({
 
     return (
         <nav className="dashboard-nav-strip" aria-label="Dashboard sections">
+            <button type="button" className={`nav-strip-btn ${activeView === "home" ? "active" : ""}`} onClick={() => handleViewChange("home")} aria-label="Home" aria-current={activeView === "home" ? "page" : undefined} title="Dashboard">
+                <div className="nav-strip-icon-box"><House className="nav-strip-svg-icon" aria-hidden="true" /></div>
+                <span className="nav-strip-label">Home</span>
+            </button>
             <button
                 type="button"
                 className={`nav-strip-btn ${isScheduleActive ? "active" : ""}`}

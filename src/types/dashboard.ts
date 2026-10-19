@@ -1,4 +1,4 @@
-export type DashboardView = "home" | "schedule" | "tasks" | "notes" | "todo" | "mails" | "settings";
+export type DashboardView = "home" | "workspace" | "schedule" | "tasks" | "notes" | "todo" | "mails" | "settings";
 
 export type ScheduleItem = {
     _id?: string;

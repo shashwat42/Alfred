@@ -14,7 +14,7 @@ import { NOTIFICATION_OPEN_EVENT } from "./lib/scheduleNotifications.ts";
 import { HoldDetails } from "./components/HoldDetails.tsx";
 
 type MobileTab = "assistant" | "dashboard";
-const mobileNavOrder = ["assistant", "dashboard", "schedule", "tasks", "notes"] as const;
+const mobileNavOrder = ["assistant", "dashboard", "workspace", "settings"] as const;
 type SwipeDestination = (typeof mobileNavOrder)[number];
 function navigateSafely(proceed: () => void) {
   if (window.dispatchEvent(new CustomEvent("alfred:before-navigate", { cancelable: true, detail: proceed }))) proceed();
@@ -228,13 +228,8 @@ const App = () => {
     if (elapsed < 500 && Math.abs(deltaX) >= minDistance && Math.abs(deltaX) > Math.abs(deltaY) * 1.5) {
       const activeDestination: SwipeDestination = mobileTab === "assistant"
         ? "assistant"
-        : currentView === "home" || currentView === "settings"
-        ? "dashboard"
-        : currentView === "schedule"
-        ? "schedule"
-        : currentView === "tasks" || currentView === "todo"
-        ? "tasks"
-        : "notes";
+        : currentView === "home" ? "dashboard"
+        : currentView === "settings" ? "settings" : "workspace";
       const currentIndex = mobileNavOrder.indexOf(activeDestination);
       const nextIndex = Math.max(0, Math.min(mobileNavOrder.length - 1, currentIndex + (deltaX < 0 ? 1 : -1)));
       const nextDestination = mobileNavOrder[nextIndex];
@@ -268,7 +263,7 @@ const App = () => {
       {!isAndroidDevice && <Header onGoHome={handleGoHome} />}
       <HoldDetails />
 
-      {/* Top Black Header with Alfred Branding (Android/Mobile only, consistent across all 6 destinations) */}
+      {/* Top Black Header with Alfred Branding (Android/Mobile only, consistent across destinations) */}
       {!isAndroidDevice && <header className="mobile-top-header" role="banner">
         {voiceHeaderState && voiceHeaderState.voiceModeState !== "off" && !voiceHeaderState.isLogoCentered ? (
           <VoiceModeHeaderIndicator
@@ -320,19 +315,7 @@ const App = () => {
             <Dashboard key={session?.account.id} currentView={currentView} onViewChange={setCurrentView} />
           </main>
           {!noteOpen && <MobileBottomNav
-            activeDestination={
-              mobileTab === "assistant"
-                ? "assistant"
-                : currentView === "home"
-                ? "dashboard"
-                : currentView === "schedule"
-                ? "schedule"
-                : currentView === "tasks" || currentView === "todo"
-                ? "tasks"
-                : currentView === "notes" || currentView === "mails"
-                ? "notes"
-                : "other"
-            }
+            activeDestination={mobileTab === "assistant" ? "assistant" : currentView === "home" ? "dashboard" : currentView === "settings" ? "settings" : "workspace"}
             onNavigate={handleMobileNavigate}
           />}
         </>

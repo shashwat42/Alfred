@@ -7392,3 +7392,31 @@ body.is-overlay .overlay-root {
 .settings-details > summary::after { content:"+"; margin-left:auto; }
 .settings-details[open] > summary::after { content:"−"; }
 .settings-details > summary:focus-visible { outline:2px solid #f87171; outline-offset:3px; }
+
+/* Keep page controls anchored; only workspace content scrolls. */
+.Dashboard .dashboard-main-card { display:flex; flex-direction:column; padding:0; background:transparent; border:0; box-shadow:none; }
+.Dashboard .dashboard-main-card .dashboard-content-area { flex:1; padding:0; overflow:hidden; }
+.Dashboard .dashboard-section-body { display:flex; flex-direction:column; flex:1; min-height:0; overflow:hidden; }
+.Dashboard .dashboard-main-card .dashboard-content-header { flex-shrink:0; min-height:40px; padding-bottom:0; border-bottom:0; margin-bottom:20px; }
+.Dashboard .dashboard-top-bar { flex-shrink:0; }
+.Dashboard .upcoming-scrollable-content { scrollbar-gutter:stable; }
+.upcoming-all-empty { display:flex; flex:1; min-height:160px; flex-direction:column; align-items:center; justify-content:center; gap:18px; color:#a1a1aa; text-align:center; }
+.upcoming-recent-notes-empty { border:0; background:transparent; font-style:normal; }
+.workspace-hub { display:grid; align-content:start; gap:14px; padding:4px 0 20px; overflow-y:auto; }
+.workspace-hub-card { display:flex; align-items:center; gap:16px; padding:22px; border:1px solid #ffffff12; border-radius:18px; background:#2b2931; color:#d8d1e5; text-align:left; cursor:pointer; }
+.workspace-hub-card > span { flex:1; display:flex; flex-direction:column; gap:6px; }
+.workspace-hub-card strong { font-size:17px; color:#fafafa; }
+.workspace-hub-card > span > span { font-size:13px; color:#aaa6b3; }
+.workspace-hub-tasks { background:#29302d; color:#b9d6c4; }
+.workspace-hub-notes { background:#302b29; color:#dec9b6; }
+.workspace-hub-card:hover { border-color:#ffffff40; }
+.workspace-hub-card:focus-visible { outline:2px solid #c4b5d8; outline-offset:2px; }
+.App.is-android .dashboard-main-card > .dashboard-nav-strip,
+.App.is-android .dashboard-main-card > .dashboard-nav-divider { display:none; }
+.App.is-android .dashboard-settings-btn { display:none; }
+@media(max-width:768px) {
+    .Dashboard .dashboard-back-placeholder { display:block; width:28px; height:28px; flex-shrink:0; }
+    .Dashboard .dashboard-content-header .content-header-title-row { min-height:40px; }
+    .Dashboard .dashboard-date-banner { flex:0 1 auto; }
+    .Dashboard .dashboard-top-bar { gap:8px; }
+}

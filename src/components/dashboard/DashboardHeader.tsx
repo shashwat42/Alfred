@@ -75,6 +75,7 @@ function DashboardHeaderComponent({
                 )}
                 <h2 className="dashboard-section-title">
                     {activeView === "home" && "UPCOMING"}
+                    {activeView === "workspace" && "WORKSPACE"}
                     {activeView === "schedule" && "SCHEDULE"}
                     {(activeView === "tasks" || activeView === "todo") && "TASKS"}
                     {(activeView === "notes" || activeView === "mails") && "NOTES"}

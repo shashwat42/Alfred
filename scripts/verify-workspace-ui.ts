@@ -60,7 +60,39 @@ try {
   assert.equal(document.querySelector("dialog[open]"), null); assert.equal(document.querySelector("input")!.value, "Preserved draft");
   const { NotFound } = await server.ssrLoadModule("/src/components/reliability/States.tsx");
   await act(async () => root.render(createElement(NotFound))); assert.match(document.body.textContent!, /404/);
-  console.log("PASS: collapsed formatting, multiline copy/previews, save-before-back, failed-save protection, tutorial return, offline/server recovery, preserved drafts and 404.");
+  const { UpcomingView } = await server.ssrLoadModule("/src/components/dashboard/UpcomingView.tsx");
+  await act(async () => root.render(createElement(UpcomingView)));
+  assert.equal(document.querySelectorAll(".empty-text-art").length, 1, "One shared face when all sections are empty");
+  assert.match(document.body.textContent!, /Nothing to show here :\)/);
+  assert.ok(document.querySelector("#upcoming-quick-note"), "Quick Note stays available on an empty dashboard");
+  await act(async () => root.render(createElement(UpcomingView, { hasNotes: true })));
+  assert.equal(document.querySelector(".upcoming-all-empty"), null, "Unopened notes still count as content");
+  const faces = [...document.querySelectorAll(".empty-text-art")].map(element => element.textContent);
+  assert.equal(faces.length, 3); assert.equal(new Set(faces).size, 3, "Individual empty faces are related but distinct");
+  await act(async () => root.render(createElement(UpcomingView, { recentNotes: [note], scheduleItems: [{ time: "23:59", topic: "Late event", date: "2026-10-20" }], priorityTasks: [{ _id: "task", task: "Priority task", priority: "high" }] })));
+  assert.equal(document.querySelectorAll(".empty-text-art").length, 0);
+  assert.match(document.body.textContent!, /Late event/); assert.match(document.body.textContent!, /Priority task/);
+  const { MobileBottomNav } = await server.ssrLoadModule("/src/components/MobileBottomNav.tsx");
+  let selected = "";
+  await act(async () => root.render(createElement(MobileBottomNav, { activeDestination: "workspace", onNavigate: (value: string) => { selected = value; } })));
+  const tabs = [...document.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+  assert.deepEqual(tabs.map(tab => tab.textContent), ["Assistant", "Dashboard", "Workspace", "Settings"]);
+  assert.equal(tabs[2].getAttribute("aria-selected"), "true");
+  for (const [index, destination] of ["assistant", "dashboard", "workspace", "settings"].entries()) {
+    await act(async () => tabs[index].click()); assert.equal(selected, destination);
+  }
+  const { WorkspaceView } = await server.ssrLoadModule("/src/components/dashboard/WorkspaceView.tsx");
+  await act(async () => root.render(createElement(WorkspaceView, { onNavigate: (value: string) => { selected = value; } })));
+  const sections = [...document.querySelectorAll<HTMLButtonElement>(".workspace-hub-card")];
+  assert.equal(sections.length, 3);
+  for (const [index, destination] of ["schedule", "tasks", "notes"].entries()) {
+    await act(async () => sections[index].click()); assert.equal(selected, destination);
+  }
+  const { DashboardNav } = await server.ssrLoadModule("/src/components/dashboard/DashboardNav.tsx");
+  await act(async () => root.render(createElement(DashboardNav, { activeView: "schedule", handleViewChange: (value: string) => { selected = value; } })));
+  await act(async () => document.querySelector<HTMLButtonElement>('button[aria-label="Home"]')!.click());
+  assert.equal(selected, "home");
+  console.log("PASS: shared/individual empty states, four mobile destinations, workspace links, Home, collapsed formatting, multiline copy/previews, save-before-back, tutorial return, offline/server recovery, preserved drafts and 404.");
 } finally {
   await act(async () => root.unmount()); await server.close(); await dom.happyDOM.abort();
   globalThis.fetch = originalFetch;

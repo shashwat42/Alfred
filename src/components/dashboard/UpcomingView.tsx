@@ -18,6 +18,7 @@ function UpcomingViewComponent({
     priorityTasks = [],
     currentMinutes,
     recentNotes = [],
+    hasNotes = recentNotes.length > 0,
     onOpenNote,
     onSaveQuickNote,
 }: {
@@ -25,6 +26,7 @@ function UpcomingViewComponent({
     priorityTasks?: TaskItem[];
     currentMinutes?: number;
     recentNotes?: NoteItem[];
+    hasNotes?: boolean;
     onOpenNote?: (note: NoteItem) => void;
     onSaveQuickNote?: (text: string) => Promise<void>;
 }) {
@@ -73,9 +75,15 @@ function UpcomingViewComponent({
             .slice(0, 5);
     }, [priorityTasks]);
 
+    const isEmpty = displaySchedule.length === 0 && priorityTasks.length === 0 && !hasNotes;
+
     return (
         <div className="upcoming-view-container">
             <div className="upcoming-scrollable-content">
+                {isEmpty ? <div className="upcoming-all-empty" role="status">
+                    <span className="empty-text-art" aria-hidden="true">( ˘ᴗ˘ )</span>
+                    <span>Nothing to show here :)</span>
+                </div> : <>
                 <div className="upcoming-columns-grid">
                     {/* Schedule Column */}
                     <div className="upcoming-col">
@@ -183,11 +191,12 @@ function UpcomingViewComponent({
                             })
                         ) : (
                             <div className="upcoming-recent-notes-empty">
-                                <span className="empty-illustration" aria-hidden="true">▧</span><span>No recently opened notes</span>
+                                <span className="empty-text-art" aria-hidden="true">( •◡• )</span><span>No recently opened notes</span>
                             </div>
                         )}
                     </div>
                 </div>
+                </>}
             </div>
 
             {/* Bottom Notes Quick Bar */}

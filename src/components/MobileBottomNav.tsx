@@ -1,7 +1,7 @@
 import { memo } from "react";
-import { Bot, LayoutDashboard, Calendar, CheckSquare, FileText } from "lucide-react";
+import { Bot, LayoutDashboard, Layers, Settings } from "lucide-react";
 
-export type MobileNavDestination = "assistant" | "dashboard" | "schedule" | "tasks" | "notes" | "settings";
+export type MobileNavDestination = "assistant" | "dashboard" | "workspace" | "settings";
 
 export interface MobileBottomNavProps {
   activeDestination: MobileNavDestination | "other";
@@ -19,9 +19,8 @@ function MobileBottomNavComponent({
   }> = [
     { id: "assistant", label: "Assistant", icon: Bot },
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-    { id: "schedule", label: "Schedule", icon: Calendar },
-    { id: "tasks", label: "Tasks", icon: CheckSquare },
-    { id: "notes", label: "Notes", icon: FileText },
+    { id: "workspace", label: "Workspace", icon: Layers },
+    { id: "settings", label: "Settings", icon: Settings },
   ];
 
   return (

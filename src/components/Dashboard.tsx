@@ -11,6 +11,7 @@ import { useDashboardAutoRefresh } from "../hooks/useDashboardAutoRefresh.ts";
 
 import { DashboardHeader } from "./dashboard/DashboardHeader.tsx";
 import { DashboardNav } from "./dashboard/DashboardNav.tsx";
+import { WorkspaceView } from "./dashboard/WorkspaceView.tsx";
 import { UpcomingView } from "./dashboard/UpcomingView.tsx";
 import { ScheduleTimelineView } from "./dashboard/ScheduleTimelineView.tsx";
 import { TodoView } from "./dashboard/TodoView.tsx";
@@ -287,9 +288,8 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
                 />
             ) : (
                 <>
-                    <div className={`dashboard-main-card is-view-${activeView} ${["schedule", "notes", "mails", "tasks", "todo", "settings"].includes(activeView) ? "is-section-workspace" : ""} ${isAbsorbing ? "is-absorbing" : isExpanding ? "is-expanding" : ""}`}>
+                    <div className={`dashboard-main-card is-view-${activeView} ${["workspace", "schedule", "notes", "mails", "tasks", "todo", "settings"].includes(activeView) ? "is-section-workspace" : ""} ${isAbsorbing ? "is-absorbing" : isExpanding ? "is-expanding" : ""}`}>
                 <div className="dashboard-content-area">
-                    {activeView === "home" && (
                     <div className={`dashboard-top-bar ${isAbsorbing ? "is-absorbing" : ""}`}>
                         <div className="dashboard-date-banner">
                             <div className="date-banner-text">
@@ -315,7 +315,6 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
                             )}
                         </button>
                     </div>
-                    )}
                     <DashboardHeader
                         activeView={activeView}
                         handleViewChange={handleViewChange}
@@ -359,6 +358,7 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
                             priorityTasks={activeTasks}
                             currentMinutes={currentMinutes}
                             recentNotes={activeRecentNotes}
+                            hasNotes={activeNotes.length > 0}
                             onOpenNote={handleOpenNoteFromUpcoming}
                             onSaveQuickNote={handleSaveQuickNote}
                         />
@@ -400,6 +400,7 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
                         />
                     )}
 
+                    {activeView === "workspace" && <WorkspaceView onNavigate={handleViewChange} />}
                     {activeView === "settings" && <SettingsView />}
                     </div>
                 </div>
