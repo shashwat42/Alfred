@@ -17,6 +17,7 @@ import { emptyWorkspace, workspaceRequest } from "../workspace/data.ts";
 import { policy } from "../config/policy.ts";
 import { PolicyError, sendPolicyError } from "./errors.ts";
 import tasksRouter from "../modules/tasks/route.ts";
+import accountRouter from "../modules/auth/account.routes.ts";
 import { generateAuthToken } from "../modules/auth/auth.service.ts";
 import { findOrCreateGoogleAccount } from "../modules/auth/auth.service.ts";
 import { generateChatCompletion } from "../modules/ai/service.ts";
@@ -33,6 +34,7 @@ before(async () => {
   database = await MongoMemoryReplSet.create({ replSet: { count: 1, ip: "127.0.0.1" } });
   await mongoose.connect(database.getUri()); await initializeSecurityIndexes();
   const app = express(); app.use(express.json()); app.use("/api/tasks", tasksRouter);
+  app.use("/api/account", accountRouter);
   app.use((error: unknown, _req: express.Request, res: express.Response, next: express.NextFunction) => { if (!sendPolicyError(error, res)) next(error); });
   server = app.listen(0, "127.0.0.1"); await new Promise<void>(resolve => server.once("listening", resolve));
   const address = server.address(); assert.ok(address && typeof address !== "string"); base = `http://127.0.0.1:${address.port}`;
@@ -40,6 +42,19 @@ before(async () => {
 after(async () => { if (server) await new Promise<void>(resolve => server.close(() => resolve())); await mongoose.disconnect(); await database?.stop(); });
 const user = () => Account.create({ type: "user", googleId: randomUUID() });
 const code = (expected: string) => (error: unknown) => error instanceof PolicyError && error.details.code === expected;
+
+test("cloud preference is authenticated, account-wide and contains no workspace content", async () => {
+  const first = await user(), second = await user();
+  await Account.updateOne({ _id: first._id }, { $set: { cloudSyncEnabled: true } });
+  assert.equal((await fetch(`${base}/api/account/cloud-sync/preference`)).status, 401);
+  const check = async (account: typeof first) => {
+    const response = await fetch(`${base}/api/account/cloud-sync/preference`, { headers: { Authorization: `Bearer ${generateAuthToken(account)}` } });
+    assert.equal(response.headers.get("cache-control"), "no-store"); return response.json();
+  };
+  assert.deepEqual(await check(first), { enabled: true }); assert.deepEqual(await check(second), { enabled: false });
+  await Account.updateOne({ _id: first._id }, { $set: { cloudSyncEnabled: false } });
+  assert.deepEqual(await check(first), { enabled: false });
+});
 
 test("new accounts default to device storage and old clients cannot persist cloud content", async () => {
   const account = await user(), id = String(account._id);

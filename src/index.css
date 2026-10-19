@@ -3320,6 +3320,9 @@ body.is-overlay .overlay-root {
 
 .recent-note-card-title,
 .recent-note-title {
+    display: block;
+    min-width: 0;
+    max-width: 100%;
     font-size: 13px;
     font-weight: 500;
     color: #f4f4f5;
@@ -5860,12 +5863,19 @@ body.is-overlay .overlay-root {
         padding-top: 6px;
         border-top: 1px solid rgba(255, 255, 255, 0.06);
         display: flex;
-        align-items: baseline;
+        align-items: stretch;
         justify-content: space-between;
         gap: 8px;
     }
 
     .upcoming-recent-note-card .recent-note-title {
+        width: 100%;
+        white-space: normal;
+        overflow-wrap: anywhere;
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+        line-clamp: 2;
         font-size: 13px;
         font-weight: 600;
         color: #ffffff;

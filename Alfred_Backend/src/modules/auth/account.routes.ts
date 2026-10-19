@@ -12,6 +12,8 @@ const router = Router();
 router.use(authMiddleware);
 router.get("/", async (req, res) => { res.json({ ...await accountState(req.accountId!), ai: await aiUsage(req.accountId!) }); });
 router.get("/cloud-sync", async (req, res) => { res.json(await cloudSnapshot(req.accountId!)); });
+// Auth already loaded the account. Preference checks do not enumerate workspace data.
+router.get("/cloud-sync/preference", (req, res) => { res.set("Cache-Control", "no-store").json({ enabled: req.account!.cloudSyncEnabled === true }); });
 router.get("/profile", requireCloudSync, async (req, res) => { res.json(await readCloudProfile(req.accountId!)); });
 router.put("/profile", requireCloudSync, async (req, res) => {
     const parsed = profileSchema.safeParse(req.body);

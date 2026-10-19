@@ -32,6 +32,7 @@ try {
   const { CloudStorageSettings } = await server.ssrLoadModule("/src/components/dashboard/CloudStorageSettings.tsx");
   const { ScheduleNotificationSettings } = await server.ssrLoadModule("/src/components/dashboard/ScheduleNotificationSettings.tsx");
   const { Usage } = await server.ssrLoadModule("/src/components/reliability/Usage.tsx");
+  const { StorageRuntime } = await server.ssrLoadModule("/src/components/StorageRuntime.tsx");
   await act(async () => root.render(createElement(AuthContext.Provider, { value: { session } }, createElement(Fragment, null,
     createElement(CloudStorageSettings, { refresh() {} }), createElement(ScheduleNotificationSettings),
     createElement(Usage, { data: { storage: { usedBytes: 0, limitBytes: 10_000_000, remainingBytes: 10_000_000, overQuota: false }, ai: { daily: { used: 0, limit: null }, monthly: { used: 0, limit: null } } } }),
@@ -49,6 +50,13 @@ try {
   assert.equal(checkbox().checked, true); assert.match(document.body.textContent!, /Cloud Sync is enabled/);
   await act(async () => checkbox().click()); await settle(); assert.equal(checkbox().checked, false);
   assert.equal(requests.filter(value => value.startsWith("PUT")).length, 3);
+  await act(async () => root.render(createElement(AuthContext.Provider, { value: { session } }, createElement(Fragment, null,
+    createElement(CloudStorageSettings, { refresh() {} }), createElement(StorageRuntime),
+  )))); await settle();
+  enabled = true; await act(async () => { window.dispatchEvent(new Event("focus")); }); await settle();
+  assert.equal(checkbox().checked, true); assert.match(document.body.textContent!, /account on all devices/);
+  enabled = false; await act(async () => { window.dispatchEvent(new Event("focus")); }); await settle();
+  assert.equal(checkbox().checked, false);
   console.log("PASS: Local default, no implicit uploads or cloud reminders, cloud storage labels, opt-in, quota failure, and opt-out.");
 } finally {
   await act(async () => root.unmount()); await server.close(); await dom.happyDOM.close(); globalThis.fetch = previousFetch;

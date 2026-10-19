@@ -7,11 +7,20 @@ out preserve the device copy. Local storage has no Alfred cloud quota, but remai
 subject to available device/browser storage. Clearing app data or uninstalling can
 remove it. Accounts on the same device have separate workspaces.
 
-Settings → **Cloud storage → Cloud Sync** is off by default on each device.
+Settings → **Cloud storage → Cloud Sync** is off by default for each account.
+It is an account-wide preference, shared by devices signed into the same account.
+Clients check it on sign-in, return to the foreground, reconnection and once per
+minute while visible and online. The device flag is only a cached offline copy.
+Preference checks read no workspace content and do not change the server flag.
 Enabling it explicitly merges the device workspace with existing cloud content
 (the newer version of a matching record wins) and uploads it atomically. Cloud
 storage quotas apply to this upload and subsequent cloud writes. A failed upload
-does not enable sync or remove the device copy. Cloud mode requires internet for
+does not enable sync or remove the device copy. When another device already
+enabled the account, joining that account's cloud workspace also merges this
+device's local content. Failed device uploads remain saved separately from the
+cloud read cache; **Sync this device’s saved content** retries them without losing
+local content to later cloud reads. The account remains enabled in this case.
+Cloud mode requires internet for
 changes; successful cloud reads and changes also update the device copy.
 
 Turning sync off first downloads and durably saves the cloud workspace, then
@@ -21,10 +30,14 @@ device after the download. This affects the whole account's cloud workspace.
 Other devices retain their saved copies and return to local mode when the server
 reports that Cloud Sync is disabled. Existing installations' cloud content is
 preserved until the user enables sync or selects **Move existing cloud data to
-this device**. No automatic production data deletion or migration is performed.
+this device**. A preference refresh never turns Cloud Sync off on the server or
+deletes cloud data. Only the device explicitly disabling sync is guaranteed to
+download the final cloud workspace; disconnected devices keep their own caches.
 
 Google sign-in copies a guest's local workspace to the signed-in account on the
-same device, preserving the source for recovery; it does not enable cloud uploads.
+same device, preserving the source for recovery; it does not enable the account's
+Cloud Sync preference. If that account already enabled sync elsewhere, its saved
+preference applies on this device too.
 Account deletion removes that account's current device workspace and its linked
 guest recovery copies, as well as its server records. Unrelated signed-out or
 inaccessible guest copies are not erased implicitly.

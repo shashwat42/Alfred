@@ -114,7 +114,7 @@ export async function apiFetch(
     if (accountId && response.status === 409) {
       const error = await response.clone().json().catch(() => null);
       if (error?.code === "CLOUD_SYNC_DISABLED") {
-        storage.setCloudSyncEnabled(accountId, false);
+        await storage.activateLocalStorage(accountId);
         const local = await storage.localWorkspaceResponse(input, init);
         if (local) return local;
       }

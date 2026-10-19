@@ -4,7 +4,7 @@ import type { AccountProfile } from "../../Alfred_Backend/src/workspace/profile.
 
 export const STORAGE_MODE_EVENT = "alfred:storage-mode";
 export const WORKSPACE_CHANGED_EVENT = "alfred:workspace-changed";
-export interface LocalWorkspace { data: WorkspaceData; revision: number; transitioning?: number; sourceAccounts?: string[]; profile?: AccountProfile }
+export interface LocalWorkspace { data: WorkspaceData; revision: number; transitioning?: number; sourceAccounts?: string[]; profile?: AccountProfile; pendingCloudData?: WorkspaceData }
 export const cloudSyncEnabled = (accountId?: string): boolean => {
   if (!accountId) return false;
   try { return localStorage.getItem(`alfred_cloud_sync_${accountId}`) === "true"; } catch { return false; }
@@ -52,10 +52,17 @@ export async function updateLocalWorkspace<T>(accountId: string, update: (worksp
   });
 }
 export const readLocalWorkspace = (accountId: string) => updateLocalWorkspace(accountId, workspace => workspace, false);
+export async function activateLocalStorage(accountId: string) {
+  await updateLocalWorkspace(accountId, workspace => {
+    if (getSession()?.account.id !== accountId) throw new Error("Your account changed.");
+    if (workspace.pendingCloudData) { workspace.data = mergeWorkspace(workspace.data, workspace.pendingCloudData); delete workspace.pendingCloudData; }
+  });
+  setCloudSyncEnabled(accountId, false);
+}
 export async function copyGuestWorkspace(sourceId: string, targetId: string) {
   const source = await readLocalWorkspace(sourceId);
   await updateLocalWorkspace(targetId, workspace => {
-    workspace.data = mergeWorkspace(workspace.data, source.data);
+    workspace.data = mergeWorkspace(workspace.data, mergeWorkspace(source.data, source.pendingCloudData ?? emptyWorkspace()));
     workspace.profile ??= source.profile;
     workspace.sourceAccounts = [...new Set([...(workspace.sourceAccounts ?? []), sourceId, ...(source.sourceAccounts ?? [])])];
   });

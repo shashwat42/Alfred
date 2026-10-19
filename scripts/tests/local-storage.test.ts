@@ -4,8 +4,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { AUTH_STORAGE_KEY, getSession, restoreAuthSession } from "../../src/auth/auth.ts";
 import { apiFetch } from "../../src/lib/api.ts";
-import { readLocalWorkspace, updateLocalWorkspace, cloudSyncEnabled, deleteLocalWorkspace, copyGuestWorkspace } from "../../src/lib/localWorkspace.ts";
-import { changeCloudSync } from "../../src/lib/cloudStorage.ts";
+import { readLocalWorkspace, updateLocalWorkspace, cloudSyncEnabled, deleteLocalWorkspace, copyGuestWorkspace, setCloudSyncEnabled } from "../../src/lib/localWorkspace.ts";
+import { changeCloudSync, reconcileCloudSync } from "../../src/lib/cloudStorage.ts";
 import { sendChatMessage } from "../../src/lib/aiChat.ts";
 import { emptyWorkspace } from "../../Alfred_Backend/src/workspace/data.ts";
 import { loadAccountProfile, profileDefaults, saveAccountProfile } from "../../src/lib/accountProfile.ts";
@@ -144,5 +144,76 @@ test("editable names and photos stay local, persist by account, and support expl
     assert.equal(validProfilePicture("data:image/svg+xml;base64,PHN2Zz4="), false);
     assert.equal(validProfilePicture("http://example.test/photo.png"), false);
     assert.equal(validProfilePicture("data:image/png;base64," + "a".repeat(350000)), false);
+  } finally { globalThis.fetch = original; await deleteLocalWorkspace(account); }
+});
+
+test("account preference enables another device, merges its local data and follows remote disable", async () => {
+  login(); await request("tasks", "POST", { task: "Only on this device" });
+  const original = globalThis.fetch; let enabled = true, uploads = 0;
+  let cloud = emptyWorkspace();
+  globalThis.fetch = async (url, init) => {
+    if (String(url).endsWith("/preference")) return Response.json({ enabled });
+    if (init?.method === "PUT") { uploads++; cloud = JSON.parse(String(init.body)).data; return Response.json({ enabled: true }); }
+    return Response.json({ data: cloud, enabled, revision: 1 });
+  };
+  try {
+    await Promise.all([reconcileCloudSync(account), reconcileCloudSync(account)]);
+    assert.equal(cloudSyncEnabled(account), true); assert.equal(uploads, 1);
+    assert.equal(cloud.tasks[0].task, "Only on this device");
+    assert.equal((await readLocalWorkspace(account)).pendingCloudData, undefined);
+    enabled = false; await reconcileCloudSync(account);
+    assert.equal(cloudSyncEnabled(account), false); assert.equal(uploads, 1, "observing another device’s opt-out must not write a preference");
+    assert.equal((await readLocalWorkspace(account)).data.tasks[0].task, "Only on this device");
+    globalThis.fetch = async () => { throw new Error("offline"); };
+    await assert.rejects(reconcileCloudSync(account)); assert.equal(cloudSyncEnabled(account), false);
+  } finally { globalThis.fetch = original; await deleteLocalWorkspace(account); }
+});
+
+test("failed adoption keeps the account enabled and retains local content through cloud cache replacement", async () => {
+  login(); await request("tasks", "POST", { task: "Unuploaded local task" });
+  const original = globalThis.fetch; let fail = true;
+  globalThis.fetch = async (url, init) => {
+    if (String(url).endsWith("/preference")) return Response.json({ enabled: true });
+    if (String(url).endsWith("/api/tasks")) return Response.json([]);
+    if (init?.method === "PUT") {
+      if (fail) return Response.json({ error: "Cloud full" }, { status: 413 });
+      assert.equal(JSON.parse(String(init.body)).data.tasks[0].task, "Unuploaded local task");
+      return Response.json({ enabled: true });
+    }
+    return Response.json({ data: emptyWorkspace(), enabled: true, revision: 0 });
+  };
+  try {
+    await assert.rejects(reconcileCloudSync(account), /preserved on this device/);
+    assert.equal(cloudSyncEnabled(account), true);
+    await request("tasks"); assert.equal((await readLocalWorkspace(account)).data.tasks.length, 0);
+    assert.equal((await readLocalWorkspace(account)).pendingCloudData?.tasks[0].task, "Unuploaded local task");
+    fail = false; await reconcileCloudSync(account);
+    assert.equal((await readLocalWorkspace(account)).pendingCloudData, undefined);
+  } finally { globalThis.fetch = original; await deleteLocalWorkspace(account); }
+});
+
+test("preference reconciliation cannot reverse a later account opt-out or change a switched account", async () => {
+  login(); const original = globalThis.fetch; let uploads = 0;
+  globalThis.fetch = async (url, init) => {
+    if (init?.method === "PUT") uploads++;
+    return String(url).endsWith("/preference") ? Response.json({ enabled: true }) : Response.json({ enabled: false, data: emptyWorkspace(), revision: 1 });
+  };
+  try {
+    await reconcileCloudSync(account); assert.equal(cloudSyncEnabled(account), false); assert.equal(uploads, 0);
+    globalThis.fetch = async () => { login(other); return Response.json({ enabled: true }); };
+    await assert.rejects(reconcileCloudSync(account), /account changed/);
+    assert.equal(cloudSyncEnabled(account), false); assert.equal(cloudSyncEnabled(other), false);
+  } finally { globalThis.fetch = original; await deleteLocalWorkspace(account); await deleteLocalWorkspace(other); login(); }
+});
+
+test("server opt-out restores unuploaded content before a stale cloud client retries locally", async () => {
+  login(); await request("tasks", "POST", { task: "Pending device content" });
+  await updateLocalWorkspace(account, workspace => { workspace.pendingCloudData = structuredClone(workspace.data); workspace.data = emptyWorkspace(); });
+  setCloudSyncEnabled(account, true); const original = globalThis.fetch;
+  globalThis.fetch = async () => Response.json({ code: "CLOUD_SYNC_DISABLED" }, { status: 409 });
+  try {
+    const rows = await (await request("tasks")).json();
+    assert.equal(rows[0].task, "Pending device content"); assert.equal(cloudSyncEnabled(account), false);
+    assert.equal((await readLocalWorkspace(account)).pendingCloudData, undefined);
   } finally { globalThis.fetch = original; await deleteLocalWorkspace(account); }
 });
