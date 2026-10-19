@@ -30,7 +30,7 @@ dom.fetch = (async (url: string) => {
     requests++;
     const path = String(url).split("/").at(-1);
     if (path === "auth-state") return new dom.Response(JSON.stringify({ verified: true }));
-    if (path === "password") { signedIn = true; return new dom.Response('{"ok":true}'); }
+    if (path === "password" || path === "login") { signedIn = true; return new dom.Response('{"ok":true}'); }
     if (path === "logout") { signedIn = false; return new dom.Response('{"ok":true}'); }
     if (path === "metrics") return new dom.Response(JSON.stringify(signedIn ? fixture : { error: "Sign in" }), { status: unavailable ? 503 : signedIn ? 200 : 401 });
     throw new Error(`Unexpected URL ${url}`);
@@ -56,5 +56,9 @@ try {
     assert.match(dom.document.querySelector("#notice")!.textContent!, /stale/);
     unavailable = false; dom.document.querySelector<HTMLButtonElement>("#logout")!.click(); await settle();
     assert.equal(scheduled.size, 0); assert.equal(dom.document.querySelector<HTMLElement>("#dashboard")!.hidden, true);
+    assert.equal(dom.document.querySelector("#submit")!.textContent, "Sign in", "consumed setup proof must not be reused after logout");
+    dom.document.querySelector<HTMLInputElement>("#password")!.value = "fixture-owner-password";
+    dom.document.querySelector("form")!.dispatchEvent(new dom.Event("submit", { bubbles: true, cancelable: true })); await settle();
+    assert.equal(dom.document.querySelector<HTMLElement>("#dashboard")!.hidden, false);
     console.log("PASS: first-password form, metric rendering, unavailable Atlas, stale failures, foreground refresh, hidden-tab suspension and logout.");
 } finally { await dom.happyDOM.close(); }

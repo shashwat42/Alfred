@@ -5,6 +5,10 @@ let timer, controller, busy = false, authenticated = false, verified = false;
 const bytes = n => n == null ? 'Unavailable' : `${(n / 1048576).toFixed(1)} MB`;
 const duration = n => `${Math.floor(n / 3600)}h ${Math.floor(n % 3600 / 60)}m`;
 function notice(text) { element('notice').textContent = text; }
+function resetSetupForm() {
+  verified = false; element('submit').textContent = 'Sign in'; element('password').autocomplete = 'current-password';
+  element('setup-copy').textContent = 'First visit or forgotten password? Verify your Google account, then choose a password.';
+}
 async function request(path, body, signal) {
   const response = await fetch(`/monitor/${path}`, { credentials: 'same-origin', cache: 'no-store',
     ...(body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {}), signal });
@@ -65,12 +69,12 @@ async function refresh() {
 }
 element('password-form').addEventListener('submit', async event => {
   event.preventDefault(); element('submit').disabled = true;
-  try { await request(verified ? 'password' : 'login', { password: element('password').value }); element('password').value = ''; await refresh(); }
+  try { await request(verified ? 'password' : 'login', { password: element('password').value }); element('password').value = ''; resetSetupForm(); await refresh(); }
   catch (error) { notice(error.message); }
   finally { element('submit').disabled = false; }
 });
 element('logout').addEventListener('click', async () => {
-  stop(); try { await request('logout', {}); authenticated = false; history.length = 0; element('dashboard').hidden = true; element('logout').hidden = true; element('login').hidden = false; notice('Signed out.'); }
+  stop(); try { await request('logout', {}); authenticated = false; resetSetupForm(); history.length = 0; element('dashboard').hidden = true; element('logout').hidden = true; element('login').hidden = false; notice('Signed out.'); }
   catch { notice('Sign-out failed. Please retry.'); }
 });
 element('refresh').addEventListener('click', refresh);
