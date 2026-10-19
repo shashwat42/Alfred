@@ -1,11 +1,11 @@
 # Windows and Android beta release
 
-The current beta is `v0.1.0-beta.6`, for Windows x64 and Android ARM64. The desktop version lives in
+The current beta is `v0.1.0-beta.6.1`, for Windows x64 and Android ARM64. The desktop version lives in
 `package.json`, `package-lock.json`, `wrapper/tauri.conf.json`, `wrapper/Cargo.toml`
 and `wrapper/Cargo.lock`. The separately deployed backend has its own version.
 
 Android uses the same beta version in `wrapper/tauri.android.conf.json`, with
-monotonically increasing version code `1009`. Package a non-debuggable release APK
+monotonically increasing version code `1010`. Package a non-debuggable release APK
 using the existing protected Android release keystore, verify its certificate,
 packaged version, HTTPS endpoint and 16 KB alignment, and include it with
 `android-release-manifest.json` and `SHA256SUMS-android.txt` in the same GitHub
@@ -75,7 +75,7 @@ certificate. For a signed build, configure the Tauri Windows signing settings
 using credentials outside source control, then rebuild and regenerate checksums.
 
 Create a **draft GitHub prerelease** titled `Alfred v0.1.0-beta.6` using the tag
-`v0.1.0-beta.6`. Paste the version's notes and attach the installer, its `.sig`,
+`v0.1.0-beta.6.1`. Paste the version's notes and attach the installer, its `.sig`,
 `latest.json`, `SHA256SUMS.txt` and `release-manifest.json`. Mark it as a prerelease and review
 the assets and acceptance results before publishing to testers.
 
