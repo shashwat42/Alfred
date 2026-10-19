@@ -160,7 +160,7 @@ jobs:
         run: |
           set -euo pipefail
           umask 077
-          docker build --platform "$TARGET_PLATFORM" -t "$BACKEND_IMAGE" .
+          docker build --platform "$TARGET_PLATFORM" --build-arg ALFRED_REVISION="$GITHUB_SHA" -t "$BACKEND_IMAGE" .
           mkdir -p "$RUNNER_TEMP/alfred-artifacts"
           cp compose.yaml compose.production.yaml "$RUNNER_TEMP/alfred-artifacts/"
           cp -R deploy "$RUNNER_TEMP/alfred-artifacts/deploy"

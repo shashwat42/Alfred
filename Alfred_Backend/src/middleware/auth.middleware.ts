@@ -3,6 +3,7 @@ import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
 import { env } from "../config/env.ts";
 import { Account, type AccountType } from "../models/account.model.ts";
+import { activity } from "../modules/monitor/activity.ts";
 
 export type Principal =
     | { kind: "user"; accountId: string; googleSub: string | undefined }
@@ -66,6 +67,7 @@ export async function authMiddleware(
         req.accountId = account._id.toString();
         req.account = account;
 
+        activity.authenticated(req.accountId, res);
         next();
     } catch (error) {
         if (error instanceof jwt.JsonWebTokenError || error instanceof jwt.TokenExpiredError || error instanceof jwt.NotBeforeError) {

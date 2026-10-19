@@ -1,4 +1,5 @@
 import { GoogleAuth } from "google-auth-library";
+import { observeService } from "../monitor/activity.ts";
 import { Types } from "mongoose";
 import { Account } from "../../models/account.model.ts";
 import { NotificationDevice } from "./models.ts";
@@ -58,11 +59,14 @@ export function startSchedulePush() {
     const auth = new GoogleAuth({ credentials, scopes: ["https://www.googleapis.com/auth/firebase.messaging"] });
     return startPushDispatcher(createPushAdapter(async (device, reminder) => {
             if (Date.now() > reminder.dueAt + GRACE_MS) return;
+            const started = Date.now();
             try {
                 const client = await auth.getClient();
                 await client.request({ url: `https://fcm.googleapis.com/v1/projects/${project}/messages:send`, method: "POST",
                     data: pushPayload(device, reminder), timeout: 8000, retry: false });
+                observeService("firebase", true, started);
             } catch (error) {
+                observeService("firebase", false, started);
                 // Remove only the exact invalid token, never a replacement registration.
                 const failure = error as { response?: { data?: { error?: { details?: { errorCode?: string }[] } } } };
                 if (failure.response?.data?.error?.details?.some(d => d.errorCode === "UNREGISTERED")) {

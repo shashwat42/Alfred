@@ -4,6 +4,8 @@ Windows and Android beta release: [release guide](docs/releases/README.md), [0.1
 
 Backend Docker setup and deployment instructions: [Alfred backend](Alfred_Backend/README.md).
 
+Admin server dashboard: [monitor access and resource budget](docs/monitoring.md).
+
 Tasks, notes and schedules use device storage by default. Enable **Settings →
 Cloud storage → Cloud Sync** to store content in your cloud account. See
 [local storage and cloud sync](docs/local-storage.md) for migration and reminders.

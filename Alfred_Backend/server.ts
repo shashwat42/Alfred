@@ -12,10 +12,14 @@ import { initializeAiService } from "./src/modules/ai/service.ts";
 import { connectDatabase, databaseReady, disconnectDatabase } from "./src/config/database.ts";
 import type { Server } from "node:http";
 import { env } from "./src/config/env.ts";
-import { apiRateLimiter } from "./src/middleware/rateLimit.middleware.ts";
+import { apiRateLimiter, authRateLimiter } from "./src/middleware/rateLimit.middleware.ts";
 import notificationRouter from "./src/modules/schedule-notifications/route.ts";
 import { initializeSecurityIndexes, requireTransactionTopology } from "./src/security/indexes.ts";
 import { startSchedulePush } from "./src/modules/schedule-notifications/pushService.ts";
+import { createMonitorRouter } from "./src/modules/monitor/route.ts";
+import { finishGoogle } from "./src/modules/monitor/auth.ts";
+import { requestMetrics } from "./src/modules/monitor/activity.ts";
+import { authMiddleware } from "./src/middleware/auth.middleware.ts";
 
 const app = express();
 let server: Server | undefined;
@@ -23,6 +27,14 @@ let draining = false;
 let stopPush = () => {};
 app.set("trust proxy", 1);
 app.use(cors({ origin: env.allowedOrigins }));
+app.use(requestMetrics);
+app.use("/monitor", createMonitorRouter(() => draining));
+// Reuse the already registered Google redirect URI without touching app OAuth.
+app.get("/auth/google/callback", (req, res, next) => {
+    if (typeof req.query.state === "string" && req.query.state.startsWith("monitor_")) {
+        next();
+    } else next("route");
+}, authRateLimiter, finishGoogle);
 
 app.use("/api/account/cloud-sync", express.json({ limit: "12mb" }));
 app.use("/api/account/profile", express.json({ limit: "400kb" }));
@@ -30,6 +42,7 @@ app.use("/api/ai/chat", express.json({ limit: "12mb" }));
 app.use(express.json());
 app.use("/auth", authRouter);
 app.use("/api", apiRateLimiter);
+app.post("/api/presence", authMiddleware, (_req, res) => { res.sendStatus(204); });
 app.use("/api/account", accountRouter);
 app.use("/api/schedule", scheduleRouter);
 app.use("/api/tasks", taskRouter);

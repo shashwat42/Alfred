@@ -1,4 +1,5 @@
 import { env } from "../../config/env.ts";
+import { trackedAiFetch } from "../monitor/activity.ts";
 import { createHash } from "node:crypto";
 import { withAiRequest } from "../../security/aiUsage.ts";
 import type { ChatMessageInput } from "./ai.schema.ts";
@@ -109,7 +110,7 @@ async function sendUpstreamRequest(
 
     let response: Response;
     try {
-        response = await fetch(targetUrl, {
+        response = await trackedAiFetch(targetUrl, {
             method: "POST",
             headers,
             body: JSON.stringify(payload),

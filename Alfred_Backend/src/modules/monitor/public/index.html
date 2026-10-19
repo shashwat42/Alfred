@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Alfred · Monitor</title><link rel="stylesheet" href="/monitor/style.css"><script src="/monitor/app.js" defer></script></head>
+<body><main>
+<header><div><p class="eyebrow">ALFRED / OPERATIONS</p><h1>System monitor</h1></div><button id="logout" hidden>Sign out</button></header>
+<p id="notice" role="status">Checking admin session…</p>
+<section id="login" class="panel" hidden><h2>Admin access</h2><p>singhshashwat.dev@gmail.com</p>
+<form id="password-form"><label for="password">Dashboard password</label><input id="password" type="password" autocomplete="current-password" minlength="12" maxlength="128" required><button id="submit" type="submit">Sign in</button></form>
+<p id="setup-copy">First visit or forgotten password? Verify your Google account, then choose a password.</p><a class="button" href="/monitor/google">Verify with Google</a></section>
+<section id="dashboard" hidden><div class="toolbar"><p id="timestamp"></p><button id="refresh">Refresh</button></div>
+<div id="cards" class="grid"></div>
+<section class="panel"><h2>Recent samples</h2><p>Backend memory and active accounts while this tab is open.</p><div id="history" class="history" aria-label="Recent metric samples"></div></section>
+<section class="panel"><h2>External services</h2><div id="services" class="services"></div></section>
+<p class="footnote">Refreshes every 30 seconds while visible. Monitoring pauses when this tab is hidden or closed. History stays in this browser tab. Active accounts are unique accounts seen within five minutes, including guests; they are not a count of people. Older apps are counted only when they contact the API.</p>
+</section></main></body></html>

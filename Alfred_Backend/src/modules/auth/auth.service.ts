@@ -7,6 +7,7 @@ import { withTenantWrite } from "../../security/tenantWrite.ts";
 import { Account, type IAccount } from "../../models/account.model.ts";
 import { AuthTicket } from "../../models/authTicket.model.ts";
 import { OAuthState, type IOAuthState } from "../../models/oauthState.model.ts";
+import { observeService } from "../monitor/activity.ts";
 
 export interface GoogleUserProfile {
     googleId: string;
@@ -350,30 +351,36 @@ export function getGoogleAuthUrl(state: string, nonce: string): string {
 }
 
 export async function getGoogleUserFromCode(code: string, nonce: string): Promise<GoogleUserProfile> {
-    const client = createOAuth2Client();
-    const { tokens } = await client.getToken({
-        code,
-        redirect_uri: env.google.callbackUrl,
-    });
+    const started = Date.now();
+    try {
+        const client = createOAuth2Client();
+        const { tokens } = await client.getToken({
+            code,
+            redirect_uri: env.google.callbackUrl,
+        });
 
-    if (!tokens.id_token) {
-        throw new Error("Missing ID token from Google OAuth response");
+        if (!tokens.id_token) {
+            throw new Error("Missing ID token from Google OAuth response");
+        }
+
+        const ticket = await client.verifyIdToken({
+            idToken: tokens.id_token,
+            audience: env.google.clientId,
+        });
+
+        const payload = ticket.getPayload();
+        if (!payload || !payload.sub || payload.nonce !== nonce) {
+            throw new Error("Invalid ID token payload received from Google");
+        }
+
+        observeService("google", true, started);
+        return {
+            googleId: payload.sub,
+            email: payload.email_verified ? payload.email ?? null : null,
+            name: payload.name ?? null,
+            picture: payload.picture ?? null,
+        };
+    } catch (error) {
+        observeService("google", false, started); throw error;
     }
-
-    const ticket = await client.verifyIdToken({
-        idToken: tokens.id_token,
-        audience: env.google.clientId,
-    });
-
-    const payload = ticket.getPayload();
-    if (!payload || !payload.sub || payload.nonce !== nonce) {
-        throw new Error("Invalid ID token payload received from Google");
-    }
-
-    return {
-        googleId: payload.sub,
-        email: payload.email_verified ? payload.email ?? null : null,
-        name: payload.name ?? null,
-        picture: payload.picture ?? null,
-    };
 }
