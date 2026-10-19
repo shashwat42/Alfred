@@ -4,6 +4,14 @@ Windows and Android beta release: [release guide](docs/releases/README.md), [0.1
 
 Backend Docker setup and deployment instructions: [Alfred backend](Alfred_Backend/README.md).
 
+## Local logs and generated files
+
+Keep build, test and diagnostic output in `logs/` (for example,
+`npm test > logs/frontend-tests.log 2>&1`). Create the folder before redirecting
+output on a fresh checkout. Logs, Gradle caches, compiler state, dependencies and
+build output are ignored by Git. Dependency lockfiles and the Android Gradle
+wrapper remain tracked so builds can be reproduced.
+
 ## Update the installed Windows app
 
 Run `npm run dev:backend` in one terminal for the Atlas-backed container and ngrok.

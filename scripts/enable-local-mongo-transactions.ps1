@@ -3,7 +3,9 @@
 $ErrorActionPreference = 'Stop'
 $mongoConfig = 'C:\Program Files\MongoDB\Server\9.0\bin\mongod.cfg'
 $mongoShell = Join-Path $env:LOCALAPPDATA 'Programs\mongosh\mongosh.exe'
-$repairLog = Join-Path $PSScriptRoot '..\docs\mongo-repair-result.txt'
+$logDirectory = Join-Path $PSScriptRoot '..\logs'
+New-Item -ItemType Directory -Path $logDirectory -Force | Out-Null
+$repairLog = Join-Path $logDirectory 'mongo-repair-result.txt'
 try {
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
     $principal = [Security.Principal.WindowsPrincipal]::new($identity)

@@ -1,5 +1,5 @@
 # Logs
-logs
+logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
@@ -12,6 +12,11 @@ AGENTS.md
 dist
 dist-ssr
 *.local
+
+# Local build caches and compiler state
+.gradle/
+.kotlin/
+*.tsbuildinfo
 
 # Editor directories and files
 .vscode/*

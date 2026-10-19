@@ -47,7 +47,7 @@ Find the installer, its `.sig`, `latest.json`, `SHA256SUMS.txt`, release notes a
 `.deployment/releases/v0.1.0-beta.5.2/`. The directory is ignored by Git. Existing
 version output is preserved; move it aside deliberately before rebuilding.
 The manifest records the source commit and whether source changes were present
-(including untracked files, excluding machine-local Android Gradle cache state).
+(including untracked files; generated caches and logs are ignored by Git).
 For a published release, commit the intended changes, create the version tag and
 build again from that exact tag. Do not publish an uncommitted local candidate.
 

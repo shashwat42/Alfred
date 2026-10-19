@@ -54,8 +54,7 @@ async function main() {
   if (installers.length !== 1) throw new Error("Expected exactly one newly built installer for this beta.");
   const signature = fs.readFileSync(path.join(bundle, `${installers[0]}.sig`), "utf8").trim();
   const sourceCommit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8", windowsHide: true }).trim();
-  // Android Gradle locks are machine-local runtime state, outside this Windows release.
-  const sourceChanges = execFileSync("git", ["status", "--porcelain", "--untracked-files=all", "--", ".", ":(exclude)wrapper/android/assistant/.gradle/**"], { cwd: root, encoding: "utf8", windowsHide: true }).trim();
+  const sourceChanges = execFileSync("git", ["status", "--porcelain", "--untracked-files=all"], { cwd: root, encoding: "utf8", windowsHide: true }).trim();
   fs.mkdirSync(output, { recursive: true });
   const name = `Alfred_${version}_windows_x64-setup.exe`;
   const destination = path.join(output, name);
