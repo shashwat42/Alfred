@@ -48,6 +48,7 @@ jobs:
           npm run test:updates-ui
           npm run test:startup-ui
           npm run test:overlay-lifecycle
+          npm run test:assistant-controls-ui
           npm run build:development
 
   package:

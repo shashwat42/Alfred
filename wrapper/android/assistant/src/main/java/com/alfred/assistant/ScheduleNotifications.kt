@@ -279,7 +279,7 @@ object ScheduleNotifications {
         @Suppress("DEPRECATION")
         val builder = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(c, CHANNEL) else Notification.Builder(c)
         if (Build.VERSION.SDK_INT < 26) builder.setSound(chime, audio)
-        val notification = builder.setSmallIcon(android.R.drawable.ic_menu_my_calendar)
+        val notification = builder.setSmallIcon(R.drawable.ic_alfred_notification)
             .setContentTitle(reminder.getString("title")).setContentText(reminder.getString("body"))
             .setContentIntent(tap).setAutoCancel(true).setVisibility(Notification.VISIBILITY_PRIVATE).setCategory(Notification.CATEGORY_EVENT).build()
         // Permission can be revoked during the request; never crash the receiver.

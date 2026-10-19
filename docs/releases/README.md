@@ -1,11 +1,11 @@
 # Windows and Android beta release
 
-The current beta is `v0.1.0-beta.5`, for Windows x64 and Android ARM64. The desktop version lives in
+The current beta is `v0.1.0-beta.5.2`, for Windows x64 and Android ARM64. The desktop version lives in
 `package.json`, `package-lock.json`, `wrapper/tauri.conf.json`, `wrapper/Cargo.toml`
 and `wrapper/Cargo.lock`. The separately deployed backend has its own version.
 
 Android uses the same beta version in `wrapper/tauri.android.conf.json`, with
-monotonically increasing version code `1006`. Package a non-debuggable release APK
+monotonically increasing version code `1008`. Package a non-debuggable release APK
 using the existing protected Android release keystore, verify its certificate,
 packaged version, HTTPS endpoint and 16 KB alignment, and include it with
 `android-release-manifest.json` and `SHA256SUMS-android.txt` in the same GitHub
@@ -16,7 +16,7 @@ prerelease. Preserve the existing certificate to support in-place upgrades.
 Set `MODE=development`, then run `npm test`, `npm run lint`,
 `npm --prefix Alfred_Backend run check`, `npm --prefix Alfred_Backend test`,
 `npm run test:reliability-ui`, `npm run test:updates-ui`, `npm run test:startup-ui`,
-`npm run test:overlay-lifecycle` and `npm run build:development`.
+`npm run test:overlay-lifecycle`, `npm run test:assistant-controls-ui` and `npm run build:development`.
 Backend tests use temporary MongoDB replica sets and stub AI providers. They need
 permission to start local processes and listen on ephemeral ports. Use the dummy
 environment from `.github/workflows/deploy-oracle.yml` and generate ephemeral
@@ -44,7 +44,7 @@ files. `ALFRED_RELEASE_API_URL` may override the HTTPS API origin explicitly.
 Existing `.env` tunnel and development-mode settings cannot override this build.
 
 Find the installer, its `.sig`, `latest.json`, `SHA256SUMS.txt`, release notes and source manifest in
-`.deployment/releases/v0.1.0-beta.5/`. The directory is ignored by Git. Existing
+`.deployment/releases/v0.1.0-beta.5.2/`. The directory is ignored by Git. Existing
 version output is preserved; move it aside deliberately before rebuilding.
 The manifest records the source commit and whether source changes were present
 (including untracked files, excluding machine-local Android Gradle cache state).
@@ -73,8 +73,8 @@ with `Get-FileHash -Algorithm SHA256`. This beta currently has no configured sig
 certificate. For a signed build, configure the Tauri Windows signing settings
 using credentials outside source control, then rebuild and regenerate checksums.
 
-Create a **draft GitHub prerelease** titled `Alfred v0.1.0-beta.5` using the tag
-`v0.1.0-beta.5`. Paste the version's notes and attach the installer, its `.sig`,
+Create a **draft GitHub prerelease** titled `Alfred v0.1.0-beta.5.2` using the tag
+`v0.1.0-beta.5.2`. Paste the version's notes and attach the installer, its `.sig`,
 `latest.json`, `SHA256SUMS.txt` and `release-manifest.json`. Mark it as a prerelease and review
 the assets and acceptance results before publishing to testers.
 

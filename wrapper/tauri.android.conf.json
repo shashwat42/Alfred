@@ -1,10 +1,10 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "identifier": "com.alfred.app",
-  "version": "0.1.0-beta.5.1",
+  "version": "0.1.0-beta.5.2",
   "bundle": {
     "android": {
-      "versionCode": 1007
+      "versionCode": 1008
     }
   },
   "build": {

@@ -9,6 +9,7 @@ import { AndroidAssistantSetup } from "../../android/AndroidAssistantSetup.tsx";
 import { ScheduleNotificationSettings } from "./ScheduleNotificationSettings.tsx";
 import { AppUpdateSettings } from "./AppUpdateSettings.tsx";
 import { AndroidAppUpdateSettings } from "../../android/AndroidAppUpdateSettings.tsx";
+import { StartupSettings } from "./StartupSettings.tsx";
 import {
   type DesktopOverlayMode,
   getSavedOverlayMode,
@@ -193,6 +194,7 @@ function SettingsViewComponent() {
 
         {/* System & Privacy Section */}
         <ScheduleNotificationSettings />
+        <StartupSettings />
         <section className="settings-card-group">
           <h3 className="settings-group-header">
             <Shield size={16} className="settings-group-icon" />

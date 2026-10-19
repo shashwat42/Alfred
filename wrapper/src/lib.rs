@@ -4,6 +4,8 @@ mod desktop;
 mod permissions;
 #[cfg(target_os = "windows")]
 mod updates;
+#[cfg(target_os = "windows")]
+mod startup;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -19,7 +21,9 @@ pub fn run() {
             .invoke_handler(tauri::generate_handler![
                 permissions::request_microphone_consent,
                 updates::check_for_app_update,
-                updates::install_app_update
+                updates::install_app_update,
+                startup::get_launch_on_startup,
+                startup::set_launch_on_startup
             ])
             .on_permission_request(permissions::handle_permission);
     }

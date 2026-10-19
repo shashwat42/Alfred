@@ -1,0 +1,29 @@
+.desktop-overlay-dock { display: flex; align-items: center; gap: 14px; width: 100%; flex-shrink: 0; }
+.desktop-overlay-circle { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; flex-shrink: 0; padding: 0; border: 0; border-radius: 50%; background: #fff; color: #202024; cursor: pointer; transition: background .15s, transform .15s; }
+.desktop-overlay-circle:hover { background: #ededed; }
+.desktop-overlay-circle:active { transform: scale(.95); }
+.desktop-overlay-pill { display: flex; align-items: center; flex: 1; min-width: 0; height: 50px; box-sizing: border-box; padding: 0 14px; border-radius: 999px; background: #080808; color: #fff; }
+.desktop-overlay-composer input { flex: 1; min-width: 0; height: 44px; padding: 0 10px; border: 0; outline: 0; background: transparent; color: #fff; font: inherit; font-size: 17px; }
+.desktop-overlay-composer input::placeholder { color: #fff; opacity: 1; }
+.desktop-overlay-composer:focus-within { outline: 1px solid #ef444466; }
+.desktop-overlay-send, .desktop-overlay-mic { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 44px; flex-shrink: 0; padding: 0; border: 0; border-radius: 50%; background: transparent; color: #a51c22; cursor: pointer; }
+.desktop-overlay-send:disabled { opacity: .35; cursor: default; }
+.desktop-overlay-mic[aria-pressed=false] { opacity: .65; }
+.desktop-overlay-circle:focus-visible, .desktop-overlay-send:focus-visible, .desktop-overlay-mic:focus-visible { outline: 2px solid #f87171; outline-offset: 3px; }
+.desktop-overlay-voice { justify-content: space-between; }
+.desktop-overlay-logo { display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border: 2px solid; border-radius: 50%; transition: transform .1s, border-color .15s; }
+.desktop-overlay-logo img { width: 26px; height: 26px; }
+.desktop-overlay-logo.state-thinking { border-style: double; }
+.desktop-overlay-activity { display: flex; align-items: center; justify-content: center; min-width: 48px; height: 44px; }
+.desktop-overlay-wave { display: flex; align-items: center; gap: 2px; height: 40px; opacity: .4; }
+.desktop-overlay-wave i { display: block; width: 3px; border-radius: 3px; background: #fff; transform: scaleY(.3); }
+.desktop-overlay-wave.is-recording { opacity: 1; }
+.desktop-overlay-wave.is-recording i { animation: desktop-overlay-wave .65s ease-in-out infinite alternate; }
+.desktop-overlay-spinner { animation: desktop-overlay-spin 1s linear infinite; }
+@keyframes desktop-overlay-wave { from { transform: scaleY(.25); } to { transform: scaleY(calc(.5 + var(--voice-level, 0) * .5)); } }
+@keyframes desktop-overlay-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+    .desktop-overlay-spinner, .desktop-overlay-wave i { animation: none; }
+    .desktop-overlay-logo, .desktop-overlay-circle { transition: none; }
+    .desktop-overlay-wave.is-recording i { transform: scaleY(calc(.4 + var(--voice-level, 0) * .6)); }
+}

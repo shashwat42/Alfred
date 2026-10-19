@@ -1,6 +1,6 @@
 import { ErrorNotice } from "../components/reliability/Notifications";
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
-import { ArrowUp, ArrowLeftRight, ExternalLink, MoreHorizontal, Square, Trash2, X, Sparkles } from "lucide-react";
+import { AudioLines, SendHorizontal, Mic, MicOff, LoaderCircle, ExternalLink, Square, Trash2, X, Sparkles } from "lucide-react";
 import Logo from "../assets/Alfred_Logo.svg";
 import { AUTH_CHANGE_EVENT, AUTH_STORAGE_KEY, getSession } from "../auth/auth.ts";
 import { SafeMarkdown } from "../components/SafeMarkdown.tsx";
@@ -19,7 +19,7 @@ let messageSequence = 0;
 const messageId = () => `${Date.now()}-${++messageSequence}`;
 
 function ModeSwitchButton({ voice, disabled, onClick }: { voice: boolean; disabled?: boolean; onClick: () => void }) {
-  return <button type="button" className="android-assistant-mode-switch" aria-label={voice ? "Switch to text mode" : "Switch to voice mode"} title={voice ? "Switch to text mode" : "Switch to voice mode"} disabled={disabled} onClick={onClick}><ArrowLeftRight size={18} /></button>;
+  return <button type="button" className="android-assistant-mode-switch" aria-label={voice ? "Switch to text mode" : "Switch to voice mode"} title={voice ? "Switch to text mode" : "Switch to voice mode"} disabled={disabled} onClick={onClick}>{voice ? <X size={36} strokeWidth={2.5} /> : <AudioLines size={24} />}</button>;
 }
 
 function AssistantLogo({ state, level = 0 }: { state: State; level?: number }) {
@@ -39,6 +39,9 @@ export default function AndroidAssistantApp() {
   const [retryPrompt, setRetryPrompt] = useState<string | null>(null);
   const [voice, setVoice] = useState(false);
   const voiceRef = useRef(false);
+  const [micMuted, setMicMuted] = useState(false);
+  const micMutedRef = useRef(false);
+  const micRevision = useRef(0);
   const generation = useRef(0);
   const abort = useRef<AbortController | null>(null);
   const [audioLevel, setAudioLevel] = useState(0);
@@ -58,6 +61,7 @@ export default function AndroidAssistantApp() {
     speechDone.current?.();
     speechDone.current = null;
     busyRef.current = false;
+    micMutedRef.current = false; setMicMuted(false);
     setVoice(false); setBusy(false); setState("Ready"); setAudioLevel(0);
   }, []);
 
@@ -139,13 +143,22 @@ export default function AndroidAssistantApp() {
     try {
       let nextPrompt = savedPrompt;
       while (current()) {
+        if (micMutedRef.current) {
+          setState("Paused");
+          await new Promise((resolve) => setTimeout(resolve, 100));
+          continue;
+        }
         let recording: RecordingResult | undefined = nextPrompt ? history.current.at(-1)?.recording : undefined;
         let text = nextPrompt;
         nextPrompt = undefined;
         if (!text) {
           setState("Listening");
-          const audio = await recordAssistantSpeech(getSilenceTimeout());
+          const recordingRevision = micRevision.current;
+          let audio: RecordingResult;
+          try { audio = await recordAssistantSpeech(getSilenceTimeout()); }
+          catch (err) { if (current() && recordingRevision !== micRevision.current) continue; throw err; }
           if (!current()) break;
+          if (micMutedRef.current || recordingRevision !== micRevision.current) continue;
           recording = audio;
           text = "Voice message";
         }
@@ -173,30 +186,42 @@ export default function AndroidAssistantApp() {
     stop();
     void androidAssistantRequest(type).catch((err: unknown) => setError(err instanceof Error ? err.message : "Android action failed."));
   };
+  const toggleMic = () => {
+    if (!voiceRef.current) { void toggleVoice(); return; }
+    const muted = !micMutedRef.current;
+    micRevision.current++;
+    micMutedRef.current = muted; setMicMuted(muted); setAudioLevel(0);
+    if (muted && (state === "Listening" || state === "Preparing voice")) {
+      audioRecorder.cancel();
+      if (hasAndroidAssistantBridge()) void androidAssistantRequest("cancelVoice").catch(() => {});
+      setState("Paused");
+    }
+  };
   return <main className={`android-assistant${voice ? " is-voice" : ""}`} aria-label="Alfred floating assistant">
-    {voice && <div className="android-assistant-voice-bar">
-      <span className={`android-assistant-status${state === "Listening" ? " is-listening" : ""}`} role="status"><i />{state}</span>
-      <AssistantLogo state={state} level={audioLevel} />
-      <div className="android-assistant-controls">
-        <button aria-label="Assistant options" aria-expanded={menuOpen} aria-haspopup="menu" onClick={() => setMenuOpen(!menuOpen)}><MoreHorizontal size={18} /></button>
-        <ModeSwitchButton voice onClick={() => { setMenuOpen(false); stop(); }} />
-        <button className="android-assistant-stop" aria-label="Stop voice mode" title="Stop voice mode" onClick={stop}><Square size={16} fill="currentColor" /></button>
-        <button aria-label="Dismiss assistant" onClick={() => native("dismiss")}><X size={20} /></button>
+    {voice && <div className="android-assistant-dock">
+      <div className="android-assistant-voice-bar">
+        <button className="android-assistant-logo-button" aria-label="Assistant options" aria-expanded={menuOpen} aria-haspopup="menu" onClick={() => setMenuOpen(!menuOpen)}><AssistantLogo state={state} level={audioLevel} /></button>
+        <span className="android-assistant-activity" role="status" aria-label={state}>
+          {state === "Thinking" || state === "Preparing audio" || state === "Preparing voice" ? <LoaderCircle className="android-assistant-spinner" size={30} /> : <span className={`android-assistant-wave${state === "Listening" && !micMuted ? " is-recording" : ""}`} style={{ "--voice-level": audioLevel } as CSSProperties} aria-hidden="true">{[12, 25, 17, 34, 24, 40, 28, 18, 30, 14].map((height, index) => <i key={index} style={{ height, animationDelay: `${index * -0.09}s` }} />)}</span>}
+        </span>
+        <button className="android-assistant-mic" aria-label={micMuted || state === "Paused" ? "Turn microphone on" : "Turn microphone off"} aria-pressed={!micMuted && state !== "Paused"} onClick={toggleMic}>{micMuted || state === "Paused" ? <MicOff size={28} /> : <Mic size={28} />}</button>
       </div>
+      <ModeSwitchButton voice onClick={() => { setMenuOpen(false); stop(); }} />
     </div>}
-    <form className="android-assistant-composer" hidden={voice} onSubmit={(event) => {
+    <form className="android-assistant-dock" hidden={voice} onSubmit={(event) => {
       event.preventDefault(); if (voice || busyRef.current || !prompt.trim()) return;
       const text = prompt; setPrompt("");
       void send(text).catch((err: unknown) => { setPrompt(text); setError(err instanceof Error ? err.message : "Could not connect. Check your network and try again."); });
     }}>
-      <AssistantLogo state={state} />
-      <input aria-label="Ask Alfred" placeholder="Ask Alfred…" maxLength={MAX_MESSAGE_CHAR_LIMIT} value={prompt} onChange={(event) => setPrompt(event.target.value)} disabled={voice} />
-      <button type="button" aria-label="Assistant options" aria-expanded={menuOpen} aria-haspopup="menu" onClick={() => setMenuOpen(!menuOpen)}><MoreHorizontal size={18} /></button>
+      <div className="android-assistant-composer">
+        <input aria-label="Ask Alfred" placeholder="Ask Alfred" maxLength={MAX_MESSAGE_CHAR_LIMIT} value={prompt} onChange={(event) => setPrompt(event.target.value)} disabled={voice} />
+        {busy ? <button type="button" className="android-assistant-stop" aria-label="Stop response" onClick={stop}><Square size={20} /></button> : <button type="submit" aria-label="Send message" disabled={voice || !prompt.trim()}><SendHorizontal size={30} /></button>}
+      </div>
       <ModeSwitchButton voice={false} disabled={busy} onClick={() => { setMenuOpen(false); void toggleVoice(); }} />
-      {busy ? <button type="button" className="android-assistant-stop" aria-label="Stop response" onClick={stop}><Square size={16} fill="currentColor" /></button> : <button type="submit" aria-label="Send message" disabled={voice || !prompt.trim()}><ArrowUp size={20} /></button>}
-      <button type="button" aria-label="Dismiss assistant" onClick={() => native("dismiss")}><X size={20} /></button>
     </form>
+    {!voice && <button className="android-assistant-options" aria-label="Assistant options" aria-expanded={menuOpen} aria-haspopup="menu" onClick={() => setMenuOpen(!menuOpen)}>Options</button>}
     {menuOpen && <div className="android-assistant-menu" role="menu" aria-label="Assistant options">
+      <button role="menuitem" onClick={() => native("dismiss")}><X size={16} />Dismiss assistant</button>
       <button role="menuitem" onClick={() => native("openApp")}><ExternalLink size={16} />Open Alfred app</button>
       <button role="menuitem" disabled={!messages.length && !error} onClick={() => { stop(); history.current = []; setMessages([]); setError(""); setRetryPrompt(null); setPrompt(""); setMenuOpen(false); }}><Trash2 size={16} />New conversation</button>
     </div>}

@@ -20,19 +20,19 @@ import {
 } from "../lib/overlayMode.ts";
 import Logo from "../assets/Alfred_Logo.svg";
 import { SafeMarkdown } from "../components/SafeMarkdown.tsx";
+import "./overlay.css";
 import {
-  ArrowUp,
+  SendHorizontal,
+  AudioLines,
   Mic,
   MicOff,
   X,
   Sparkles,
   Loader2,
-  Square,
-  ArrowLeftRight,
   Trash2,
 } from "lucide-react";
 
-const IDLE_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes of inactivity
+const IDLE_TIMEOUT_MS = 60 * 1000; // One minute of inactivity
 
 /**
  * Release the overlay renderer when explicitly dismissed. Its session is reset
@@ -76,7 +76,7 @@ async function positionOverlayAtTop(): Promise<void> {
 
 /**
  * Standardized Mode-Switch Button
- * Identical icon, sizing, styling, and animations across Normal and Voice modes.
+ * Circular control matching the clear-chat button in both modes.
  */
 export function OverlayModeSwitchButton({
   targetMode,
@@ -90,13 +90,17 @@ export function OverlayModeSwitchButton({
     <button
       type="button"
       onClick={onClick}
-      title={isTargetingVoice ? "Switch to voice mode" : "Switch to normal mode"}
-      aria-label={isTargetingVoice ? "Switch to voice mode" : "Switch to normal mode"}
-      className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 active:scale-95 transition-all flex items-center justify-center shrink-0"
+      title={isTargetingVoice ? "Switch to voice mode" : "Switch to text mode"}
+      aria-label={isTargetingVoice ? "Switch to voice mode" : "Switch to text mode"}
+      className="desktop-overlay-circle"
     >
-      <ArrowLeftRight size={15} />
+      {isTargetingVoice ? <AudioLines size={24} /> : <X size={32} />}
     </button>
   );
+}
+
+function ClearChatButton({ onClick }: { onClick: () => void }) {
+  return <button type="button" className="desktop-overlay-circle" title="Clear chat" aria-label="Clear chat" onClick={onClick}><Trash2 size={22} /></button>;
 }
 
 /**
@@ -127,7 +131,8 @@ export function OverlayConversationList({
     if (!el) return;
     const distanceToBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
     isNearBottomRef.current = distanceToBottom < 80;
-  }, []);
+    onUserActivity?.();
+  }, [onUserActivity]);
 
   // Auto-scroll when messages or status change if user was near bottom
   useEffect(() => {
@@ -388,75 +393,23 @@ export function QuickInputOverlay({
 
   return (
     <div className="w-full max-w-155 flex flex-col font-sans select-none pointer-events-auto">
-      {/* 1. Stationary, Fixed-Position Control Bar */}
-      <div className="w-full shrink-0 flex items-center gap-3 px-3.5 py-2.5 bg-[#121216]/95 backdrop-blur-md border border-white/12 rounded-2xl text-slate-100 transition-all z-20 shadow-xl">
-        <img
-          src={Logo}
-          alt="Alfred"
-          className="w-6 h-6 shrink-0 opacity-95 transition-opacity"
-        />
-
-        <input
-          ref={inputRef}
-          type="text"
-          value={prompt}
-          onChange={(e) => {
-            onUserActivity();
-            setPrompt(e.target.value);
-          }}
-          onKeyDown={handleKeyDown}
-          placeholder={
-            isLoading
-              ? "Type follow-up prompt... (Enter to queue)"
-              : "Ask Alfred anything... (Enter to send, Esc to close)"
-          }
-          className="flex-1 bg-transparent border-0 outline-none text-[14px] text-white placeholder-zinc-400 font-normal focus:ring-0 leading-tight"
-          autoFocus
-        />
-
-        <div className="flex items-center gap-1.5 shrink-0">
-          {messages.length > 0 && (
-            <button
-              type="button"
-              onClick={handleClear}
-              title="New / Clear Chat"
-              aria-label="New / Clear Chat"
-              className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 active:scale-95 transition-all"
-            >
-              <Trash2 size={15} />
-            </button>
-          )}
-
-          {/* Standardized Mode Switch Button */}
-          <OverlayModeSwitchButton targetMode="voice" onClick={onSwitchMode} />
-
-          {isLoading ? (
-            <div className="p-1.5 text-red-400 animate-spin flex items-center justify-center">
-              <Loader2 size={16} />
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => handleSubmit()}
-              disabled={!prompt.trim()}
-              title="Submit prompt"
-              aria-label="Submit prompt"
-              className="p-1.5 rounded-lg bg-red-600 hover:bg-red-500 disabled:opacity-30 disabled:hover:bg-red-600 text-white transition-all active:scale-95 flex items-center justify-center"
-            >
-              <ArrowUp size={15} />
-            </button>
-          )}
-
-          <button
-            type="button"
-            onClick={onDismiss}
-            title="Dismiss overlay (Esc)"
-            aria-label="Dismiss overlay (Esc)"
-            className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 active:scale-95 transition-all"
-          >
-            <X size={15} />
-          </button>
-        </div>
+      <div className="desktop-overlay-dock">
+        <ClearChatButton onClick={handleClear} />
+        <form className="desktop-overlay-pill desktop-overlay-composer" onSubmit={handleSubmit}>
+          <input
+            ref={inputRef}
+            type="text"
+            aria-label="Ask Alfred"
+            value={prompt}
+            onChange={(event) => { onUserActivity(); setPrompt(event.target.value); }}
+            onKeyDown={handleKeyDown}
+            placeholder={isLoading ? "Ask a follow-up..." : "Ask Alfred"}
+            title="Enter to send or queue a follow-up; Escape to close"
+            autoFocus
+          />
+          {isLoading ? <span role="status" aria-label="Alfred is thinking" className="desktop-overlay-send"><Loader2 size={25} className="desktop-overlay-spinner" /></span> : <button type="submit" className="desktop-overlay-send" disabled={!prompt.trim()} title="Submit prompt" aria-label="Submit prompt"><SendHorizontal size={28} /></button>}
+        </form>
+        <OverlayModeSwitchButton targetMode="voice" onClick={onSwitchMode} />
       </div>
 
       {/* 2. Unified Conversation Display */}
@@ -487,6 +440,7 @@ export function VoiceOverlay({
   setMessages,
   onClearSession,
   onUserActivity,
+  sessionVersion = 0,
 }: {
   onDismiss: () => void;
   onSwitchMode: () => void;
@@ -494,6 +448,7 @@ export function VoiceOverlay({
   setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
   onClearSession: () => void;
   onUserActivity: () => void;
+  sessionVersion?: number;
 }) {
   const [voiceState, setVoiceState] = useState<VoiceModeState>("starting");
   const [audioLevel, setAudioLevel] = useState<number>(0);
@@ -546,9 +501,10 @@ export function VoiceOverlay({
   useEffect(() => {
     const unsubLevel = audioRecorder.addLevelListener((level) => {
       setAudioLevel(level);
+      if (level > 0.02) onUserActivity();
     });
     return () => unsubLevel();
-  }, []);
+  }, [onUserActivity]);
 
   // Hands-free Voice loop
   useEffect(() => {
@@ -558,6 +514,7 @@ export function VoiceOverlay({
     async function runLoop() {
       try {
         setVoiceState("starting");
+        setVoiceError(null);
 
       } catch (err: unknown) {
         if (!isListeningRef.current || sessionIdRef.current !== currentSession) return;
@@ -656,7 +613,7 @@ export function VoiceOverlay({
     return () => {
       stopVoice();
     };
-  }, [stopVoice, isMuted, setMessages, onUserActivity]);
+  }, [stopVoice, isMuted, setMessages, onUserActivity, sessionVersion]);
 
   const scale =
     voiceState === "listening" && !isMuted
@@ -680,107 +637,20 @@ export function VoiceOverlay({
 
   return (
     <div className="w-full max-w-155 flex flex-col font-sans select-none pointer-events-auto">
-      {/* 1. Standardized Voice Control Bar */}
-      <div className="w-full shrink-0 flex items-center justify-between gap-3 px-3.5 py-2.5 bg-[#121216]/95 backdrop-blur-md border border-white/12 rounded-2xl text-slate-100 transition-all z-20 shadow-xl">
-        {/* Left Side: Status Pill & Mute Button */}
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-xs font-medium text-zinc-300">
-            <span
-              className={`w-2 h-2 rounded-full ${
-                voiceState === "listening" && !isMuted
-                  ? "bg-green-400 animate-ping"
-                  : voiceState === "transcribing"
-                  ? "bg-red-400 animate-pulse"
-                  : voiceState === "thinking"
-                  ? "bg-red-500 animate-pulse"
-                  : voiceState === "error"
-                  ? "bg-red-400"
-                  : "bg-zinc-500"
-              }`}
-            />
-            <span className="capitalize text-[11px] font-medium tracking-wide">
-              {voiceState === "starting" && "Connecting..."}
-              {voiceState === "listening" && (isMuted ? "Muted" : "Listening")}
-              {voiceState === "transcribing" && "Preparing audio..."}
-              {voiceState === "thinking" && "Thinking..."}
-              {voiceState === "error" && "Error"}
-            </span>
-          </div>
-
-          <button
-            type="button"
-            onClick={handleToggleMute}
-            title={isMuted ? "Unmute microphone" : "Mute microphone"}
-            aria-label={isMuted ? "Unmute microphone" : "Mute microphone"}
-            className={`p-1.5 rounded-lg transition-all active:scale-95 ${
-              isMuted
-                ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
-                : "text-zinc-400 hover:text-white hover:bg-white/10"
-            }`}
-          >
-            {isMuted ? <MicOff size={15} /> : <Mic size={15} />}
+      <div className="desktop-overlay-dock">
+        <ClearChatButton onClick={onClearSession} />
+        <div className="desktop-overlay-pill desktop-overlay-voice">
+          <span className={`desktop-overlay-logo state-${voiceState}${isMuted ? " is-muted" : ""}`} style={{ transform: `scale(${scale})`, borderColor: isMuted ? "#71717a" : glowColor, filter: `drop-shadow(0 0 ${10 + Math.round(audioLevel * 14)}px ${glowColor})` }}>
+            <img src={Logo} alt="Alfred" />
+          </span>
+          <span className="desktop-overlay-activity" role="status" aria-label={isMuted ? "Microphone muted" : voiceState}>
+            {!isMuted && (isThinkingOrTranscribing || voiceState === "starting") ? <Loader2 size={30} className="desktop-overlay-spinner" /> : <span className={`desktop-overlay-wave${voiceState === "listening" && !isMuted ? " is-recording" : ""}`} style={{ "--voice-level": audioLevel } as React.CSSProperties} aria-hidden="true">{[12, 25, 17, 34, 24, 40, 28, 18, 30, 14].map((height, index) => <i key={index} style={{ height, animationDelay: `${index * -0.09}s` }} />)}</span>}
+          </span>
+          <button type="button" className="desktop-overlay-mic" onClick={handleToggleMute} aria-pressed={!isMuted} title={isMuted ? "Unmute microphone" : "Mute microphone"} aria-label={isMuted ? "Unmute microphone" : "Mute microphone"}>
+            {isMuted ? <MicOff size={28} /> : <Mic size={28} />}
           </button>
         </div>
-
-        {/* Center: Glowing Alfred Logo */}
-        <div
-          className="relative flex items-center justify-center transition-transform duration-100 ease-out"
-          style={{
-            transform: `scale(${scale})`,
-            filter: `drop-shadow(0 0 ${10 + Math.round(audioLevel * 14)}px ${glowColor})`,
-          }}
-        >
-          <img
-            src={Logo}
-            alt="Alfred"
-            className={`w-6 h-6 transition-opacity ${
-              voiceState === "thinking"
-                ? "animate-pulse"
-                : voiceState === "transcribing"
-                ? "opacity-80"
-                : "opacity-100"
-            }`}
-          />
-        </div>
-
-        {/* Right Side: Action Controls & Mode Switch */}
-        <div className="flex items-center gap-1.5 shrink-0">
-          {messages.length > 0 && (
-            <button
-              type="button"
-              onClick={onClearSession}
-              title="New / Clear Chat"
-              aria-label="New / Clear Chat"
-              className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 active:scale-95 transition-all"
-            >
-              <Trash2 size={15} />
-            </button>
-          )}
-
-          {/* Standardized Mode Switch Button */}
-          <OverlayModeSwitchButton targetMode="quick_input" onClick={onSwitchMode} />
-
-          <button
-            type="button"
-            onClick={handleDismiss}
-            title="Stop voice mode (Esc)"
-            aria-label="Stop voice mode (Esc)"
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white font-medium text-xs active:scale-95 transition-all shadow-sm"
-          >
-            <Square size={11} fill="currentColor" />
-            <span>Stop</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={handleDismiss}
-            title="Dismiss overlay (Esc)"
-            aria-label="Dismiss overlay (Esc)"
-            className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 active:scale-95 transition-all"
-          >
-            <X size={15} />
-          </button>
-        </div>
+        <OverlayModeSwitchButton targetMode="quick_input" onClick={onSwitchMode} />
       </div>
 
       {/* 2. Unified Conversation Display */}
@@ -799,12 +669,13 @@ export function VoiceOverlay({
  * Main Overlay Application Entry Point
  * Manages:
  * - Shared, session-local in-memory chat history (persists across mode toggling)
- * - 10-minute idle inactivity auto-reset
+ * - One-minute idle inactivity auto-reset
  * - Centered layout with seamless downward card expansion
  * - Automatic reset on overlay dismissal (Escape or Close)
  */
 export default function OverlayApp() {
   const [mode, setMode] = useState<DesktopOverlayMode>(() => getSavedOverlayMode());
+  const [sessionVersion, setSessionVersion] = useState(0);
   const [visible, setVisible] = useState(() => !document.hidden);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const lastActivityTimeRef = useRef<number>(0);
@@ -816,6 +687,8 @@ export default function OverlayApp() {
 
   const resetSession = useCallback(() => {
     setMessages([]);
+    setSessionVersion((version) => version + 1);
+    if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
     audioRecorder.cancel();
     lastActivityTimeRef.current = Date.now();
   }, []);
@@ -872,7 +745,7 @@ export default function OverlayApp() {
           setVisible(true);
           void positionOverlayAtTop();
           const now = Date.now();
-          if (now - lastActivityTimeRef.current > IDLE_TIMEOUT_MS) {
+          if (now - lastActivityTimeRef.current >= IDLE_TIMEOUT_MS) {
             resetSession();
           } else {
             recordUserActivity();
@@ -907,6 +780,7 @@ export default function OverlayApp() {
     <div className="overlay-root w-screen h-screen flex flex-col items-center justify-start pt-2 px-4 pb-4 bg-transparent overflow-hidden pointer-events-none">
       {mode === "quick_input" ? (
         <QuickInputOverlay
+          key={sessionVersion}
           onDismiss={handleDismiss}
           onSwitchMode={handleSwitchMode}
           messages={messages}
@@ -916,6 +790,7 @@ export default function OverlayApp() {
         />
       ) : visible ? (
         <VoiceOverlay
+          sessionVersion={sessionVersion}
           onDismiss={handleDismiss}
           onSwitchMode={handleSwitchMode}
           messages={messages}
