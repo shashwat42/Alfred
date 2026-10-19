@@ -12,18 +12,18 @@ const resetDate = (value: string) => new Date(value).toLocaleString(undefined, {
 export function Usage({ data, loading, error, refresh }: { data?: AccountStatus | null; loading?: boolean; error?: string; refresh?: () => void }) {
   const unlimited = data && data.storage.limitBytes === null && data.ai.daily.limit === null && data.ai.monthly.limit === null;
   return <section className="settings-card-group account-usage">
-    <div className="account-usage-header"><h3 className="settings-group-header"><HardDrive size={16} className="settings-group-icon" />Storage & AI usage</h3>
+    <div className="account-usage-header"><h3 className="settings-group-header"><HardDrive size={16} className="settings-group-icon" />Cloud storage & AI usage</h3>
       {refresh && <button className="account-usage-refresh" type="button" disabled={loading} onClick={refresh} aria-label="Refresh usage" title="Refresh usage"><RefreshCw size={15} className={loading ? "account-usage-spinning" : ""} /></button>}
     </div>
     <div className="settings-feature-card account-usage-card">
-      {unlimited && <div className="account-usage-development"><span>DEVELOPMENT</span><p>Storage and AI limits are disabled.</p></div>}
+      {unlimited && <div className="account-usage-development"><span>DEVELOPMENT</span><p>Cloud storage and AI limits are disabled.</p></div>}
       {loading && !data && <Loader label="Loading usage…" />}
       {error && <ErrorState message={error} retry={refresh} />}
       {data && <div className="account-usage-grid">
-        <div className="account-usage-metric"><div className="account-usage-label"><HardDrive size={15} />Storage</div>
+        <div className="account-usage-metric"><div className="account-usage-label"><HardDrive size={15} />Cloud storage</div>
           <p className="account-usage-value">{megabytes(data.storage.usedBytes)} <span>{data.storage.limitBytes === null ? "MB used" : `MB of ${megabytes(data.storage.limitBytes)} MB`}</span></p>
-          {data.storage.limitBytes !== null ? <><progress max={data.storage.limitBytes} value={Math.min(data.storage.usedBytes, data.storage.limitBytes)} aria-label="Account storage usage" /><p className="account-usage-detail">{megabytes(data.storage.remainingBytes ?? 0)} MB available</p>
-            {data.storage.usedBytes >= data.storage.limitBytes * .9 && <p className="account-usage-warning" role="status">{data.storage.overQuota || data.storage.usedBytes >= data.storage.limitBytes ? "Storage full. Free up space to add more." : "Storage is nearly full."}</p>}</> : <p className="account-usage-detail">No storage cap</p>}
+          {data.storage.limitBytes !== null ? <><progress max={data.storage.limitBytes} value={Math.min(data.storage.usedBytes, data.storage.limitBytes)} aria-label="Cloud storage usage" /><p className="account-usage-detail">{megabytes(data.storage.remainingBytes ?? 0)} MB available</p>
+            {data.storage.usedBytes >= data.storage.limitBytes * .9 && <p className="account-usage-warning" role="status">{data.storage.overQuota || data.storage.usedBytes >= data.storage.limitBytes ? "Cloud storage full. Free up space or use local storage." : "Cloud storage is nearly full."}</p>}</> : <p className="account-usage-detail">No cloud storage cap</p>}
         </div>
         {(["daily", "monthly"] as const).map(window => { const value = data.ai[window]; return <div key={window} className="account-usage-metric"><div className="account-usage-label"><Sparkles size={15} />{window === "daily" ? "Daily AI" : "Monthly AI"}</div>
           <p className="account-usage-value">{value.used.toLocaleString()}{value.limit !== null && ` / ${value.limit}`} <span>requests</span></p>

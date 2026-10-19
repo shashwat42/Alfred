@@ -5,6 +5,7 @@ import * as notesService from "../notes/service.ts";
 import * as scheduleService from "../schedule/service.ts";
 import type { TaskPriority } from "../../models/task.model.ts";
 import { isValidCalendarDate } from "../../utils/dateUtils.ts";
+import { localWorkspaceContext } from "../../security/localWorkspace.ts";
 
 export function isEventInPast(
     eventDate: string,
@@ -368,12 +369,14 @@ export async function executeAiTool(
         "clearAllSchedules",
     ].includes(toolName);
 
+    const local = localWorkspaceContext.getStore();
+    const cache = local ? (local.toolCache ??= new Map()) : idempotencyCache;
     const idempotencyKey = isMutation
         ? `${accountId}:${toolName}:${JSON.stringify(parsedArgs)}`
         : null;
 
     if (idempotencyKey) {
-        const cached = idempotencyCache.get(idempotencyKey);
+        const cached = cache.get(idempotencyKey);
         if (cached && cached.expiresAt > Date.now()) {
             return cached.result;
         }
@@ -632,7 +635,7 @@ export async function executeAiTool(
         }
 
         if (idempotencyKey && executionResult.success) {
-            idempotencyCache.set(idempotencyKey, {
+            cache.set(idempotencyKey, {
                 result: executionResult,
                 expiresAt: Date.now() + 15000, // 15 second idempotency window
             });

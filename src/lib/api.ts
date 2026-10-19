@@ -58,10 +58,16 @@ export async function apiFetch(
   input: string,
   init: RequestInit & { _isRetry?: boolean; _preserveAccount?: boolean; _expectedAccountId?: string } = {}
 ): Promise<Response> {
+  if (/^\/api\/(tasks|notes|schedule)(?:[/?]|$)/.test(input)) {
+    const { localWorkspaceResponse } = await import("./localWorkspace.ts");
+    const local = await localWorkspaceResponse(input, init);
+    if (local) return local;
+  }
   const url = buildUrl(input);
   const headers = new Headers(init.headers);
 
   const token = headers.get("Authorization")?.replace(/^Bearer\s+/i, "") || (await ensureToken());
+  const requestAccountId = getSession()?.account.id;
   if (init._expectedAccountId && getSession()?.account.id !== init._expectedAccountId) {
     throw new Error("Your account changed. Please try again.");
   }
@@ -88,6 +94,7 @@ export async function apiFetch(
     if (error instanceof DOMException && error.name === "TimeoutError") throw new Error("The request timed out. Please retry; your input is preserved.", { cause: error });
     throw new Error(typeof navigator !== "undefined" && !navigator.onLine ? "You’re offline. Check your connection and retry." : "The Alfred server could not be reached. Please retry.", { cause: error });
   }
+  if (requestAccountId && getSession()?.account.id !== requestAccountId) throw new Error("Your account changed. Please try again.");
   if (response.status === 401 && token) {
     const current = getSession();
     if (!init._isRetry && current?.token === token && current.account.type === "guest") {
@@ -100,6 +107,26 @@ export async function apiFetch(
       }
     }
     reportInvalidSession(token);
+  }
+  if (/^\/api\/(tasks|notes|schedule)(?:[/?]|$)/.test(input)) {
+    const storage = await import("./localWorkspace.ts");
+    const accountId = getSession()?.account.id;
+    if (accountId && response.status === 409) {
+      const error = await response.clone().json().catch(() => null);
+      if (error?.code === "CLOUD_SYNC_DISABLED") {
+        storage.setCloudSyncEnabled(accountId, false);
+        const local = await storage.localWorkspaceResponse(input, init);
+        if (local) return local;
+      }
+    }
+    if (accountId && response.ok) {
+      try {
+        await storage.rememberCloudResponse(accountId, input, init, response);
+        window.dispatchEvent(new CustomEvent("alfred:storage-warning", { detail: "" }));
+      } catch {
+        window.dispatchEvent(new CustomEvent("alfred:storage-warning", { detail: "The cloud request succeeded, but its device copy could not be updated. Free device space before turning Cloud Sync off." }));
+      }
+    }
   }
   return response;
 }

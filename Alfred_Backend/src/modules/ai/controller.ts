@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { sendPolicyError } from "../../security/errors.ts";
+import { PolicyError } from "../../security/errors.ts";
 import type { ChatRequestBody } from "./ai.schema.ts";
 import { requireAccountId } from "../../utils/requireAccountId.ts";
 import {
@@ -21,7 +22,8 @@ export async function chatCompletionHandler(
             req.body.message
         );
 
-        const result = await generateChatCompletion(clientMessages, accountId, undefined, [], req.get("Idempotency-Key"));
+        if (!req.body.localWorkspace && req.account?.cloudSyncEnabled !== true) throw new PolicyError(409, "LOCAL_WORKSPACE_REQUIRED", "Open Alfred to use the workspace stored on this device, or enable Cloud Sync.");
+        const result = await generateChatCompletion(clientMessages, accountId, undefined, [], req.get("Idempotency-Key"), req.body.localWorkspace);
         res.json(result);
     } catch (err: unknown) {
         if (sendPolicyError(err, res)) return;

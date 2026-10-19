@@ -27,7 +27,7 @@ function fixture(t: TestContext, p: Preferences | null = defaults()) {
     mock.method(mongoose.connection, "transaction", (async (callback: (session?: unknown) => Promise<unknown>) => callback(undefined)) as never);
     mock.method(TenantAccount, "updateOne", (async () => ({ matchedCount: 1, modifiedCount: 1 })) as never);
     for (const model of storageModels) mock.method(model, "aggregate", (() => ({ session: async () => [] })) as never);
-    mock.method(TenantAccount, "findById", (async (id: string) => ({ _id: id, type: "user", googleId: "test-google" })) as never);
+    mock.method(TenantAccount, "findById", (async (id: string) => ({ _id: id, type: "user", googleId: "test-google", cloudSyncEnabled: true })) as never);
     const rows = new Map<string, Event>([[id, event()]]);
     const sent = new Map<string, unknown>();
     const installations = new Map<string, Record<string, unknown>>();
@@ -272,7 +272,7 @@ async function api(t: TestContext) {
     const { Account } = await import("../../models/account.model.ts");
     const { env } = await import("../../config/env.ts");
     const { default: router } = await import("./route.ts");
-    mock.method(Account, "findById", (async (sub: string) => ({ _id: new mongoose.Types.ObjectId(sub), type: "user", googleId: "test-google" })) as never);
+    mock.method(Account, "findById", (async (sub: string) => ({ _id: new mongoose.Types.ObjectId(sub), type: "user", googleId: "test-google", cloudSyncEnabled: true })) as never);
     mock.method(Date, "now", () => now);
     const app = express(); app.use(express.json()); app.use("/notifications", router);
     const server = app.listen(0, "127.0.0.1");

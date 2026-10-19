@@ -11,6 +11,7 @@ test("application persistence uses the scoped repository; global access has expl
         "security/tenantRepository.ts", "security/tenantWrite.ts", "security/guestMigration.ts", "security/indexes.ts",
         "middleware/auth.middleware.ts", "modules/auth/auth.service.ts", "modules/auth/auth.controller.ts",
         "security/storage.ts", "security/aiUsage.ts", "security/accountLifecycle.ts",
+        "security/cloudStorage.ts",
     ]);
     async function inspect(directory: string) {
         for (const entry of await readdir(directory, { withFileTypes: true })) {

@@ -4,6 +4,9 @@ import { withAiRequest } from "../../security/aiUsage.ts";
 import type { ChatMessageInput } from "./ai.schema.ts";
 import { buildAlfredSystemPrompt, ALFRED_SYSTEM_PROMPT } from "./prompt.ts";
 import { AI_TOOLS, executeAiTool, type ConfirmedAction } from "./tools.ts";
+import { localWorkspaceContext } from "../../security/localWorkspace.ts";
+import type { WorkspaceData } from "../../workspace/data.ts";
+import { randomUUID } from "node:crypto";
 
 export class AiServiceError extends Error {
     public readonly statusCode: number;
@@ -19,6 +22,7 @@ export class AiServiceError extends Error {
 }
 
 export interface ChatCompletionResult {
+    localWorkspace?: WorkspaceData;
     message: {
         role: "assistant";
         content: string;
@@ -325,13 +329,18 @@ export async function generateChatCompletion(
     clientMessages: ChatMessageInput[], accountId?: string,
     audio?: { data: string; format: "wav" },
     historyAudio: Array<{ index: number; data: string; format: "wav" }> = [],
-    requestKey?: string
+    requestKey?: string,
+    localWorkspace?: WorkspaceData
 ): Promise<ChatCompletionResult> {
     if (!env.llm.apiKey) throw new AiServiceError(503, "AI service is not configured. Please contact the administrator.");
-    const run = () => generateCompletion(clientMessages, accountId, audio, historyAudio);
+    const run = async () => {
+        if (!localWorkspace || !accountId) return generateCompletion(clientMessages, accountId, audio, historyAudio);
+        const data = structuredClone(localWorkspace);
+        return localWorkspaceContext.run({ accountId, data, requestId: randomUUID() }, async () => ({ ...await generateCompletion(clientMessages, accountId, audio, historyAudio), localWorkspace: data }));
+    };
     // Account-free provider probes/tests have no tools or persisted user context.
     if (!accountId) return run();
-    const fingerprint = createHash("sha256").update(JSON.stringify({ clientMessages, audio, historyAudio })).digest("hex");
+    const fingerprint = createHash("sha256").update(JSON.stringify({ clientMessages, audio, historyAudio, localWorkspace })).digest("hex");
     return withAiRequest(accountId, requestKey, fingerprint, run);
 }
 

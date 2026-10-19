@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import "fake-indexeddb/auto";
 import { test } from "node:test";
 import { AUTH_STORAGE_KEY, RECOVERABLE_SESSIONS_KEY, createGuestSession, getSession, initAuthSession, renewGuestSession, restoreAuthSession } from "../../src/auth/auth.ts";
 import { apiFetch } from "../../src/lib/api.ts";
@@ -17,7 +18,7 @@ const storage = { getItem: (key: string) => values.get(key) ?? null, setItem: (k
 Object.defineProperty(globalThis, "localStorage", { configurable: true, value: storage });
 Object.defineProperty(globalThis, "window", { configurable: true, value: { location: { search: "", hash: "", pathname: "/" }, dispatchEvent: () => true } });
 const guest = { token: "expired-guest-token", account: { id: "canonical-guest", type: "guest" as const } };
-const saveGuest = () => { values.clear(); values.set(AUTH_STORAGE_KEY, JSON.stringify(guest)); };
+const saveGuest = () => { values.clear(); values.set(`alfred_cloud_sync_${guest.account.id}`, "true"); values.set(AUTH_STORAGE_KEY, JSON.stringify(guest)); };
 
 test("startup verifies saved guests and renews the same canonical account without Google", async () => {
   saveGuest(); const calls: string[] = [];

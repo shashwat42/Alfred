@@ -45,10 +45,10 @@ before(async () => {
     await mongoose.connect(database.getUri("alfred_security_test"));
     await requireTransactionTopology();
     await initializeSecurityIndexes();
-    a = await Account.create({ type: "user", googleId: "google-a" });
-    b = await Account.create({ type: "user", googleId: "google-b" });
-    ga = await Account.create({ type: "guest", guestId: randomUUID() });
-    gb = await Account.create({ type: "guest", guestId: randomUUID() });
+    a = await Account.create({ cloudSyncEnabled: true, type: "user", googleId: "google-a" });
+    b = await Account.create({ cloudSyncEnabled: true, type: "user", googleId: "google-b" });
+    ga = await Account.create({ cloudSyncEnabled: true, type: "guest", guestId: randomUUID() });
+    gb = await Account.create({ cloudSyncEnabled: true, type: "guest", guestId: randomUUID() });
     const app = express(); app.use(express.json());
     app.use("/auth", auth); app.use("/tasks", tasks); app.use("/notes", notes); app.use("/schedules", schedules);
     server = app.listen(0, "127.0.0.1");
@@ -151,7 +151,7 @@ test("legacy bearer acceptance is explicit, bounded and never overrides issuer o
 });
 
 test("real migration transaction rolls back partial work and ticket failure; retries revoke guest access", async () => {
-    const source = await Account.create({ type: "guest", guestId: randomUUID() });
+    const source = await Account.create({ cloudSyncEnabled: true, type: "guest", guestId: randomUUID() });
     const task = await taskService.addTask(String(source._id), "Transfer me");
     await noteService.createNote(String(source._id), "Guest note");
     await scheduleService.addSchedule(String(source._id), { date: "2026-10-17", time: "12:00", topic: "Guest schedule" });
@@ -176,7 +176,7 @@ test("real migration transaction rolls back partial work and ticket failure; ret
 });
 
 test("real concurrent migrations to different users commit exactly one owner", async () => {
-    const source = await Account.create({ type: "guest", guestId: randomUUID() });
+    const source = await Account.create({ cloudSyncEnabled: true, type: "guest", guestId: randomUUID() });
     const task = await taskService.addTask(String(source._id), "Race");
     const results = await Promise.allSettled([migrateGuest(source._id, a._id, 0), migrateGuest(source._id, b._id, 0)]);
     assert.equal(results.filter(r => r.status === "fulfilled").length, 1);
@@ -236,7 +236,7 @@ test("real migration supports legacy guest versions and preserves existing accou
 });
 
 test("guest write fence prevents stranded creates while migration is in flight", async () => {
-    const source = await Account.create({ type: "guest", guestId: randomUUID() });
+    const source = await Account.create({ cloudSyncEnabled: true, type: "guest", guestId: randomUUID() });
     let entered!: () => void, release!: () => void;
     const ready = new Promise<void>(resolve => { entered = resolve; });
     const gate = new Promise<void>(resolve => { release = resolve; });
@@ -251,8 +251,8 @@ test("guest write fence prevents stranded creates while migration is in flight",
 });
 
 test("notification migration preserves claim idempotency and invalidates device sessions", async () => {
-    const source = await Account.create({ type: "guest", guestId: randomUUID() });
-    const target = await Account.create({ type: "user", googleId: "notification-transfer-google" });
+    const source = await Account.create({ cloudSyncEnabled: true, type: "guest", guestId: randomUUID() });
+    const target = await Account.create({ cloudSyncEnabled: true, type: "user", googleId: "notification-transfer-google" });
     const now = Date.parse("2026-10-17T09:50Z");
     await NotificationSettings.create({ accountId: source._id, timeZone: "UTC" });
     await scheduleService.addSchedule(String(source._id), { date: "2026-10-17", time: "10:00", topic: "Transfer reminder" });
@@ -268,7 +268,7 @@ test("notification migration preserves claim idempotency and invalidates device 
 });
 
 test("desktop OAuth handoff requires the prepared verifier and cannot be replayed", async () => {
-    const source = await Account.create({ type: "guest", guestId: randomUUID() });
+    const source = await Account.create({ cloudSyncEnabled: true, type: "guest", guestId: randomUUID() });
     const verifier = "b".repeat(43), challenge = createHash("sha256").update(verifier).digest("base64url");
     const prepared = await (await request("/auth/prepare", generateAuthToken(source), "POST", { flow: "desktop", code_challenge: challenge })).json();
     const launch = await request(`/auth/google?state=${prepared.state}`);
@@ -287,7 +287,7 @@ test("desktop OAuth handoff requires the prepared verifier and cannot be replaye
 });
 
 test("OAuth nonce mismatch and migration failure never issue a successful handoff", async () => {
-    const source = await Account.create({ type: "guest", guestId: randomUUID() });
+    const source = await Account.create({ cloudSyncEnabled: true, type: "guest", guestId: randomUUID() });
     const verifier = "d".repeat(43), challenge = createHash("sha256").update(verifier).digest("base64url");
     for (const failure of ["nonce", "transaction"]) {
         const prepared = await (await request("/auth/prepare", generateAuthToken(source), "POST", { flow: "browser", code_challenge: challenge })).json();

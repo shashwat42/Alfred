@@ -44,7 +44,7 @@ export async function registerDevice(accountId: string, secret: string, platform
             pushSessionVersion: tokenSession?.version ?? 0,
         } : {}),
         ...(pushToken ? { pushToken } : {}),
-    }, ...(platform === "desktop" ? { $unset: { pushToken: "", pushSessionExpiresAt: "", pushSessionVersion: "" } } : {}) }, { upsert: true, ...(session ? { session } : {}) }));
+    }, ...(platform === "desktop" ? { $unset: { pushToken: "", pushSessionExpiresAt: "", pushSessionVersion: "" } } : {}) }, { upsert: true, ...(session ? { session } : {}) }), true);
 }
 export async function device(accountId: string, secret: string, token: string, now = Date.now()) {
     return tenantRepository(NotificationDevice, accountId).findOne({ _id: hash(secret), sessionHash: hash(token), expiresAt: { $gt: new Date(now) } });

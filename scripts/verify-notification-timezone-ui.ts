@@ -33,6 +33,7 @@ try {
   const { ScheduleNotificationSettings } = await server.ssrLoadModule('/src/components/dashboard/ScheduleNotificationSettings.tsx');
   const session = { token: 'isolated-test-token', account: { id: '111111111111111111111111', type: 'user' } };
   localStorage.setItem('alfred_session', JSON.stringify(session));
+  localStorage.setItem(`alfred_cloud_sync_${session.account.id}`, 'true');
   await act(async () => root.render(createElement(AuthContext.Provider, { value: { session, requiresAccountChoice: false } }, createElement(ScheduleNotificationSettings))));
   await settle();
   const zone = () => document.querySelector<HTMLSelectElement>('#schedule-notification-zone')!;

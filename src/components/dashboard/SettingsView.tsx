@@ -37,7 +37,7 @@ function SettingsViewComponent() {
   const displayName =
     session?.account?.name ||
     session?.account?.email?.split("@")[0] ||
-    "Guest";
+    (isGoogleUser ? "Google account" : "Guest");
 
   const [silenceTimeout, setSilenceTimeout] = useState(getSilenceTimeout);
 

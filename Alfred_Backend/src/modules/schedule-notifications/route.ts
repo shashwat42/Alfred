@@ -1,3 +1,4 @@
+import { requireCloudSync } from "../../middleware/cloudStorage.middleware.ts";
 import { sendPolicyError } from "../../security/errors.ts";
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
@@ -16,7 +17,7 @@ const registrationSchema = z.object({ secret: secretSchema, platform: z.enum(["m
     .refine(value => !value.pushToken || value.platform === "mobile");
 const keySchema = z.string().regex(/^[a-f0-9]{24}:\d{10,16}:(lead|start)$/);
 const router = Router();
-router.use(authMiddleware);
+router.use(authMiddleware, requireCloudSync);
 const token = (req: Request) => req.headers.authorization!.slice(7).trim();
 const run = (handler: (req: Request, res: Response) => Promise<unknown>) => async (req: Request, res: Response) => {
     try { await handler(req, res); }

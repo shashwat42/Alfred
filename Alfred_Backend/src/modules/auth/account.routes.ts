@@ -4,9 +4,17 @@ import { authMiddleware } from "../../middleware/auth.middleware.ts";
 import { env } from "../../config/env.ts";
 import { accountState, completeOnboarding, deleteAccount } from "../../security/accountLifecycle.ts";
 import { aiUsage } from "../../security/aiUsage.ts";
+import { z } from "zod";
+import { cloudSnapshot, setCloudStorage, workspaceSchema } from "../../security/cloudStorage.ts";
 const router = Router();
 router.use(authMiddleware);
 router.get("/", async (req, res) => { res.json({ ...await accountState(req.accountId!), ai: await aiUsage(req.accountId!) }); });
+router.get("/cloud-sync", async (req, res) => { res.json(await cloudSnapshot(req.accountId!)); });
+router.put("/cloud-sync", async (req, res) => {
+    const parsed = z.object({ enabled: z.boolean(), revision: z.number().int().nonnegative(), data: workspaceSchema.optional(), localCopySaved: z.literal(true).optional() }).strict().safeParse(req.body);
+    if (!parsed.success || (!parsed.data.enabled && parsed.data.localCopySaved !== true)) { res.status(400).json({ error: "Save a local copy before disabling Cloud Sync." }); return; }
+    res.json(await setCloudStorage(req.accountId!, parsed.data.enabled, parsed.data.revision, parsed.data.data));
+});
 router.put("/onboarding", async (req, res) => {
     if (req.body?.completed !== true || Object.keys(req.body).length !== 1) { res.status(400).json({ error: "Expected completed: true" }); return; }
     await completeOnboarding(req.accountId!); res.sendStatus(204);

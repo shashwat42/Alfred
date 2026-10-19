@@ -245,12 +245,23 @@ export function reportInvalidSession(token: string): void {
 }
 
 export async function restoreAuthSession(existing: AuthSession): Promise<AuthSession> {
-  const response = await fetch(`${API_BASE_URL}/auth/session`, { signal: AbortSignal.timeout(20_000), headers: { Authorization: `Bearer ${existing.token}`, "ngrok-skip-browser-warning": "true" } });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/auth/session`, { signal: AbortSignal.timeout(20_000), headers: { Authorization: `Bearer ${existing.token}`, "ngrok-skip-browser-warning": "true" } });
+  } catch (error) {
+    const { cloudSyncEnabled } = await import("../lib/localWorkspace.ts");
+    if (!cloudSyncEnabled(existing.account.id) && getSession()?.token === existing.token) return existing;
+    throw error;
+  }
   if (response.status === 401) {
     if (existing.account.type === "guest") return renewGuestSession(existing);
     throw new SessionRecoveryError("Your saved session needs recovery. You can continue as a guest without signing in, or use Google to return to your account.");
   }
-  if (!response.ok) throw new Error("Alfred is temporarily unavailable. Retry when the connection is restored.");
+  if (!response.ok) {
+    const { cloudSyncEnabled } = await import("../lib/localWorkspace.ts");
+    if (response.status >= 500 && !cloudSyncEnabled(existing.account.id) && getSession()?.token === existing.token) return existing;
+    throw new Error("Alfred is temporarily unavailable. Retry when the connection is restored.");
+  }
   const restored = await response.json() as AuthSession;
   if (!restored.token || restored.account?.id !== existing.account.id || restored.account.type !== existing.account.type) throw new Error("The server returned an invalid session.");
   if (getSession()?.token !== existing.token) throw new Error("Your account changed. Please try again.");
@@ -280,6 +291,7 @@ export async function deriveCodeChallenge(verifier: string): Promise<string> {
 }
 
 export interface PendingDesktopAuth {
+  sourceAccountId?: string;
   state: string;
   codeVerifier: string;
   expiresAt: number;
@@ -293,6 +305,7 @@ let memoryPendingAuth: PendingDesktopAuth | null = null;
 
 export function savePendingDesktopAuth(state: string, codeVerifier: string): void {
   const pending: PendingDesktopAuth = {
+    sourceAccountId: getSession()?.account.id,
     state,
     codeVerifier,
     expiresAt: Date.now() + 120_000, // Strict 2-minute lifetime
@@ -373,8 +386,16 @@ export async function exchangeTicket(ticket: string, codeVerifier?: string, expe
   }
 
   if (expectedState && getPendingDesktopAuth()?.state !== expectedState) throw new Error("This sign-in attempt was replaced. Please use the latest Google sign-in window.");
+  await migrateLocalGuest(sessionData);
   setSession(sessionData);
   return sessionData;
+}
+
+async function migrateLocalGuest(target: AuthSession): Promise<void> {
+  const current = getSession();
+  if (current?.account.type !== "guest" || current.account.id === target.account.id || getPendingDesktopAuth()?.sourceAccountId !== current.account.id) return;
+  const { copyGuestWorkspace } = await import("../lib/localWorkspace.ts");
+  await copyGuestWorkspace(current.account.id, target.account.id);
 }
 
 /**
@@ -573,6 +594,7 @@ export async function pollDesktopAuthStatus(
         const sessionData = (await response.json()) as AuthSession;
         if (signal?.aborted || getPendingDesktopAuth()?.state !== state) return null;
         if (sessionData?.token && sessionData?.account?.id) {
+          await migrateLocalGuest(sessionData);
           clearPendingDesktopAuth();
           setSession(sessionData);
           triggerAuthCompletionCallback(sessionData);

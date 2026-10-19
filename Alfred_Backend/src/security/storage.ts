@@ -21,7 +21,7 @@ export async function measureStorage(accountId: string, session: mongoose.Client
     return bytes;
 }
 export function enforceStorage(before: number, after: number) {
-    if (policy.enforceQuotas && after > policy.storageBytes && after > before) throw new PolicyError(413, "STORAGE_QUOTA_EXCEEDED", "Account storage is full. Delete content or reduce its size before adding more.", { usedBytes: before, limitBytes: policy.storageBytes, requestedBytes: after - before });
+    if (policy.enforceQuotas && after > policy.storageBytes && after > before) throw new PolicyError(413, "STORAGE_QUOTA_EXCEEDED", "Cloud storage is full. Delete cloud content or keep data on your device.", { usedBytes: before, limitBytes: policy.storageBytes, requestedBytes: after - before });
 }
 export function storageUsage(usedBytes: number) {
     return { usedBytes, limitBytes: policy.enforceQuotas ? policy.storageBytes : null, remainingBytes: policy.enforceQuotas ? Math.max(0, policy.storageBytes - usedBytes) : null, overQuota: policy.enforceQuotas && usedBytes > policy.storageBytes };

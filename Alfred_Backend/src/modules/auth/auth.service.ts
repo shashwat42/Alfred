@@ -315,7 +315,6 @@ export async function findOrCreateGoogleAccount(
     try {
         account = await Account.findOneAndUpdate({ googleId: profile.googleId }, { $setOnInsert: {
             type: "user", googleId: profile.googleId,
-            email: profile.email ?? undefined, name: profile.name ?? undefined, picture: profile.picture ?? undefined,
         } }, { upsert: true, returnDocument: "after", runValidators: true });
     } catch (error) {
         if ((error as { code?: number }).code !== 11000) throw error;

@@ -12,7 +12,7 @@ export async function accountState(accountId: string) {
     // Reconciliation and reads share the same fence as writes and deletion.
     return withTenantWrite(accountId, async session => {
         const account = await Account.findById(accountId).session(session!);
-        return { onboardingCompleted: account?.onboardingCompleted ?? false, storage: storageUsage(await measureStorage(accountId, session!)) };
+        return { onboardingCompleted: account?.onboardingCompleted ?? false, cloudSyncEnabled: account?.cloudSyncEnabled === true, storage: storageUsage(await measureStorage(accountId, session!)) };
     });
 }
 export async function completeOnboarding(accountId: string) {

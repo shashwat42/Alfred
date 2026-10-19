@@ -1,6 +1,9 @@
 import type { RecordingResult } from "../types/audio.ts";
 import { MAX_AUDIO_BYTES } from "./audio.ts";
 import { apiFetch } from "./api.ts";
+import { getSession } from "../auth/auth.ts";
+import { cloudSyncEnabled, readLocalWorkspace, updateLocalWorkspace } from "./localWorkspace.ts";
+import type { WorkspaceData } from "../../Alfred_Backend/src/workspace/data.ts";
 
 export interface ChatMessage {
   id: string;
@@ -26,6 +29,7 @@ export interface ActionExecutionResult {
 }
 
 export interface ChatCompletionResponse {
+  localWorkspace?: WorkspaceData;
   message: {
     role: "assistant";
     content: string;
@@ -124,7 +128,10 @@ export async function sendChatMessage(
   options?: { preserveAccount?: boolean; expectedAccountId?: string; recording?: RecordingResult; requestId?: string }
 ): Promise<ChatCompletionResponse> {
   const wireMessages = messages.map(({ role, content }) => ({ role, content }));
-  let body: BodyInit = JSON.stringify({ messages: wireMessages });
+  const accountId = options?.expectedAccountId ?? getSession()?.account.id;
+  const local = accountId && !cloudSyncEnabled(accountId) ? await readLocalWorkspace(accountId) : null;
+  const context = { messages: wireMessages, ...(local ? { localWorkspace: local.data } : {}) };
+  let body: BodyInit = JSON.stringify(context);
   const hasAudio = Boolean(options?.recording || messages.some((message) => message.recording));
   if (hasAudio) {
     const form = new FormData();
@@ -139,7 +146,7 @@ export async function sendChatMessage(
       bytes += recording.audio.size;
       form.append(`audio-${index}`, recording.audio, "voice.wav");
     }
-    form.append("context", JSON.stringify({ messages: wireMessages }));
+    form.append("context", JSON.stringify(context));
     body = form;
   }
   const response = await apiFetch(hasAudio ? "/api/ai/chat/audio" : "/api/ai/chat", {
@@ -183,6 +190,14 @@ export async function sendChatMessage(
   const result = (await response.json()) as ChatCompletionResponse;
   if (typeof result.message?.content !== "string" || !result.message.content.trim()) {
     throw new Error("Alfred returned an empty response. Please retry your question.");
+  }
+  if (local && accountId) {
+    if (!result.localWorkspace) throw new Error("The server needs an update to support local storage. No cloud content was saved.");
+    await updateLocalWorkspace(accountId, workspace => {
+      if (getSession()?.account.id !== accountId || cloudSyncEnabled(accountId)) throw new Error("Storage or account changed. The assistant changes were not saved.");
+      if (workspace.revision !== local.revision) throw new Error("Your workspace changed during this request. The assistant changes were not saved; please retry.");
+      workspace.data = result.localWorkspace!;
+    });
   }
   return result;
 }

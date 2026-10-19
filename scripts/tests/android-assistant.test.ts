@@ -118,6 +118,7 @@ Object.defineProperty(globalThis, "window", { configurable: true, value: { local
 
 test("assistant requests keep expired account sessions instead of provisioning a guest", async () => {
   const originalFetch = globalThis.fetch;
+  values.set("alfred_cloud_sync_account-a", "true");
   values.set(AUTH_STORAGE_KEY, JSON.stringify({ token: "unit-test-token", account: { id: "account-a", type: "user" } }));
   let calls = 0;
   globalThis.fetch = async (_url, init) => {
@@ -177,6 +178,7 @@ test("live voice levels update the logo without completing or replacing the capt
 
 test("an empty successful AI response becomes a retryable failure", async () => {
   const originalFetch = globalThis.fetch;
+  values.set("alfred_cloud_sync_account-a", "true");
   values.set(AUTH_STORAGE_KEY, JSON.stringify({ token: "unit-test-token", account: { id: "account-a", type: "user" } }));
   globalThis.fetch = async () => Response.json({ message: { role: "assistant", content: "  " } });
   try { await assert.rejects(sendChatMessage([{ role: "user", content: "hello" }]), /empty response/i); }
@@ -185,6 +187,7 @@ test("an empty successful AI response becomes a retryable failure", async () => 
 
 test("expired app sessions never downgrade to a new guest", async () => {
   const originalFetch = globalThis.fetch;
+  values.set("alfred_cloud_sync_old-account", "true");
   values.set(AUTH_STORAGE_KEY, JSON.stringify({ token: "expired-test-token", account: { id: "old-account", type: "guest" } }));
   let calls = 0;
   globalThis.fetch = async (url) => {
@@ -201,6 +204,7 @@ test("expired app sessions never downgrade to a new guest", async () => {
 
 test("voice upload uses the exact Blob and retains earlier audio for follow-up text with one request", async () => {
   const saved = globalThis.fetch;
+  values.set("alfred_cloud_sync_account-a", "true");
   values.set(AUTH_STORAGE_KEY, JSON.stringify({ token: "unit-test-token", account: { id: "account-a", type: "user" } }));
   const recording = decodeNativeSpeech(btoa(String.fromCharCode(0, 128, 0, 0, 255, 127)), 16000);
   let calls = 0;

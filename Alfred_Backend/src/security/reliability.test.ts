@@ -40,7 +40,7 @@ before(async () => {
     const address = server.address(); assert.ok(address && typeof address !== "string"); base = `http://127.0.0.1:${address.port}`;
 }, { timeout: 180_000 });
 after(async () => { if (server) await new Promise<void>(resolve => server.close(() => resolve())); await mongoose.disconnect(); await database?.stop(); });
-const user = () => Account.create({ type: "user", googleId: randomUUID() });
+const user = () => Account.create({ cloudSyncEnabled: true, type: "user", googleId: randomUUID() });
 const request = (token?: string, method = "GET", body?: unknown) => fetch(`${base}/account`, { method, headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) });
 const rejectCode = (code: string) => (error: unknown) => error instanceof PolicyError && error.details.code === code;
 
@@ -224,7 +224,7 @@ test("account switching does not mix storage or AI allowances; old UTC windows d
     assert.equal((await aiUsage(String(a._id), new Date("2030-01-01T00:00:00Z"))).monthly.used, 0);
 });
 test("onboarding and AI usage transfer during guest migration without bypassing limits", async () => {
-    const guest = await Account.create({ type: "guest", guestId: randomUUID() }), target = await user();
+    const guest = await Account.create({ cloudSyncEnabled: true, type: "guest", guestId: randomUUID() }), target = await user();
     await completeOnboarding(String(guest._id));
     await withAiRequest(String(guest._id), "guest-interaction", "f", async () => true);
     await withAiRequest(String(target._id), "user-interaction", "f", async () => true);
@@ -256,7 +256,7 @@ test("database authentication lookup failures are service errors, not expired se
     assert.equal((await request("tampered-token")).status, 401);
 });
 test("deletion cleans all owned records and migrated archives without touching other accounts", async () => {
-    const a = await user(), b = await user(), guest = await Account.create({ type: "guest", guestId: randomUUID(), migratedTo: a._id });
+    const a = await user(), b = await user(), guest = await Account.create({ cloudSyncEnabled: true, type: "guest", guestId: randomUUID(), migratedTo: a._id });
     await tenantRepository(Note, String(a._id)).create({ content: "private" });
     await tenantRepository(Note, String(b._id)).create({ content: "keep" });
     await withAiRequest(String(a._id), "to-be-deleted", "f", async () => true);
@@ -282,7 +282,7 @@ test("partial deletion failure rolls back content cleanup and session revocation
 
 test("expired guests renew their own identity, data, onboarding and quotas without Google sign-in", async () => {
     const { default: jwt } = await import("jsonwebtoken");
-    const guest = await Account.create({ type: "guest", guestId: randomUUID(), onboardingCompleted: true });
+    const guest = await Account.create({ cloudSyncEnabled: true, type: "guest", guestId: randomUUID(), onboardingCompleted: true });
     const id = String(guest._id);
     await tenantRepository(Note, id).create({ content: "Keep my guest note" });
     await withAiRequest(id, "guest-before-renewal", "f", async () => true);
@@ -301,7 +301,7 @@ test("expired guests renew their own identity, data, onboarding and quotas witho
 });
 test("guest renewal rejects forged, stale, migrated, deleted and Google credentials", async () => {
     const { default: jwt } = await import("jsonwebtoken");
-    const guest = await Account.create({ type: "guest", guestId: randomUUID() }), target = await user();
+    const guest = await Account.create({ cloudSyncEnabled: true, type: "guest", guestId: randomUUID() }), target = await user();
     const stale = jwt.sign({ sub: String(guest._id), type: "guest", version: 0, iat: Math.floor(Date.now() / 1000) - 39 * 86400 }, env.jwt.secret, { expiresIn: "7d", issuer: "alfred", audience: "alfred-api" });
     const renew = (token: string) => fetch(`${base}/auth/guest/renew`, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
     assert.equal((await renew("forged-token")).status, 401);

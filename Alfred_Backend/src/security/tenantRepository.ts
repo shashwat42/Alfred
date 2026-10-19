@@ -1,5 +1,6 @@
 import mongoose, { type Model } from "mongoose";
 import { withTenantWrite } from "./tenantWrite.ts";
+import { memoryRepository } from "./localWorkspace.ts";
 
 // The accountId argument is an internal execution context supplied by authentication,
 // never a request field. Guests already have canonical Account IDs in Alfred.
@@ -34,7 +35,7 @@ export function tenantRepository<T, TQueryHelpers, TMethods, TVirtuals>(sourceMo
         return { ...filter, ...owner, guestId: { $exists: false } };
     };
     const update = (fields: Record<string, unknown>) => { assertSafeFields(fields); return { $set: fields }; };
-    return {
+    const repository = {
         find: async (filter = {}, options: { sort?: Record<string, 1 | -1>; limit?: number } = {}) =>
             await model.find(scope(filter)).sort(options.sort ?? {}).limit(options.limit ?? 0).lean(),
         findOne: async (filter = {}) => await model.findOne(scope(filter)).lean(),
@@ -47,20 +48,21 @@ export function tenantRepository<T, TQueryHelpers, TMethods, TVirtuals>(sourceMo
                 if (!session) return await model.create(document);
                 const doc = new model(document);
                 return await doc.save({ session });
-            });
+            }, true);
         },
         updateOne: (filter: Record<string, unknown>, fields: Record<string, unknown>) => {
             const changes = update(fields), scoped = scope(filter);
-            return withTenantWrite(accountId, session => model.updateOne(scoped, changes, { runValidators: true, ...(session ? { session } : {}) }));
+            return withTenantWrite(accountId, session => model.updateOne(scoped, changes, { runValidators: true, ...(session ? { session } : {}) }), true);
         },
         findOneAndUpdate: (filter: Record<string, unknown>, fields: Record<string, unknown>) => {
             const changes = update(fields), scoped = scope(filter);
-            return withTenantWrite(accountId, session => model.findOneAndUpdate(scoped, changes, { returnDocument: "after", runValidators: true, ...(session ? { session } : {}) }).lean());
+            return withTenantWrite(accountId, session => model.findOneAndUpdate(scoped, changes, { returnDocument: "after", runValidators: true, ...(session ? { session } : {}) }).lean(), true);
         },
-        deleteOne: (filter: Record<string, unknown>) => withTenantWrite(accountId, session => model.deleteOne(scope(filter), session ? { session } : {})),
-        deleteMany: (filter = {}) => withTenantWrite(accountId, session => model.deleteMany(scope(filter), session ? { session } : {})),
-        findOneAndDelete: (filter: Record<string, unknown>) => withTenantWrite(accountId, session => model.findOneAndDelete(scope(filter), session ? { session } : {}).lean()),
+        deleteOne: (filter: Record<string, unknown>) => withTenantWrite(accountId, session => model.deleteOne(scope(filter), session ? { session } : {}), true),
+        deleteMany: (filter = {}) => withTenantWrite(accountId, session => model.deleteMany(scope(filter), session ? { session } : {}), true),
+        findOneAndDelete: (filter: Record<string, unknown>) => withTenantWrite(accountId, session => model.findOneAndDelete(scope(filter), session ? { session } : {}).lean(), true),
         // Only this fixed pipeline is permitted; atomic toggle cannot alter ownership.
-        toggleCompleted: (id: mongoose.Types.ObjectId) => withTenantWrite(accountId, session => model.findOneAndUpdate(scope({ _id: id }), [{ $set: { completed: { $not: "$completed" } } }], { returnDocument: "after", updatePipeline: true, ...(session ? { session } : {}) }).lean()),
+        toggleCompleted: (id: mongoose.Types.ObjectId) => withTenantWrite(accountId, session => model.findOneAndUpdate(scope({ _id: id }), [{ $set: { completed: { $not: "$completed" } } }], { returnDocument: "after", updatePipeline: true, ...(session ? { session } : {}) }).lean(), true),
     };
+    return (memoryRepository(model.modelName, accountId) ?? repository) as typeof repository;
 }

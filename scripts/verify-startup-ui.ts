@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
+import "fake-indexeddb/auto";
 import { createElement, act, Fragment } from "react";
 import { Window } from "happy-dom";
 import { createServer } from "vite";
 
 const dom = new Window({ url: "http://localhost:5173/" });
-const names = ["window", "document", "navigator", "localStorage", "CustomEvent", "StorageEvent", "MutationObserver", "requestAnimationFrame", "cancelAnimationFrame", "IS_REACT_ACT_ENVIRONMENT"] as const;
+const names = ["window", "document", "navigator", "localStorage", "Event", "CustomEvent", "StorageEvent", "MutationObserver", "requestAnimationFrame", "cancelAnimationFrame", "IS_REACT_ACT_ENVIRONMENT"] as const;
 const saved = new Map(names.map(name => [name, Object.getOwnPropertyDescriptor(globalThis, name)]));
 for (const name of names) {
   const value = name === "IS_REACT_ACT_ENVIRONMENT" ? true : name === "requestAnimationFrame" || name === "cancelAnimationFrame" ? dom[name].bind(dom) : dom[name as keyof Window];

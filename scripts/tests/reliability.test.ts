@@ -17,6 +17,7 @@ test("AI quota errors preserve backend window and reset message, with stable ret
   Object.defineProperty(globalThis, "window", { configurable: true, value: { location: { search: "", hash: "", pathname: "/" }, localStorage: { getItem: (key: string) => storage.get(key) ?? null } } });
   const previousStorage = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
   Object.defineProperty(globalThis, "localStorage", { configurable: true, value: { getItem: (key: string) => storage.get(key) ?? null } });
+  storage.set("alfred_cloud_sync_account", "true");
   const keys: string[] = [];
   globalThis.fetch = async (_input, init) => { keys.push(new Headers(init?.headers).get("Idempotency-Key")!); return Response.json({ code: "AI_QUOTA_EXCEEDED", window: "daily", resetAt: "2026-10-18T00:00:00Z", error: "Daily limit reached. Resets 18 October at 00:00 UTC." }, { status: 429 }); };
   try {

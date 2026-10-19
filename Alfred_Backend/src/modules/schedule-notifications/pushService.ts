@@ -34,7 +34,7 @@ export function createPushAdapter(send: PushDispatchAdapter["send"]): PushDispat
         async active(d) {
             const [device, account] = await Promise.all([
                 NotificationDevice.exists(activeFilter(d)),
-                Account.exists({ _id: d.accountId, migratedTo: { $exists: false },
+                Account.exists({ _id: d.accountId, migratedTo: { $exists: false }, cloudSyncEnabled: true,
                     ...(d.sessionVersion === 0 ? { $or: [{ sessionVersion: 0 }, { sessionVersion: { $exists: false } }] } : { sessionVersion: d.sessionVersion }) }),
             ]);
             return Boolean(device && account);

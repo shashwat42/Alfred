@@ -214,7 +214,7 @@ export default function Chat({
   const displayName =
     session?.account?.name ||
     session?.account?.email?.split("@")[0] ||
-    "Guest";
+    (isGoogleUser ? "Google account" : "Guest");
 
   // In-memory conversation state (ephemeral; cleared on reload)
   const [messages, setMessages] = useState<ChatMessage[]>([]);

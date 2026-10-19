@@ -97,9 +97,9 @@ test("authenticated multipart route validates uploads, preserves account scope a
   const { Account } = await import("../../models/account.model.ts");
   const saved = globalThis.fetch, lookup = Account.findById;
   const accountId = "507f1f77bcf86cd799439011";
-  await Account.create({ _id: accountId, type: "user", googleId: "test-google" });
+  await Account.create({ cloudSyncEnabled: true, _id: accountId, type: "user", googleId: "test-google" });
   const lookedUp: unknown[] = [];
-  Account.findById = ((id: unknown) => { lookedUp.push(id); return Promise.resolve({ _id: accountId, type: "user", googleId: "test-google" }); }) as unknown as typeof lookup;
+  Account.findById = ((id: unknown) => { lookedUp.push(id); return Promise.resolve({ _id: accountId, type: "user", googleId: "test-google", cloudSyncEnabled: true }); }) as unknown as typeof lookup;
   let upstream = 0;
   globalThis.fetch = async (url, init) => {
     if (String(url).startsWith("http://127.0.0.1:")) return saved(url, init);

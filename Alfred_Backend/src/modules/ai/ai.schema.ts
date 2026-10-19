@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { workspaceSchema } from "../../workspace/schema.ts";
 
 export const MAX_MESSAGE_CONTENT_LENGTH = 4000;
 export const MAX_MESSAGES_COUNT = 20;
@@ -28,6 +29,7 @@ export type ChatMessageInput = z.infer<typeof chatMessageSchema>;
 
 export const chatRequestSchema = z
     .object({
+        localWorkspace: workspaceSchema.optional(),
         messages: z
             .array(chatMessageSchema)
             .max(

@@ -6,7 +6,7 @@ import { requireAccountId } from "../../utils/requireAccountId.ts";
 import { generateChatCompletion, AiServiceError } from "./service.ts";
 
 export const MAX_AUDIO_BYTES = 12 * 1024 * 1024;
-export const audioBodyParser = express.raw({ type: "multipart/form-data", limit: MAX_AUDIO_BYTES + 65536 });
+export const audioBodyParser = express.raw({ type: "multipart/form-data", limit: MAX_AUDIO_BYTES + 12 * 1024 * 1024 });
 
 /** Accept only our bounded PCM16 WAV encoding, validating actual bytes rather than filename. */
 export function validateWav(bytes: Buffer, mime: string): void {
@@ -39,7 +39,7 @@ export async function audioCompletionHandler(req: Request, res: Response): Promi
         } catch { throw new AiServiceError(400, "Malformed audio upload."); }
         if ([...form.keys()].some((key) => key !== "audio" && key !== "context" && !/^audio-\d+$/.test(key)) || form.getAll("audio").length > 1 || form.getAll("context").length !== 1) throw new AiServiceError(400, "Invalid audio fields.");
         const audio = form.get("audio"), context = form.get("context");
-        if ((audio !== null && !(audio instanceof Blob)) || typeof context !== "string" || context.length > 60000) throw new AiServiceError(400, "Missing audio or conversation context.");
+        if ((audio !== null && !(audio instanceof Blob)) || typeof context !== "string" || context.length > 12 * 1024 * 1024) throw new AiServiceError(400, "Missing audio or conversation context.");
         let parsed: unknown;
         try { parsed = JSON.parse(context); } catch { throw new AiServiceError(400, "Invalid conversation context."); }
         const validated = chatRequestSchema.safeParse(parsed);
@@ -57,7 +57,8 @@ export async function audioCompletionHandler(req: Request, res: Response): Promi
             attachments.push({ index, bytes });
         }
         if (!attachments.length) throw new AiServiceError(400, "Missing audio recording.");
-        const result = await generateChatCompletion(validated.data.messages, accountId, undefined, attachments.map(({ index, bytes }) => ({ index, data: bytes.toString("base64"), format: "wav" })), req.get("Idempotency-Key"));
+        if (!validated.data.localWorkspace && req.account?.cloudSyncEnabled !== true) throw new AiServiceError(409, "Open Alfred to use local voice actions, or enable Cloud Sync.");
+        const result = await generateChatCompletion(validated.data.messages, accountId, undefined, attachments.map(({ index, bytes }) => ({ index, data: bytes.toString("base64"), format: "wav" })), req.get("Idempotency-Key"), validated.data.localWorkspace);
         res.json(result);
     } catch (err) {
         if (sendPolicyError(err, res)) return;

@@ -24,6 +24,8 @@ let stopPush = () => {};
 app.set("trust proxy", 1);
 app.use(cors({ origin: env.allowedOrigins }));
 
+app.use("/api/account/cloud-sync", express.json({ limit: "12mb" }));
+app.use("/api/ai/chat", express.json({ limit: "12mb" }));
 app.use(express.json());
 app.use("/auth", authRouter);
 app.use("/api", apiRateLimiter);

@@ -26,7 +26,7 @@ test("real MongoDB: concurrent delivery uniqueness, restart reconstruction and a
     try {
         await requireTransactionTopology();
         await initializeNotificationIndexes();
-        await Account.create({ _id: account, type: "user", googleId: `test-${account}` });
+        await Account.create({ cloudSyncEnabled: true, _id: account, type: "user", googleId: `test-${account}` });
         await NotificationSettings.create({ accountId: account, destination: "both", enabled: true, leadMinutes: 10, timeZone: "UTC", atStart: false, revision: 1 });
         const schedule = await Schedule.create({ accountId: account, topic: "Isolated test event", date: "2026-10-17", time: "10:00" });
         const first = await plan(String(account), "desktop", instant);

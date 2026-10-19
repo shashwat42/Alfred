@@ -5,9 +5,15 @@ import { Bell } from "lucide-react";
 import { useAuth } from "../../auth/authContext.ts";
 import { getSession } from "../../auth/auth.ts";
 import { androidNotificationRequest, automaticTimeZone, detectedTimeZone, syncDetectedTimeZone, canOpenNotificationSettings, openNotificationSettings, getNotificationDeliveryStatus, subscribeNotificationDeliveryStatus, isAndroid, notificationPermission, notificationPlatform, notificationRequest, NOTIFICATION_SETTINGS_EVENT, type ScheduleNotificationPreferences } from "../../lib/scheduleNotifications.ts";
+import { cloudSyncEnabled, STORAGE_MODE_EVENT } from "../../lib/localWorkspace.ts";
 
 export function ScheduleNotificationSettings() {
   const { session } = useAuth();
+  const enabled = useSyncExternalStore(listener => {
+    window.addEventListener(STORAGE_MODE_EVENT, listener); window.addEventListener("storage", listener);
+    return () => { window.removeEventListener(STORAGE_MODE_EVENT, listener); window.removeEventListener("storage", listener); };
+  }, () => cloudSyncEnabled(session?.account.id));
+  if (!enabled) return <section className="settings-card-group schedule-notification-settings"><h3 className="settings-group-header"><Bell size={16} />Schedule notifications</h3><p className="settings-feature-desc">Your schedules stay on this device. Enable Cloud Sync to use cloud reminder delivery, including Android background alarms and push notifications.</p></section>;
   return <ScheduleNotificationSettingsForm key={session?.account.id ?? "signed-out"} accountId={session?.account.id} />;
 }
 

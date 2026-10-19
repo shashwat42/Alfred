@@ -1,3 +1,4 @@
+import { requireCloudSync } from "../../middleware/cloudStorage.middleware.ts";
 import { Router } from "express";
 import { authMiddleware } from "../../middleware/auth.middleware.ts";
 import { validate } from "../../middleware/validate.middleware.ts";
@@ -18,7 +19,7 @@ import {
 
 const router = Router();
 
-router.use(authMiddleware);
+router.use(authMiddleware, requireCloudSync);
 
 router.get("/", listNotes);
 router.get("/recent", validate(recentNotesSchema), getRecentNotesHandler);

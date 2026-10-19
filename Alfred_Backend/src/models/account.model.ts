@@ -14,6 +14,7 @@ export interface IAccount {
     migratedTo?: mongoose.Types.ObjectId;
     guestWriteVersion?: number;
     storageBytes?: number;
+    cloudSyncEnabled?: boolean;
     onboardingCompleted?: boolean;
     createdAt: Date;
     updatedAt: Date;
@@ -30,6 +31,7 @@ const accountSchema = new Schema<IAccount>(
         migratedTo: { type: Schema.Types.ObjectId, ref: "Account" },
         guestWriteVersion: { type: Number, default: 0 },
         storageBytes: { type: Number, default: 0 },
+        cloudSyncEnabled: { type: Boolean, default: false },
         onboardingCompleted: { type: Boolean, default: false },
         guestId: {
             type: String,

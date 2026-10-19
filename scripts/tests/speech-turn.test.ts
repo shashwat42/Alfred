@@ -74,7 +74,7 @@ test("a short voice turn auto-stops, releases the mic, and reaches the authentic
     { AudioContext: Context, dispatchEvent() {}, location: { search: "", pathname: "/", hash: "" } }, Context, Recorder,
     (callback: () => void) => { frames.set(++frameId, callback); return frameId; },
     (id: number) => { frames.delete(id); }, { now: () => clock },
-    { getItem: (key: string) => key === "alfred_session" ? JSON.stringify(session) : null },
+    { getItem: (key: string) => key === "alfred_session" ? JSON.stringify(session) : key === `alfred_cloud_sync_${session.account.id}` ? "true" : null },
     async (url: string, init: RequestInit) => {
       requests++; assert.ok(url.endsWith("/api/ai/chat/audio"));
       assert.equal(new Headers(init.headers).get("Authorization"), "Bearer voice-test-token");
