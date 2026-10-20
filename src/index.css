@@ -7352,11 +7352,11 @@ body.is-overlay .overlay-root {
 .task-edit-btn, .note-card-edit-btn { display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; width:36px; height:36px; padding:0; border:0; border-radius:10px; background:transparent; color:#bfb7ca; cursor:pointer; }
 .task-edit-btn:hover, .note-card-edit-btn:hover { color:#fafafa; background:#ffffff12; }
 .task-edit-btn:focus-visible, .note-card-edit-btn:focus-visible { outline:2px solid #c4b5d8; outline-offset:2px; }
-.note-card-footer, .recent-note-card-meta { position:relative; padding-right:40px; }
-.note-card-footer > .note-card-edit-btn, .recent-note-card-meta > .note-card-edit-btn { position:absolute; right:0; top:0; }
+.note-card-footer { position:relative; padding-right:40px; }
+.note-card-footer > .note-card-edit-btn { position:absolute; right:0; top:0; }
 .workspace-hub-focus { background:#382b2d; color:#f1b7b7; }
 .App.is-android .task-edit-btn, .App.is-android .note-card-edit-btn { min-width:44px; min-height:44px; }
-.App.is-android .note-card-footer, .App.is-android .recent-note-card-meta { padding-right:48px; min-height:44px; }
+.App.is-android .note-card-footer { padding-right:48px; min-height:44px; }
 .upcoming-notes-bar, .upcoming-notes-bar:focus-within { background:transparent; box-shadow:none; border:0; }
 .upcoming-notes-bar { padding:4px 0; gap:14px; border-radius:0; }
 .upcoming-notes-tag { display:inline-flex; align-items:center; justify-content:center; padding:9px 18px; min-height:40px; box-sizing:border-box; border-radius:999px; background:#393344; color:#e2d8ef; cursor:text; }
@@ -7443,6 +7443,7 @@ body.is-overlay .overlay-root {
 .android-app-header .chat-voice-header-sub { font-size:10px; }
 .App.is-android .Main { flex:1; height:auto; padding-top:0; }
 .App.is-android .Dashboard { padding-bottom:calc(var(--mobile-nav-clearance) + 8px) !important; }
+.App.is-android .Dashboard:has(.is-view-home) { padding-bottom:calc(max(0px, var(--android-nav-height, 60px) - var(--android-safe-bottom, env(safe-area-inset-bottom, 0px))) + 4px) !important; }
 .App.is-android .Chat { padding-bottom:calc(var(--mobile-nav-clearance) + 8px) !important; }
 .App.is-android .mobile-bottom-nav { padding-bottom:max(6px,var(--android-safe-bottom,env(safe-area-inset-bottom,0px))); }
 .App.is-android.is-note-open,
@@ -7486,9 +7487,9 @@ html[data-android-keyboard="true"] .App.is-android .mobile-bottom-nav { display:
 .note-editor-workspace > .note-editor-body { min-width:0; }
 .note-editor-header .note-format-toggle { align-self:center; flex-shrink:0; }
 .note-format-sidebar {
-    flex:0 0 200px;
+    flex:0 0 64px;
     min-width:0;
-    padding:12px;
+    padding:8px;
     box-sizing:border-box;
     border-left:1px solid #ffffff18;
     background:#26242b;
@@ -7496,9 +7497,14 @@ html[data-android-keyboard="true"] .App.is-android .mobile-bottom-nav { display:
     overscroll-behavior:contain;
 }
 .note-format-sidebar[hidden] { display:none; }
-.note-format-sidebar-header { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:12px; font-size:13px; color:#e2dced; }
-.note-format-tools { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:6px; }
-.note-format-tools .note-format-btn { min-width:36px; min-height:44px; }
+.note-format-sidebar-header { display:flex; justify-content:center; margin-bottom:4px; color:#e2dced; }
+.note-format-sidebar-header .note-editor-icon-btn { width:44px; height:44px; flex-shrink:0; }
+.note-format-tools { display:flex; flex-direction:column; align-items:center; gap:4px; }
+.note-format-tools .note-format-btn { width:44px; height:44px; min-width:44px; min-height:44px; flex-shrink:0; }
+.note-format-size-label { font-size:12px; font-weight:600; line-height:1.15; }
+.note-format-popover { position:absolute; z-index:20; top:0; right:64px; max-height:100%; overflow-y:auto; overscroll-behavior:contain; padding:8px; box-sizing:border-box; border:1px solid #ffffff20; border-radius:10px 0 0 10px; background:#26242b; box-shadow:-8px 4px 20px #0004; }
+.note-format-font-sizes { display:flex; flex-direction:column; gap:4px; min-width:86px; }
+.note-format-font-sizes .note-size-option-btn { min-height:44px; }
 .note-format-tools .note-format-divider { grid-column:1 / -1; width:100%; height:1px; margin:6px 0; }
 .note-format-tools .note-size-control-group { grid-column:1 / -1; justify-content:space-between; flex-wrap:wrap; }
 .note-format-sidebar .note-size-adjust-btn, .note-format-sidebar .note-font-size-btn { min-height:36px; }
@@ -7508,9 +7514,7 @@ html[data-android-keyboard="true"] .App.is-android .mobile-bottom-nav { display:
 @media(max-width:768px) {
     .note-editor-header .note-format-toggle { padding:10px; }
     .note-editor-header .note-format-toggle > span { display:none; }
-    .note-format-sidebar { flex-basis:148px; padding:8px; }
-    .note-format-sidebar-header { gap:2px; }
-    .note-format-tools { gap:2px; }
+    .note-format-sidebar { flex-basis:64px; padding:8px; }
 }
 
 /* Header controls respond to the dashboard panel width, including split windows. */
@@ -7547,6 +7551,9 @@ html[data-android-keyboard="true"] .App.is-android .mobile-bottom-nav { display:
 .App .Dashboard .is-compact .dashboard-header-controls .section-add-trigger { min-height:44px; justify-content:center; }
 .App .Dashboard .is-compact .schedule-header-actions { min-width:0; }
 .App .Dashboard .is-compact .timeline-date-nav { flex-wrap:wrap; }
+.App.is-android .Dashboard .content-header-title-row { flex:1 0 100%; min-height:44px; align-items:center; }
+.App.is-android .content-header-title-row > .dashboard-refresh-btn { position:static; margin:0 0 0 auto; width:40px; height:40px; min-width:40px; min-height:40px; padding:0; flex-shrink:0; }
+.App.is-android .Dashboard .dashboard-header-controls { flex-basis:100%; }
 .schedule-edit-btn { display:inline-flex; align-items:center; justify-content:center; width:36px; height:36px; flex-shrink:0; border:0; border-radius:8px; background:transparent; color:inherit; cursor:pointer; }
 .schedule-edit-btn:hover { background:#80808026; }
 .schedule-edit-btn:focus-visible { outline:2px solid currentColor; outline-offset:1px; }

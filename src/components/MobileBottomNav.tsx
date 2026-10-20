@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useEffect, useRef } from "react";
 import { Bot, LayoutDashboard, Layers, Settings } from "lucide-react";
 
 export type MobileNavDestination = "assistant" | "dashboard" | "workspace" | "settings";
@@ -12,6 +12,22 @@ function MobileBottomNavComponent({
   activeDestination,
   onNavigate,
 }: MobileBottomNavProps) {
+  const navRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    const nav = navRef.current;
+    const app = nav?.closest<HTMLElement>(".App.is-android");
+    if (!nav || !app) return;
+    const measure = () => app.style.setProperty("--android-nav-height", `${nav.getBoundingClientRect().height}px`);
+    measure();
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+    observer?.observe(nav);
+    window.addEventListener("resize", measure);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", measure);
+      app.style.removeProperty("--android-nav-height");
+    };
+  }, []);
   const items: Array<{
     id: MobileNavDestination;
     label: string;
@@ -24,7 +40,7 @@ function MobileBottomNavComponent({
   ];
 
   return (
-    <nav className="mobile-bottom-nav" role="tablist" aria-label="Mobile Bottom Navigation">
+    <nav ref={navRef} className="mobile-bottom-nav" role="tablist" aria-label="Mobile Bottom Navigation">
       <div className="mobile-bottom-nav-inner">
         {items.map(({ id, label, icon: Icon }) => {
           const isActive = activeDestination === id;

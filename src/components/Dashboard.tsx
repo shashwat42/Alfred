@@ -369,8 +369,6 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
                             recentNotes={activeRecentNotes}
                             hasNotes={activeNotes.length > 0}
                             onOpenNote={handleOpenNoteFromUpcoming}
-                            onEditTask={handleEditTask}
-                            onEditSchedule={handleEditSchedule}
                             onSaveQuickNote={handleSaveQuickNote}
                         />
                     )}

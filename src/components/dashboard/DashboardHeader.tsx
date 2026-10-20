@@ -60,7 +60,9 @@ function DashboardHeaderComponent({
     onAddTask?: () => void;
     onAddSchedule?: () => void;
 }) {
+    const isAndroid = /Android/i.test(navigator.userAgent);
     const [compact, setCompact] = useState(() => window.innerWidth < 768);
+    const useBurgerMenu = compact && !isAndroid;
     const [menuOpen, setMenuOpen] = useState(false);
     const headerRef = useRef<HTMLDivElement>(null);
     const toggleRef = useRef<HTMLButtonElement>(null);
@@ -96,9 +98,18 @@ function DashboardHeaderComponent({
     const formattedLastRefresh = lastRefreshedAt
         ? `Last updated: ${lastRefreshedAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`
         : "Refresh dashboard";
+    const refreshButton = onRefresh && <button
+        type="button"
+        className={`dashboard-refresh-btn ${isRefreshing ? "is-refreshing" : ""}`}
+        onClick={onRefresh}
+        disabled={isRefreshing}
+        aria-label="Refresh dashboard data"
+        title={isRefreshing ? "Refreshing..." : formattedLastRefresh}
+    ><RefreshCw size={15} className={isRefreshing ? "animate-spin text-red-500" : ""} /></button>;
+    const hasPageActions = ["schedule", "tasks", "todo"].includes(activeView);
 
     return (
-        <div ref={headerRef} className={`dashboard-content-header ${activeView === "schedule" ? "is-schedule-header" : ""} ${compact ? "is-compact" : ""}`}>
+        <div ref={headerRef} className={`dashboard-content-header ${activeView === "schedule" ? "is-schedule-header" : ""} ${useBurgerMenu ? "is-compact" : ""}`}>
             <div className="content-header-title-row">
                 {activeView === "home" ? <span className="dashboard-back-placeholder" aria-hidden="true" /> : (
                     <button
@@ -119,7 +130,7 @@ function DashboardHeaderComponent({
                     {activeView === "settings" && "SETTINGS"}
                 </h2>
 
-                {activeView === "home" && !/Android/i.test(navigator.userAgent) && (
+                {activeView === "home" && !isAndroid && (
                     <button
                         type="button"
                         className="dashboard-settings-btn"
@@ -130,27 +141,17 @@ function DashboardHeaderComponent({
                         <Settings size={18} />
                     </button>
                 )}
+                {isAndroid && refreshButton}
             </div>
 
-            {compact && <button ref={toggleRef} type="button" className="dashboard-menu-toggle" aria-label="Dashboard menu" aria-expanded={menuOpen} aria-controls={controlsId} onClick={() => setMenuOpen(open => !open)}>{menuOpen ? <X size={20} /> : <Menu size={20} />}</button>}
-            <div id={controlsId} className="dashboard-header-controls" hidden={compact && !menuOpen} onClick={(event) => {
-                if (compact && event.target instanceof Element && event.target.closest("button")) setMenuOpen(false);
+            {useBurgerMenu && <button ref={toggleRef} type="button" className="dashboard-menu-toggle" aria-label="Dashboard menu" aria-expanded={menuOpen} aria-controls={controlsId} onClick={() => setMenuOpen(open => !open)}>{menuOpen ? <X size={20} /> : <Menu size={20} />}</button>}
+            {(!isAndroid || hasPageActions) && <div id={controlsId} className="dashboard-header-controls" hidden={useBurgerMenu && !menuOpen} onClick={(event) => {
+                if (useBurgerMenu && event.target instanceof Element && event.target.closest("button")) setMenuOpen(false);
             }}>
-            <div className="desktop-dashboard-navigation">
+            {!isAndroid && <div className="desktop-dashboard-navigation">
                 <DashboardNav activeView={activeView} handleViewChange={handleViewChange} />
-            </div>
-                {onRefresh && (
-                    <button
-                        type="button"
-                        className={`dashboard-refresh-btn ${isRefreshing ? "is-refreshing" : ""}`}
-                        onClick={onRefresh}
-                        disabled={isRefreshing}
-                        aria-label="Refresh dashboard data"
-                        title={isRefreshing ? "Refreshing..." : formattedLastRefresh}
-                    >
-                        <RefreshCw size={15} className={isRefreshing ? "animate-spin text-red-500" : ""} />
-                    </button>
-                )}
+            </div>}
+            {!isAndroid && refreshButton}
             {activeView === "schedule" && <div className="schedule-header-bulk-actions">
                 <button className="section-clear-btn" type="button" disabled={isScheduleClearing || !hasScheduleForDate} onClick={onClearScheduleDay} title={`Clear schedule for ${scheduleDate}`}>Clear day</button>
                 <button className="section-clear-btn" type="button" disabled={isScheduleClearing} onClick={onClearScheduleAll}>Clear all dates</button>
@@ -166,7 +167,7 @@ function DashboardHeaderComponent({
                     setTaskError(""); setIsTaskDialogOpen(true);
                 }}><Plus size={18} aria-hidden="true" /><span>Add task</span></button>
             </div>}
-            </div>
+            </div>}
             {activeView === "schedule" && (
                 <div className="schedule-header-actions">
                     <div className="schedule-timeline-toolbar">

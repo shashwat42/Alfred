@@ -1,6 +1,6 @@
 import { ErrorNotice } from "../reliability/Notifications";
 import { notePlainText } from "../../lib/noteText.ts";
-import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback, type ReactNode } from "react";
 import {
     Copy,
     Type,
@@ -19,6 +19,7 @@ import {
     Undo2,
     Redo2,
     X,
+    MoreVertical,
 } from "lucide-react";
 import type { NoteItem } from "../../types/notes.ts";
 
@@ -58,9 +59,14 @@ export function NotesView({
     const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "unsaved">("saved");
     const [currentFontSize, setCurrentFontSize] = useState<number>(15);
     const [formatOpen, setFormatOpen] = useState(false);
+    const [formatMoreOpen, setFormatMoreOpen] = useState(false);
+    const [visibleFormatCount, setVisibleFormatCount] = useState(11);
+    const formatSidebarRef = useRef<HTMLElement | null>(null);
+    const formatMoreRef = useRef<HTMLButtonElement | null>(null);
     const formatToggleRef = useRef<HTMLButtonElement | null>(null);
     const closeFormatting = () => {
         setFormatOpen(false);
+        setFormatMoreOpen(false);
         setIsFontSizeMenuOpen(false);
         formatToggleRef.current?.focus();
     };
@@ -93,6 +99,34 @@ export function NotesView({
     });
 
     const isEditorOpen = Boolean(activeNote);
+
+    useEffect(() => {
+        const sidebar = formatSidebarRef.current;
+        if (!formatOpen || !isEditorOpen || !sidebar) return;
+        const measure = (height: number) => {
+            if (height <= 0) return;
+            // Reserve the close control and, when needed, the overflow control.
+            const slots = Math.max(1, Math.floor((height - 64) / 48));
+            setVisibleFormatCount(slots >= 11 ? 11 : slots - 1);
+        };
+        const resize = () => measure(sidebar.clientHeight);
+        resize();
+        const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(entries => measure(entries[0].contentRect.height));
+        observer?.observe(sidebar);
+        window.addEventListener("resize", resize);
+        return () => { observer?.disconnect(); window.removeEventListener("resize", resize); };
+    }, [formatOpen, isEditorOpen]);
+
+    useEffect(() => {
+        if (!formatMoreOpen && !isFontSizeMenuOpen) return;
+        const outside = (event: PointerEvent) => {
+            if (event.target instanceof Element && event.target.closest(".note-format-sidebar, .note-format-popover")) return;
+            setFormatMoreOpen(false);
+            setIsFontSizeMenuOpen(false);
+        };
+        document.addEventListener("pointerdown", outside);
+        return () => document.removeEventListener("pointerdown", outside);
+    }, [formatMoreOpen, isFontSizeMenuOpen]);
 
     useEffect(() => {
         window.dispatchEvent(new CustomEvent("alfred:note-open", { detail: isEditorOpen }));
@@ -462,11 +496,45 @@ export function NotesView({
     // Note Editor View (Visual WYSIWYG)
     // ----------------------------------------------------
     if (isEditorOpen) {
+        const formattingActions: { id: string; label: string; icon: ReactNode; active?: boolean }[] = [
+            { id: "copy", label: "Copy content", icon: <Copy size={17} /> },
+            { id: "bold", label: "Bold", icon: <Bold size={17} />, active: activeFormats.bold },
+            { id: "italic", label: "Italic", icon: <Italic size={17} />, active: activeFormats.italic },
+            { id: "underline", label: "Underline", icon: <Underline size={17} />, active: activeFormats.underline },
+            { id: "bullet", label: "Bullet List", icon: <List size={18} />, active: activeFormats.bullet },
+            { id: "numbered", label: "Numbered List", icon: <ListOrdered size={18} />, active: activeFormats.numbered },
+            { id: "smaller", label: "Decrease text size", icon: <Minus size={17} /> },
+            { id: "font-size", label: "Pick font size for line / selection", icon: <span className="note-format-size-label">Aa<br />{currentFontSize}</span> },
+            { id: "larger", label: "Increase text size", icon: <Plus size={17} /> },
+            { id: "undo", label: "Undo", icon: <Undo2 size={17} /> },
+            { id: "redo", label: "Redo", icon: <Redo2 size={17} /> },
+        ];
+        const handleFormatAction = (id: string) => {
+            if (id === "copy") {
+                if (!navigator.clipboard?.writeText) { setCopyFeedback("Copy is unavailable. Please select and copy the text."); return; }
+                void navigator.clipboard.writeText(notePlainText(content)).then(() => setCopyFeedback("Copied content.")).catch(() => setCopyFeedback("Could not copy. Please select and copy the text."));
+            } else if (id === "font-size") { setFormatMoreOpen(false); setIsFontSizeMenuOpen(open => !open); }
+            else if (id === "smaller") applyFontSizeToSelection(Math.max(12, currentFontSize - 1));
+            else if (id === "larger") applyFontSizeToSelection(Math.min(28, currentFontSize + 1));
+            else execCommand(id === "bullet" ? "insertUnorderedList" : id === "numbered" ? "insertOrderedList" : id);
+        };
+        const formatActionButton = (action: typeof formattingActions[number]) => <button
+            key={action.id} type="button" className={`note-format-btn ${action.active ? "is-active" : ""}`}
+            data-format-action={action.id} title={action.label} aria-label={action.label} aria-pressed={action.active}
+            aria-expanded={action.id === "font-size" ? isFontSizeMenuOpen : undefined}
+            aria-controls={action.id === "font-size" ? "note-font-sizes" : undefined}
+            onMouseDown={event => event.preventDefault()} onClick={() => handleFormatAction(action.id)}
+        >{action.icon}</button>;
         return (
             <div key="note-editor" className="note-editor-wrapper" onKeyDown={(event) => {
                 if (event.key === "Escape" && formatOpen) {
                     event.preventDefault();
-                    closeFormatting();
+                    if (formatMoreOpen || isFontSizeMenuOpen) {
+                        event.stopPropagation();
+                        setFormatMoreOpen(false);
+                        setIsFontSizeMenuOpen(false);
+                        (formatMoreRef.current ?? formatSidebarRef.current?.querySelector<HTMLButtonElement>("button"))?.focus();
+                    } else closeFormatting();
                 }
             }}>
                 <ErrorNotice message={operationError} />
@@ -497,6 +565,7 @@ export function NotesView({
                     <div className="note-editor-header-right">
                         <button ref={formatToggleRef} type="button" className="note-format-toggle" aria-label="Toggle formatting sidebar" title="Formatting" aria-expanded={formatOpen} aria-controls="note-formatting" onPointerDown={rememberSelection} onClick={() => {
                             setFormatOpen(!formatOpen);
+                            setFormatMoreOpen(false);
                             setIsFontSizeMenuOpen(false);
                         }}><Type size={18} /><span>Formatting</span></button>
                         {/* Prominent Save / Status Action Button */}
@@ -548,147 +617,23 @@ export function NotesView({
                     />
                 </div>
 
-                <aside id="note-formatting" className="note-format-sidebar" aria-label="Formatting" hidden={!formatOpen} onPointerDownCapture={rememberSelection}>
+                <aside ref={formatSidebarRef} id="note-formatting" className="note-format-sidebar" aria-label="Formatting" hidden={!formatOpen} onPointerDownCapture={rememberSelection}>
                     <div className="note-format-sidebar-header">
-                        <strong>Formatting</strong>
-                        <button type="button" className="note-editor-icon-btn" aria-label="Close formatting sidebar" onClick={closeFormatting}><X size={18} /></button>
+                        <button type="button" className="note-editor-icon-btn" aria-label="Close formatting sidebar" title="Close formatting" onClick={closeFormatting}><X size={18} /></button>
                     </div>
-                    <div className="note-format-tools">
-                    <button type="button" className="note-format-btn" title="Copy content" aria-label="Copy content" onClick={() => {
-                        if (!navigator.clipboard?.writeText) { setCopyFeedback("Copy is unavailable. Please select and copy the text."); return; }
-                        void navigator.clipboard.writeText(notePlainText(content)).then(() => setCopyFeedback("Copied content.")).catch(() => setCopyFeedback("Could not copy. Please select and copy the text."));
-                    }}><Copy size={17} /></button>
-                    {/* Bold */}
-                    <button
-                        type="button"
-                        className={`note-format-btn ${activeFormats.bold ? "is-active" : ""}`}
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={() => execCommand("bold")}
-                        title="Bold"
-                    >
-                        <Bold size={17} />
-                    </button>
-
-                    {/* Italic */}
-                    <button
-                        type="button"
-                        className={`note-format-btn ${activeFormats.italic ? "is-active" : ""}`}
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={() => execCommand("italic")}
-                        title="Italic"
-                    >
-                        <Italic size={17} />
-                    </button>
-
-                    {/* Underline */}
-                    <button
-                        type="button"
-                        className={`note-format-btn ${activeFormats.underline ? "is-active" : ""}`}
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={() => execCommand("underline")}
-                        title="Underline"
-                    >
-                        <Underline size={17} />
-                    </button>
-
-                    <div className="note-format-divider" />
-
-                    {/* Bullet List */}
-                    <button
-                        type="button"
-                        className={`note-format-btn ${activeFormats.bullet ? "is-active" : ""}`}
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={() => execCommand("insertUnorderedList")}
-                        title="Bullet List"
-                    >
-                        <List size={18} />
-                    </button>
-
-                    {/* Numbered List */}
-                    <button
-                        type="button"
-                        className={`note-format-btn ${activeFormats.numbered ? "is-active" : ""}`}
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={() => execCommand("insertOrderedList")}
-                        title="Numbered List"
-                    >
-                        <ListOrdered size={18} />
-                    </button>
-
-                    <div className="note-format-divider" />
-
-                    {/* Text Size for selected line / block: [-] [Aa size] [+] */}
-                    <div className="note-size-control-group">
-                        <button
-                            type="button"
-                            className="note-size-adjust-btn"
-                            onClick={() => applyFontSizeToSelection(Math.max(12, currentFontSize - 1))}
-                            title="Decrease text size"
-                        >
-                            <Minus size={13} />
-                        </button>
-
-                        <div className="note-size-menu-wrapper">
-                            <button
-                                type="button"
-                                className="note-font-size-btn"
-                                onClick={() => setIsFontSizeMenuOpen((prev) => !prev)}
-                                title="Pick font size for line / selection"
-                            >
-                                <span>Aa {currentFontSize}</span>
-                            </button>
-
-                            {isFontSizeMenuOpen && (
-                                <div className="note-size-dropdown-menu">
-                                    {PRESET_FONT_SIZES.map((sz) => (
-                                        <button
-                                            key={sz}
-                                            type="button"
-                                            className={`note-size-option-btn ${sz === currentFontSize ? "active" : ""}`}
-                                            onClick={() => applyFontSizeToSelection(sz)}
-                                        >
-                                            {sz}px
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-
-                        <button
-                            type="button"
-                            className="note-size-adjust-btn"
-                            onClick={() => applyFontSizeToSelection(Math.min(28, currentFontSize + 1))}
-                            title="Increase text size"
-                        >
-                            <Plus size={13} />
-                        </button>
-                    </div>
-
-                    <div className="note-format-divider" />
-
-                    {/* Undo */}
-                    <button
-                        type="button"
-                        className="note-format-btn"
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={() => execCommand("undo")}
-                        title="Undo"
-                    >
-                        <Undo2 size={17} />
-                    </button>
-
-                    {/* Redo */}
-                    <button
-                        type="button"
-                        className="note-format-btn"
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={() => execCommand("redo")}
-                        title="Redo"
-                    >
-                        <Redo2 size={17} />
-                    </button>
+                    <div className="note-format-tools" role="toolbar" aria-label="Formatting" aria-orientation="vertical">
+                        {formattingActions.slice(0, visibleFormatCount).map(formatActionButton)}
+                        {visibleFormatCount < formattingActions.length && <button ref={formatMoreRef} type="button" className="note-format-btn note-format-more" title="More formatting options" aria-label="More formatting options" aria-expanded={formatMoreOpen} aria-controls="note-format-overflow" onMouseDown={event => event.preventDefault()} onClick={() => { setFormatMoreOpen(open => !open); setIsFontSizeMenuOpen(false); }}><MoreVertical size={20} /></button>}
                     </div>
                 </aside>
+                {formatOpen && formatMoreOpen && visibleFormatCount < formattingActions.length && <div id="note-format-overflow" className="note-format-popover note-format-tools" role="toolbar" aria-label="More formatting options" aria-orientation="vertical" onPointerDownCapture={rememberSelection}>
+                    {formattingActions.slice(visibleFormatCount).map(formatActionButton)}
+                </div>}
+                {formatOpen && isFontSizeMenuOpen && <div id="note-font-sizes" className="note-format-popover note-format-font-sizes" role="group" aria-label="Text size" onPointerDownCapture={rememberSelection}>
+                    {PRESET_FONT_SIZES.map(size => <button key={size} type="button" className={
+                        size === currentFontSize ? "note-size-option-btn active" : "note-size-option-btn"
+                    } onMouseDown={event => event.preventDefault()} onClick={() => applyFontSizeToSelection(size)}>{size}px</button>)}
+                </div>}
                 </div>
                 <p className="note-copy-feedback" role="status">{copyFeedback}</p>
             </div>
