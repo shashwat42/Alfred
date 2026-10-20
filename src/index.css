@@ -7522,7 +7522,7 @@ html[data-android-keyboard="true"] .App.is-android .mobile-bottom-nav { display:
     display:flex; flex-direction:row !important; align-items:center !important;
     flex-wrap:wrap; gap:12px; padding-right:0; box-sizing:border-box;
 }
-.App .Dashboard .content-header-title-row { display:flex; flex:0 1 auto; min-width:0; padding-right:0; }
+.App .Dashboard .content-header-title-row { display:flex; flex:0 1 auto; align-items:center; width:auto; min-width:0; min-height:40px; padding-right:0; }
 .App .Dashboard .dashboard-header-controls { display:flex; flex:1; flex-wrap:wrap; justify-content:flex-end; align-items:center; gap:10px; min-width:0; }
 .App .Dashboard .dashboard-header-controls[hidden] { display:none; }
 .App .Dashboard .dashboard-header-controls > .dashboard-refresh-btn { position:static; flex-shrink:0; }
@@ -7575,3 +7575,18 @@ html[data-android-keyboard="true"] .App.is-android .mobile-bottom-nav { display:
 @media(min-width:769px) {
     .App:not(.is-android) .Dashboard:has(.is-view-home) { padding-bottom:8px; }
 }
+
+/* Alfred's charcoal surfaces and red accents stay consistent across Workspace. */
+.workspace-hub .workspace-hub-card { background:#1e1e1e; color:#f87171; border-color:#ffffff18; }
+.workspace-hub .workspace-hub-card:hover { background:#282020; border-color:#ef444466; }
+.workspace-hub .workspace-hub-card:focus-visible { outline-color:#f87171; }
+.workspace-hub .workspace-hub-card > span > span { color:#a1a1aa; }
+.App .Dashboard .upcoming-notes-tag { background:#3b2323; border:1px solid #ef444433; color:#fca5a5; }
+.App .Dashboard .upcoming-notes-bar:focus-within { background:#242020; border-color:#b46d6d; }
+.App .Dashboard .upcoming-notes-bar:focus-within .upcoming-notes-tag { background:#4b2828; }
+.upcoming-capture-row { position:absolute; left:0; right:0; bottom:0; display:flex; align-items:center; gap:12px; min-width:0; }
+.App .Dashboard .upcoming-capture-row > .upcoming-notes-bar { position:static; flex:1; min-width:0; }
+.App .Dashboard .upcoming-capture-row > .focus-session-btn { display:inline-flex; align-items:center; justify-content:center; gap:8px; flex-shrink:0; min-height:50px; margin:0; white-space:nowrap; }
+.App.is-android .mobile-bottom-nav,
+.App.is-android .upcoming-notes-bar,
+.App.is-android .upcoming-notes-bar:focus-within { box-shadow:none !important; }

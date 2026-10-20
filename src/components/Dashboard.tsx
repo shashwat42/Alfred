@@ -1,5 +1,4 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
-import { Timer } from "lucide-react";
 import { Loader, ErrorState, Modal } from "./reliability/States";
 import { useAuth } from "../auth/authContext.ts";
 import type { DashboardView } from "../types/dashboard.ts";
@@ -40,6 +39,10 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
     const [isFocusSessionOpen, setIsFocusSessionOpen] = useState(false);
     const [isAbsorbing, setIsAbsorbing] = useState(false);
     const [isExpanding, setIsExpanding] = useState(false);
+    const focusTransitionRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    useEffect(() => () => {
+        if (focusTransitionRef.current) clearTimeout(focusTransitionRef.current);
+    }, []);
     const focusSession = useFocusSession();
 
     // Keep 'now' updated regularly so current time and schedule filters advance in real-time
@@ -58,15 +61,6 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
     );
     const currentMinutes = useMemo(
         () => now.getHours() * 60 + now.getMinutes(),
-        [now]
-    );
-
-    const todayWeekdayLabel = useMemo(
-        () => now.toLocaleDateString("en-US", { weekday: "long" }).toUpperCase(),
-        [now]
-    );
-    const todayMonthDayLabel = useMemo(
-        () => now.toLocaleDateString("en-US", { month: "short", day: "numeric" }).toUpperCase(),
         [now]
     );
 
@@ -189,20 +183,29 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
     );
 
     const handleOpenFocusSession = useCallback(() => {
+        if (focusTransitionRef.current) clearTimeout(focusTransitionRef.current);
+        setIsExpanding(false);
         setIsAbsorbing(true);
-        setTimeout(() => {
+        focusTransitionRef.current = setTimeout(() => {
+            focusTransitionRef.current = null;
             setIsAbsorbing(false);
             setIsFocusSessionOpen(true);
         }, 340);
     }, []);
 
     const handleReturnToDashboard = useCallback(() => {
+        if (focusTransitionRef.current) clearTimeout(focusTransitionRef.current);
+        setIsAbsorbing(false);
         setIsFocusSessionOpen(false);
+        if (isAndroid) {
+            if (onViewChange) onViewChange("workspace"); else setLocalView("workspace");
+        }
         setIsExpanding(true);
-        setTimeout(() => {
+        focusTransitionRef.current = setTimeout(() => {
+            focusTransitionRef.current = null;
             setIsExpanding(false);
         }, 380);
-    }, []);
+    }, [isAndroid, onViewChange]);
 
     useEffect(() => {
         const back = (event: Event) => {
@@ -288,40 +291,14 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
         <section className={`Dashboard ${isFocusSessionOpen ? "is-focus-mode" : ""} ${isAbsorbing ? "is-absorbing-mode" : ""}`}>
             {isFocusSessionOpen ? (
                 <FocusSession
-                    todayWeekdayLabel={todayWeekdayLabel}
-                    todayMonthDayLabel={todayMonthDayLabel}
-                    onReturnToDashboard={handleReturnToDashboard}
+                    returnDestination={isAndroid ? "Workspace" : "Dashboard"}
+                    onReturn={handleReturnToDashboard}
                     focusSession={focusSession}
                 />
             ) : (
                 <>
                     <div className={`dashboard-main-card is-view-${activeView} ${["workspace", "schedule", "notes", "mails", "tasks", "todo", "settings"].includes(activeView) ? "is-section-workspace" : ""} ${isAbsorbing ? "is-absorbing" : isExpanding ? "is-expanding" : ""}`}>
                 <div className="dashboard-content-area">
-                    <div className={`dashboard-top-bar ${isAbsorbing ? "is-absorbing" : ""}`}>
-                        <div className="dashboard-date-banner">
-                            <div className="date-banner-text">
-                                <span className="date-banner-weekday">{todayWeekdayLabel}</span>
-                                <span className="date-banner-day">{todayMonthDayLabel}</span>
-                            </div>
-                        </div>
-                        {!isAndroid && <><span className="desktop-focus-divider" aria-hidden="true" />
-                        <button
-                            type="button"
-                            className={`focus-session-btn ${focusSession.isRunning ? "is-running-badge" : ""}`}
-                            onClick={handleOpenFocusSession}
-                            title="Open Focus Session"
-                        >
-                            <Timer className="desktop-focus-icon" size={18} aria-hidden="true" />
-                            {focusSession.isRunning ? (
-                                <span className="focus-btn-running-content">
-                                    <span className="focus-btn-pulse-dot" />
-                                    <span>Focus Session ({formatTimeMMSS(focusSession.remainingSeconds)})</span>
-                                </span>
-                            ) : (
-                                "Focus Session"
-                            )}
-                        </button></>}
-                    </div>
                     <DashboardHeader
                         activeView={activeView}
                         handleViewChange={handleViewChange}
@@ -370,6 +347,8 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
                             hasNotes={activeNotes.length > 0}
                             onOpenNote={handleOpenNoteFromUpcoming}
                             onSaveQuickNote={handleSaveQuickNote}
+                            onOpenFocusSession={isAndroid ? undefined : handleOpenFocusSession}
+                            focusTime={focusSession.isRunning ? formatTimeMMSS(focusSession.remainingSeconds) : undefined}
                         />
                     )}
 

@@ -1,6 +1,6 @@
 import { notePlainText } from "../../lib/noteText.ts";
 import { useState, useMemo, memo, type KeyboardEvent } from "react";
-import { Clock } from "lucide-react";
+import { Clock, Timer } from "lucide-react";
 import type { ScheduleItem, TaskItem } from "../../types/dashboard.ts";
 import type { NoteItem } from "../../types/notes.ts";
 import { getRelativeTimeBadge, parseTimeToMinutes } from "../../utils/scheduleUtils.ts";
@@ -21,6 +21,8 @@ function UpcomingViewComponent({
     hasNotes = recentNotes.length > 0,
     onOpenNote,
     onSaveQuickNote,
+    onOpenFocusSession,
+    focusTime,
 }: {
     scheduleItems?: ScheduleItem[];
     priorityTasks?: TaskItem[];
@@ -29,6 +31,8 @@ function UpcomingViewComponent({
     hasNotes?: boolean;
     onOpenNote?: (note: NoteItem) => void;
     onSaveQuickNote?: (text: string) => Promise<void>;
+    onOpenFocusSession?: () => void;
+    focusTime?: string;
 }) {
     const [noteText, setNoteText] = useState("");
 
@@ -209,6 +213,7 @@ function UpcomingViewComponent({
             </div>
 
             {/* Bottom Notes Quick Bar */}
+            <div className="upcoming-capture-row">
             <div className="upcoming-notes-bar">
                 <label className="upcoming-notes-tag" htmlFor="upcoming-quick-note">notes</label>
                 <input
@@ -220,6 +225,11 @@ function UpcomingViewComponent({
                     onChange={(e) => setNoteText(e.target.value)}
                     onKeyDown={handleNoteKeyDown}
                 />
+            </div>
+            {onOpenFocusSession && <button type="button" className={`focus-session-btn ${focusTime ? "is-running-badge" : ""}`} onClick={onOpenFocusSession} title="Open Focus Session">
+                <Timer size={18} aria-hidden="true" />
+                {focusTime ? <span className="focus-btn-running-content"><span className="focus-btn-pulse-dot" /><span>Focus Session ({focusTime})</span></span> : "Focus Session"}
+            </button>}
             </div>
         </div>
     );

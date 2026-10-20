@@ -4,16 +4,14 @@ import type { useFocusSession } from "../../hooks/useFocusSession.ts";
 import { CheckCircle2, RotateCcw } from "lucide-react";
 
 interface FocusSessionProps {
-    todayWeekdayLabel: string;
-    todayMonthDayLabel: string;
-    onReturnToDashboard: () => void;
+    returnDestination: "Dashboard" | "Workspace";
+    onReturn: () => void;
     focusSession: ReturnType<typeof useFocusSession>;
 }
 
 export function FocusSession({
-    todayWeekdayLabel,
-    todayMonthDayLabel,
-    onReturnToDashboard,
+    returnDestination,
+    onReturn,
     focusSession,
 }: FocusSessionProps) {
     const {
@@ -38,16 +36,6 @@ export function FocusSession({
 
     return (
         <div className="focus-session-workspace">
-            {/* Top Date Header */}
-            <div className="focus-session-top-bar">
-                <div className="dashboard-date-banner">
-                    <div className="date-banner-text">
-                        <span className="date-banner-weekday">{todayWeekdayLabel}</span>
-                        <span className="date-banner-day">{todayMonthDayLabel}</span>
-                    </div>
-                </div>
-            </div>
-
             {/* Main Center Timer Workspace */}
             <div className="focus-session-center-stage">
                 {phase === "completed" ? (
@@ -71,9 +59,9 @@ export function FocusSession({
                             <button
                                 type="button"
                                 className="focus-completed-dashboard-btn"
-                                onClick={onReturnToDashboard}
+                                onClick={onReturn}
                             >
-                                Return to Dashboard
+                                Return to {returnDestination}
                             </button>
                         </div>
                     </div>
@@ -114,15 +102,15 @@ export function FocusSession({
                 )}
             </div>
 
-            {/* Bottom Dashboard Button */}
+            {/* Return to the page where focus sessions are opened. */}
             <div className="focus-session-bottom-bar">
                 <button
                     type="button"
                     className="focus-dashboard-pill-btn"
-                    onClick={onReturnToDashboard}
-                    title="Return to Dashboard"
+                    onClick={onReturn}
+                    title={`Return to ${returnDestination}`}
                 >
-                    Dashboard
+                    {returnDestination}
                 </button>
             </div>
         </div>

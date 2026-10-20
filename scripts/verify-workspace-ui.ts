@@ -259,10 +259,13 @@ try {
   assert.equal(editedNote, note._id);
   const { default: Dashboard } = await server.ssrLoadModule("/src/components/Dashboard.tsx");
   const { AuthContext } = await server.ssrLoadModule("/src/auth/authContext.ts");
-  const renderDashboard = (view: string) => root.render(createElement(AuthContext.Provider, { value: { session } }, createElement(Dashboard, { currentView: view, onViewChange() {} })));
+  let focusDestination = "";
+  const renderDashboard = (view: string) => root.render(createElement(AuthContext.Provider, { value: { session } }, createElement(Dashboard, { currentView: view, onViewChange: (next: string) => { focusDestination = next; } })));
   Object.defineProperty(navigator, "userAgent", { configurable: true, value: "Windows NT 10.0" });
   await act(async () => renderDashboard("home")); await settle();
-  assert.ok(document.querySelector(".focus-session-btn"), "Desktop keeps Focus Session in the header");
+  assert.ok(document.querySelector(".focus-session-btn"), "Desktop keeps Focus Session available");
+  assert.equal(document.querySelector(".focus-session-btn")!.parentElement, document.querySelector(".upcoming-notes-bar")!.parentElement, "PC Focus Session shares the horizontal capture row");
+  assert.equal(document.querySelector(".dashboard-date-banner"), null, "The day/date pill is removed");
   await act(async () => renderDashboard("workspace")); await settle();
   assert.equal(document.querySelector(".workspace-hub-focus"), null, "Desktop does not duplicate Focus Session in Workspace");
   Object.defineProperty(navigator, "userAgent", { configurable: true, value: "Android" });
@@ -273,6 +276,11 @@ try {
   await act(async () => document.querySelector<HTMLButtonElement>(".workspace-hub-focus")!.click());
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 400)); });
   assert.ok(document.querySelector(".is-focus-mode"), "Workspace opens Focus Session");
+  assert.equal(document.querySelector(".dashboard-date-banner"), null, "Focus Session has no day/date pill");
+  assert.equal(document.querySelector(".focus-dashboard-pill-btn")!.textContent, "Workspace");
+  await act(async () => document.querySelector<HTMLButtonElement>(".focus-dashboard-pill-btn")!.click());
+  assert.equal(focusDestination, "workspace", "Android returns to Workspace");
+  assert.equal(document.querySelector(".is-focus-mode"), null);
   const { deleteLocalWorkspace } = await server.ssrLoadModule("/src/lib/localWorkspace.ts");
   await deleteLocalWorkspace(accountId);
   console.log("PASS: Schedule editing/moving between dates, task editing, responsive burger menu/navigation/actions/Escape, note editing, Android Workspace focus navigation, formatting and workspace checks.");
