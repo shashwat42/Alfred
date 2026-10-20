@@ -36,6 +36,7 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
     const accountId = session?.account?.id;
     const [localView, setLocalView] = useState<DashboardView>(currentView);
     const activeView = onViewChange ? currentView : localView;
+    const isAndroid = /Android/i.test(navigator.userAgent);
     const [isFocusSessionOpen, setIsFocusSessionOpen] = useState(false);
     const [isAbsorbing, setIsAbsorbing] = useState(false);
     const [isExpanding, setIsExpanding] = useState(false);
@@ -82,6 +83,9 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
         isTaskDialogOpen,
         setIsTaskDialogOpen,
         handleAddTask,
+        handleEditTask,
+        handleStartNewTask,
+        editingTaskId,
         handleToggleTaskComplete,
         handleDeleteTask,
         handleClearAllTasks,
@@ -110,6 +114,9 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
         setIsCalendarOpen,
         currentHourRef,
         handleAddSchedule,
+        handleEditSchedule,
+        handleStartNewSchedule,
+        editingSchedule,
         handleDeleteSchedule,
         handleClearSchedules,
         isClearing: scheduleClearing,
@@ -297,7 +304,7 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
                                 <span className="date-banner-day">{todayMonthDayLabel}</span>
                             </div>
                         </div>
-                        <span className="desktop-focus-divider" aria-hidden="true" />
+                        {!isAndroid && <><span className="desktop-focus-divider" aria-hidden="true" />
                         <button
                             type="button"
                             className={`focus-session-btn ${focusSession.isRunning ? "is-running-badge" : ""}`}
@@ -313,7 +320,7 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
                             ) : (
                                 "Focus Session"
                             )}
-                        </button>
+                        </button></>}
                     </div>
                     <DashboardHeader
                         activeView={activeView}
@@ -326,11 +333,13 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
                         handleNextDay={handleNextDay}
                         handleToday={handleToday}
                         setScheduleError={setScheduleError}
+                        onAddSchedule={handleStartNewSchedule}
                         setNewScheduleDate={setNewScheduleDate}
                         setIsScheduleDialogOpen={setIsScheduleDialogOpen}
                         activeTasks={activeTasks}
                         handleClearAllTasks={handleClearAllTasks}
                         setTaskError={setTaskError}
+                        onAddTask={handleStartNewTask}
                         setIsTaskDialogOpen={setIsTaskDialogOpen}
                         isScheduleDialogOpen={isScheduleDialogOpen}
                         isTaskDialogOpen={isTaskDialogOpen}
@@ -360,6 +369,8 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
                             recentNotes={activeRecentNotes}
                             hasNotes={activeNotes.length > 0}
                             onOpenNote={handleOpenNoteFromUpcoming}
+                            onEditTask={handleEditTask}
+                            onEditSchedule={handleEditSchedule}
                             onSaveQuickNote={handleSaveQuickNote}
                         />
                     )}
@@ -372,6 +383,7 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
                             currentMinutes={currentMinutes}
                             currentHourRef={currentHourRef}
                             handleDeleteSchedule={handleDeleteSchedule}
+                            onEditSchedule={handleEditSchedule}
                         />
                     )}
 
@@ -383,6 +395,7 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
                             setTaskPage={setTaskPage}
                             handleToggleTaskComplete={handleToggleTaskComplete}
                             handleDeleteTask={handleDeleteTask}
+                            onEditTask={handleEditTask}
                         />
                     )}
 
@@ -400,7 +413,7 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
                         />
                     )}
 
-                    {activeView === "workspace" && <WorkspaceView onNavigate={handleViewChange} />}
+                    {activeView === "workspace" && <WorkspaceView onNavigate={handleViewChange} onOpenFocusSession={isAndroid ? handleOpenFocusSession : undefined} focusTime={focusSession.isRunning ? formatTimeMMSS(focusSession.remainingSeconds) : undefined} />}
                     {activeView === "settings" && <SettingsView />}
                     </div>
                 </div>
@@ -426,6 +439,7 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
 
             {isTaskDialogOpen && (
                 <TaskDialog
+                    isEditing={Boolean(editingTaskId)}
                     isSubmitting={taskSubmitting}
                     newTask={newTask}
                     setNewTask={setNewTask}
@@ -439,6 +453,7 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
 
             {isScheduleDialogOpen && (
                 <ScheduleDialog
+                    isEditing={Boolean(editingSchedule)}
                     isSubmitting={scheduleSubmitting}
                     newScheduleDate={newScheduleDate}
                     setNewScheduleDate={setNewScheduleDate}

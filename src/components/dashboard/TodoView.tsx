@@ -1,4 +1,5 @@
 import type { TaskItem } from "../../types/dashboard.ts";
+import { SquarePen } from "lucide-react";
 import { EmptyState } from "../reliability/States";
 import { Pagination } from "../ui/Pagination.tsx";
 import { ITEMS_PER_PAGE } from "../../hooks/useTasks.ts";
@@ -10,6 +11,7 @@ export function TodoView({
     setTaskPage,
     handleToggleTaskComplete,
     handleDeleteTask,
+    onEditTask,
 }: {
     visibleTasks: TaskItem[];
     taskPage: number;
@@ -17,6 +19,7 @@ export function TodoView({
     setTaskPage: (page: number) => void;
     handleToggleTaskComplete: (id: string, currentCompleted?: boolean) => void;
     handleDeleteTask: (id: string) => void;
+    onEditTask: (task: TaskItem) => void;
 }) {
     return (
         <div className="dashboard-list-container">
@@ -61,6 +64,7 @@ export function TodoView({
                                     </span>
                                 )}
                                 </div>
+                                <button type="button" className="task-edit-btn" aria-label={`Edit "${item.task}"`} title="Edit task" onClick={() => onEditTask(item)}><SquarePen size={17} /></button>
                                 <button
                                     type="button"
                                     className="todo-item-del-btn"

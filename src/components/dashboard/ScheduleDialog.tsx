@@ -14,6 +14,7 @@ export function ScheduleDialog({
     scheduleError,
     setIsScheduleDialogOpen,
     isSubmitting = false,
+    isEditing = false,
 }: {
     newScheduleDate: string;
     setNewScheduleDate: (date: string) => void;
@@ -25,6 +26,7 @@ export function ScheduleDialog({
     scheduleError: string;
     setIsScheduleDialogOpen: Dispatch<SetStateAction<boolean>>;
     isSubmitting?: boolean;
+    isEditing?: boolean;
 }) {
     const datePickerRef = useRef<HTMLInputElement>(null);
     const timePickerRef = useRef<HTMLInputElement>(null);
@@ -167,7 +169,7 @@ export function ScheduleDialog({
                 aria-labelledby="schedule-dialog-title"
             >
                 <div className="task-dialog-heading">
-                    <h2 id="schedule-dialog-title">Add to schedule</h2>
+                    <h2 id="schedule-dialog-title">{isEditing ? "Edit schedule" : "Add to schedule"}</h2>
                     <button
                         className="task-dialog-close"
                         type="button"
@@ -273,13 +275,14 @@ export function ScheduleDialog({
                         <input
                             type="text"
                             required
+                            maxLength={200}
                             placeholder="What is scheduled?"
                             value={newScheduleTopic}
                             onChange={(event) => setNewScheduleTopic(event.target.value)}
                         />
                     </label>
                     <button className="task-add-trigger" type="submit" disabled={isSubmitting}>
-                        Add schedule
+                        {isSubmitting ? "Saving…" : isEditing ? "Save changes" : "Add schedule"}
                     </button>
                 </form>
                 <ErrorNotice message={clientError || scheduleError} />

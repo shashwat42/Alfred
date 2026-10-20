@@ -1,4 +1,5 @@
 import React from "react";
+import { SquarePen } from "lucide-react";
 import type { ScheduleItem } from "../../types/dashboard.ts";
 import { EVENT_PALETTE, parseTimeToMinutes, TIMELINE_HOURS } from "../../utils/scheduleUtils.ts";
 
@@ -9,6 +10,7 @@ export function ScheduleTimelineView({
     currentMinutes,
     currentHourRef,
     handleDeleteSchedule,
+    onEditSchedule,
 }: {
     activeTimelineSchedule: ScheduleItem[];
     scheduleDate: string;
@@ -17,6 +19,7 @@ export function ScheduleTimelineView({
     currentMinutes: number;
     currentHourRef: React.MutableRefObject<HTMLDivElement | null>;
     handleDeleteSchedule: (id: string) => void;
+    onEditSchedule?: (item: ScheduleItem) => void;
 }) {
     const currentHour = Math.floor(currentMinutes / 60);
     // Minutes within the current hour, used to position the "now" indicator line.
@@ -87,6 +90,8 @@ export function ScheduleTimelineView({
                                                     {eventItem.topic}
                                                 </span>
                                                 {eventItem._id && (
+                                                    <>
+                                                    {onEditSchedule && <button type="button" className="schedule-edit-btn" aria-label={`Edit schedule: ${eventItem.topic}`} title="Edit schedule" onClick={() => onEditSchedule(eventItem)}><SquarePen size={16} /></button>}
                                                     <button
                                                         type="button"
                                                         className="timeline-chip-del"
@@ -95,6 +100,7 @@ export function ScheduleTimelineView({
                                                     >
                                                         ×
                                                     </button>
+                                                    </>
                                                 )}
                                             </div>
                                         );

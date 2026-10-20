@@ -20,6 +20,7 @@ export function TaskDialog({
     taskError,
     setIsTaskDialogOpen,
     isSubmitting = false,
+    isEditing = false,
 }: {
     newTask: string;
     setNewTask: (task: string) => void;
@@ -29,6 +30,7 @@ export function TaskDialog({
     taskError: string;
     setIsTaskDialogOpen: Dispatch<SetStateAction<boolean>>;
     isSubmitting?: boolean;
+    isEditing?: boolean;
 }) {
     return createPortal(
         <div
@@ -44,7 +46,7 @@ export function TaskDialog({
                 aria-labelledby="task-dialog-title"
             >
                 <div className="task-dialog-heading">
-                    <h2 id="task-dialog-title">Add a task</h2>
+                    <h2 id="task-dialog-title">{isEditing ? "Edit task" : "Add a task"}</h2>
                     <button
                         className="task-dialog-close"
                         type="button"
@@ -58,7 +60,9 @@ export function TaskDialog({
                     <input
                         disabled={isSubmitting}
                         autoFocus
-                        aria-label="New task"
+                        aria-label={isEditing ? "Task text" : "New task"}
+                        required
+                        maxLength={500}
                         placeholder="Add a task..."
                         value={newTask}
                         onChange={(event) => setNewTask(event.target.value)}
@@ -83,8 +87,8 @@ export function TaskDialog({
                         </div>
                     </div>
 
-                    <button type="submit" className="task-submit-btn" disabled={isSubmitting}>
-                        {isSubmitting ? "Adding task…" : "Add Task"}
+                    <button type="submit" className="task-submit-btn" disabled={isSubmitting || !newTask.trim()}>
+                        {isSubmitting ? "Saving task…" : isEditing ? "Save changes" : "Add Task"}
                     </button>
                 </form>
                 <ErrorNotice message={taskError} />

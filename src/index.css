@@ -7349,6 +7349,14 @@ body.is-overlay .overlay-root {
 .note-format-toggle:focus-visible { outline:2px solid #c4b5d8; outline-offset:3px; }
 .note-copy-feedback { font-size:12px; color:#a1a1aa; margin:0; }
 .note-copy-feedback:empty { display:none; }
+.task-edit-btn, .note-card-edit-btn { display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; width:36px; height:36px; padding:0; border:0; border-radius:10px; background:transparent; color:#bfb7ca; cursor:pointer; }
+.task-edit-btn:hover, .note-card-edit-btn:hover { color:#fafafa; background:#ffffff12; }
+.task-edit-btn:focus-visible, .note-card-edit-btn:focus-visible { outline:2px solid #c4b5d8; outline-offset:2px; }
+.note-card-footer, .recent-note-card-meta { position:relative; padding-right:40px; }
+.note-card-footer > .note-card-edit-btn, .recent-note-card-meta > .note-card-edit-btn { position:absolute; right:0; top:0; }
+.workspace-hub-focus { background:#382b2d; color:#f1b7b7; }
+.App.is-android .task-edit-btn, .App.is-android .note-card-edit-btn { min-width:44px; min-height:44px; }
+.App.is-android .note-card-footer, .App.is-android .recent-note-card-meta { padding-right:48px; min-height:44px; }
 .upcoming-notes-bar, .upcoming-notes-bar:focus-within { background:transparent; box-shadow:none; border:0; }
 .upcoming-notes-bar { padding:4px 0; gap:14px; border-radius:0; }
 .upcoming-notes-tag { display:inline-flex; align-items:center; justify-content:center; padding:9px 18px; min-height:40px; box-sizing:border-box; border-radius:999px; background:#393344; color:#e2d8ef; cursor:text; }
@@ -7426,7 +7434,7 @@ body.is-overlay .overlay-root {
 .android-app-header.is-assistant { background:#171717; }
 .App.is-android.is-assistant-page { background:#171717; }
 .android-header-home { display:inline-flex; align-items:center; gap:8px; padding:4px 12px; border:0; background:transparent; color:#fafafa; font-family:inherit; font-size:11px; font-weight:600; line-height:1.2; letter-spacing:1.2px; cursor:pointer; }
-.android-header-home img { width:20px; height:24px; object-fit:contain; }
+.android-header-home img { width:36px; height:40px; object-fit:contain; }
 .android-header-home:focus-visible { outline:2px solid #f87171; border-radius:8px; }
 .android-app-header .chat-voice-header-indicator { margin:0 auto; max-width:320px; height:44px; padding:3px 16px 3px 3px; box-sizing:border-box; }
 .android-app-header .chat-voice-header-logo-wrap { width:36px; height:36px; min-width:36px; min-height:36px; }
@@ -7455,4 +7463,108 @@ html[data-android-keyboard="true"] .App.is-android .mobile-bottom-nav { display:
     .App:not(.is-android) .upcoming-notes-bar:focus-within .upcoming-notes-tag,
     .App:not(.is-android) .note-format-toggle:hover,
     .App:not(.is-android) .note-format-toggle[aria-expanded="true"] { background:#563838; }
+}
+
+/* Compact Android capture pill, with no reserved panel around the input. */
+.App.is-android .upcoming-view-container { gap:8px; }
+.App.is-android .upcoming-scrollable-content { padding-bottom:8px; }
+.App.is-android .upcoming-notes-bar {
+    margin:0;
+    padding:4px 12px 4px 4px;
+    gap:10px;
+    min-height:48px;
+    border:1px solid #ffffff18;
+    border-radius:999px;
+    background:#2b292f;
+}
+.App.is-android .upcoming-notes-bar:focus-within { background:#302d36; border-color:#a79ab8; }
+.App.is-android .upcoming-notes-tag { min-height:36px; padding:6px 14px; flex-shrink:0; }
+.App.is-android .upcoming-notes-input { padding:8px 0; }
+
+/* Formatting docks beside the canvas on every platform. */
+.note-editor-workspace { display:flex; flex:1; min-height:0; min-width:0; position:relative; overflow:hidden; }
+.note-editor-workspace > .note-editor-body { min-width:0; }
+.note-editor-header .note-format-toggle { align-self:center; flex-shrink:0; }
+.note-format-sidebar {
+    flex:0 0 200px;
+    min-width:0;
+    padding:12px;
+    box-sizing:border-box;
+    border-left:1px solid #ffffff18;
+    background:#26242b;
+    overflow-y:auto;
+    overscroll-behavior:contain;
+}
+.note-format-sidebar[hidden] { display:none; }
+.note-format-sidebar-header { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:12px; font-size:13px; color:#e2dced; }
+.note-format-tools { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:6px; }
+.note-format-tools .note-format-btn { min-width:36px; min-height:44px; }
+.note-format-tools .note-format-divider { grid-column:1 / -1; width:100%; height:1px; margin:6px 0; }
+.note-format-tools .note-size-control-group { grid-column:1 / -1; justify-content:space-between; flex-wrap:wrap; }
+.note-format-sidebar .note-size-adjust-btn, .note-format-sidebar .note-font-size-btn { min-height:36px; }
+.note-format-sidebar .note-size-dropdown-menu { position:static; transform:none; margin-top:4px; min-width:0; }
+.note-format-tools button:focus-visible { outline:2px solid #c4b5d8; outline-offset:1px; }
+.note-copy-feedback:empty { display:none; }
+@media(max-width:768px) {
+    .note-editor-header .note-format-toggle { padding:10px; }
+    .note-editor-header .note-format-toggle > span { display:none; }
+    .note-format-sidebar { flex-basis:148px; padding:8px; }
+    .note-format-sidebar-header { gap:2px; }
+    .note-format-tools { gap:2px; }
+}
+
+/* Header controls respond to the dashboard panel width, including split windows. */
+.App .Dashboard .dashboard-main-card .dashboard-content-header {
+    display:flex; flex-direction:row !important; align-items:center !important;
+    flex-wrap:wrap; gap:12px; padding-right:0; box-sizing:border-box;
+}
+.App .Dashboard .content-header-title-row { display:flex; flex:0 1 auto; min-width:0; padding-right:0; }
+.App .Dashboard .dashboard-header-controls { display:flex; flex:1; flex-wrap:wrap; justify-content:flex-end; align-items:center; gap:10px; min-width:0; }
+.App .Dashboard .dashboard-header-controls[hidden] { display:none; }
+.App .Dashboard .dashboard-header-controls > .dashboard-refresh-btn { position:static; flex-shrink:0; }
+.App .Dashboard .desktop-dashboard-navigation { margin:0; }
+.App .Dashboard .task-header-buttons { display:flex; gap:8px; justify-content:flex-end; flex-basis:100%; }
+.App .Dashboard .dashboard-header-controls > .schedule-header-bulk-actions { flex-basis:100%; justify-content:flex-end; }
+.dashboard-menu-toggle { display:inline-flex; align-items:center; justify-content:center; margin-left:auto; width:44px; height:44px; flex-shrink:0; border:1px solid #ffffff20; border-radius:10px; background:#2b292d; color:#e4e4e7; cursor:pointer; }
+.dashboard-menu-toggle:focus-visible { outline:2px solid #f87171; outline-offset:2px; }
+.App .Dashboard .is-compact .dashboard-header-controls {
+    position:absolute; z-index:60; top:48px; right:0; width:min(280px,100%);
+    max-height:min(60dvh,420px); overflow-y:auto; flex-direction:column; align-items:stretch;
+    padding:10px; border:1px solid #ffffff24; border-radius:14px; background:#202023;
+    box-shadow:0 12px 28px #0007;
+}
+.App .Dashboard .is-compact .desktop-dashboard-navigation { display:block; }
+.App .Dashboard .is-compact .desktop-dashboard-navigation .dashboard-nav-strip { display:flex !important; flex-direction:column; align-items:stretch; gap:4px; padding:0; }
+.App .Dashboard .is-compact .desktop-dashboard-navigation .nav-strip-btn { display:flex; flex-direction:row; justify-content:flex-start; gap:12px; width:100%; height:auto; min-height:44px; padding:8px 12px; box-sizing:border-box; }
+.App .Dashboard .is-compact .desktop-dashboard-navigation .nav-strip-icon-box,
+.App .Dashboard .is-compact .desktop-dashboard-navigation .nav-strip-svg-icon { width:20px; height:20px; }
+.App .Dashboard .is-compact .desktop-dashboard-navigation .nav-strip-label { font-size:14px; }
+.App .Dashboard .is-compact .dashboard-header-controls > .dashboard-refresh-btn { width:100%; height:44px; }
+.App .Dashboard .is-compact .dashboard-header-controls > .dashboard-refresh-btn::after { content:"Refresh"; margin-left:10px; }
+.App .Dashboard .is-compact .schedule-header-bulk-actions,
+.App .Dashboard .is-compact .task-header-buttons { display:flex; flex-direction:column; align-items:stretch; gap:6px; }
+.App .Dashboard .is-compact .dashboard-header-controls .section-clear-btn,
+.App .Dashboard .is-compact .dashboard-header-controls .section-add-trigger { min-height:44px; justify-content:center; }
+.App .Dashboard .is-compact .schedule-header-actions { min-width:0; }
+.App .Dashboard .is-compact .timeline-date-nav { flex-wrap:wrap; }
+.schedule-edit-btn { display:inline-flex; align-items:center; justify-content:center; width:36px; height:36px; flex-shrink:0; border:0; border-radius:8px; background:transparent; color:inherit; cursor:pointer; }
+.schedule-edit-btn:hover { background:#80808026; }
+.schedule-edit-btn:focus-visible { outline:2px solid currentColor; outline-offset:1px; }
+.App.is-android .schedule-edit-btn { min-width:44px; min-height:44px; }
+.upcoming-schedule-card-left { flex:1; min-width:0; }
+
+/* Float the capture pill over scrolling content without a reserved grey footer. */
+.Dashboard .upcoming-view-container { position:relative; gap:0; padding-right:0; }
+.Dashboard .upcoming-scrollable-content { padding-bottom:76px; }
+.App .Dashboard .upcoming-notes-bar {
+    position:absolute; left:0; right:0; bottom:0; width:auto; margin:0;
+    padding:4px; gap:10px; min-height:48px; border:1px solid #ffffff20;
+    border-radius:999px; background:#1c1c1e; box-shadow:none;
+}
+.App .Dashboard .upcoming-notes-bar:focus-within { background:#242126; border-color:#a79ab8; }
+.App .Dashboard .upcoming-notes-input { min-height:40px; padding:8px 12px 8px 0; border:0; border-radius:0; background:transparent; box-sizing:border-box; }
+.App .Dashboard .upcoming-notes-input:focus { outline:none; }
+.App .Dashboard .upcoming-notes-tag { min-height:36px; padding:6px 14px; }
+@media(min-width:769px) {
+    .App:not(.is-android) .Dashboard:has(.is-view-home) { padding-bottom:8px; }
 }

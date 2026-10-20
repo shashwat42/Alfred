@@ -1,5 +1,5 @@
-import { memo, type Dispatch, type SetStateAction } from "react";
-import { Settings, RefreshCw, Plus, ArrowLeft } from "lucide-react";
+import { memo, useEffect, useRef, useState, useId, type Dispatch, type SetStateAction } from "react";
+import { Settings, RefreshCw, Plus, ArrowLeft, Menu, X } from "lucide-react";
 import { DashboardNav } from "./DashboardNav.tsx";
 import type { DashboardView, TaskItem } from "../../types/dashboard.ts";
 
@@ -29,6 +29,8 @@ function DashboardHeaderComponent({
     onClearScheduleAll,
     isScheduleClearing = false,
     hasScheduleForDate = false,
+    onAddTask,
+    onAddSchedule,
 }: {
     activeView: DashboardView;
     handleViewChange: (view: DashboardView) => void;
@@ -55,13 +57,48 @@ function DashboardHeaderComponent({
     onClearScheduleAll: () => void;
     isScheduleClearing?: boolean;
     hasScheduleForDate?: boolean;
+    onAddTask?: () => void;
+    onAddSchedule?: () => void;
 }) {
+    const [compact, setCompact] = useState(() => window.innerWidth < 768);
+    const [menuOpen, setMenuOpen] = useState(false);
+    const headerRef = useRef<HTMLDivElement>(null);
+    const toggleRef = useRef<HTMLButtonElement>(null);
+    const controlsId = useId();
+    useEffect(() => {
+        const header = headerRef.current;
+        if (!header) return;
+        const measure = (width: number) => {
+            if (width <= 0) return;
+            setCompact(width < 780);
+            if (width >= 780) setMenuOpen(false);
+        };
+        measure(header.getBoundingClientRect().width);
+        if (typeof ResizeObserver === "undefined") return;
+        const observer = new ResizeObserver(entries => measure(entries[0].contentRect.width));
+        observer.observe(header);
+        return () => observer.disconnect();
+    }, []);
+    useEffect(() => {
+        if (!menuOpen) return;
+        const outside = (event: PointerEvent) => {
+            if (event.target instanceof Node && !headerRef.current?.contains(event.target)) setMenuOpen(false);
+        };
+        const dismiss = (event: KeyboardEvent) => {
+            if (event.key === "Escape") { event.preventDefault(); setMenuOpen(false); toggleRef.current?.focus(); }
+        };
+        const back = (event: Event) => { event.preventDefault(); setMenuOpen(false); toggleRef.current?.focus(); };
+        document.addEventListener("pointerdown", outside);
+        document.addEventListener("keydown", dismiss);
+        window.addEventListener("alfred:back", back, true);
+        return () => { document.removeEventListener("pointerdown", outside); document.removeEventListener("keydown", dismiss); window.removeEventListener("alfred:back", back, true); };
+    }, [menuOpen]);
     const formattedLastRefresh = lastRefreshedAt
         ? `Last updated: ${lastRefreshedAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`
         : "Refresh dashboard";
 
     return (
-        <div className={`dashboard-content-header ${activeView === "schedule" ? "is-schedule-header" : ""}`}>
+        <div ref={headerRef} className={`dashboard-content-header ${activeView === "schedule" ? "is-schedule-header" : ""} ${compact ? "is-compact" : ""}`}>
             <div className="content-header-title-row">
                 {activeView === "home" ? <span className="dashboard-back-placeholder" aria-hidden="true" /> : (
                     <button
@@ -95,6 +132,10 @@ function DashboardHeaderComponent({
                 )}
             </div>
 
+            {compact && <button ref={toggleRef} type="button" className="dashboard-menu-toggle" aria-label="Dashboard menu" aria-expanded={menuOpen} aria-controls={controlsId} onClick={() => setMenuOpen(open => !open)}>{menuOpen ? <X size={20} /> : <Menu size={20} />}</button>}
+            <div id={controlsId} className="dashboard-header-controls" hidden={compact && !menuOpen} onClick={(event) => {
+                if (compact && event.target instanceof Element && event.target.closest("button")) setMenuOpen(false);
+            }}>
             <div className="desktop-dashboard-navigation">
                 <DashboardNav activeView={activeView} handleViewChange={handleViewChange} />
             </div>
@@ -110,9 +151,22 @@ function DashboardHeaderComponent({
                         <RefreshCw size={15} className={isRefreshing ? "animate-spin text-red-500" : ""} />
                     </button>
                 )}
-
-
-
+            {activeView === "schedule" && <div className="schedule-header-bulk-actions">
+                <button className="section-clear-btn" type="button" disabled={isScheduleClearing || !hasScheduleForDate} onClick={onClearScheduleDay} title={`Clear schedule for ${scheduleDate}`}>Clear day</button>
+                <button className="section-clear-btn" type="button" disabled={isScheduleClearing} onClick={onClearScheduleAll}>Clear all dates</button>
+                <button className="section-add-trigger" type="button" aria-label="Add schedule item" disabled={isScheduleClearing} aria-haspopup="dialog" aria-expanded={isScheduleDialogOpen} onClick={() => {
+                    if (onAddSchedule) { onAddSchedule(); return; }
+                    setScheduleError(""); setNewScheduleDate(scheduleDate); setIsScheduleDialogOpen(true);
+                }}><Plus size={18} aria-hidden="true" /><span>Add event</span></button>
+            </div>}
+            {(activeView === "tasks" || activeView === "todo") && <div className="task-header-buttons">
+                <button className="section-clear-btn" type="button" aria-label="Clear all tasks" onClick={handleClearAllTasks} disabled={activeTasks.length === 0}>Clear all</button>
+                <button className="section-add-trigger" type="button" aria-label="Add to-do item" aria-haspopup="dialog" aria-expanded={isTaskDialogOpen} onClick={() => {
+                    if (onAddTask) { onAddTask(); return; }
+                    setTaskError(""); setIsTaskDialogOpen(true);
+                }}><Plus size={18} aria-hidden="true" /><span>Add task</span></button>
+            </div>}
+            </div>
             {activeView === "schedule" && (
                 <div className="schedule-header-actions">
                     <div className="schedule-timeline-toolbar">
@@ -174,26 +228,6 @@ function DashboardHeaderComponent({
                         </div>
                     </div>
 
-                    <div className="schedule-header-bulk-actions">
-                    <button className="section-clear-btn" type="button" disabled={isScheduleClearing || !hasScheduleForDate} onClick={onClearScheduleDay} title={`Clear schedule for ${scheduleDate}`}>Clear day</button>
-                    <button className="section-clear-btn" type="button" disabled={isScheduleClearing} onClick={onClearScheduleAll}>Clear all dates</button>
-                    <button
-                        className="section-add-trigger"
-                        type="button"
-                        aria-label="Add schedule item"
-                        disabled={isScheduleClearing}
-                        aria-haspopup="dialog"
-                        aria-expanded={isScheduleDialogOpen}
-                        onClick={() => {
-                            setScheduleError("");
-                            setNewScheduleDate(scheduleDate);
-                            setIsScheduleDialogOpen(true);
-                        }}
-                    >
-                        <Plus size={18} aria-hidden="true" />
-                        <span>Add event</span>
-                    </button>
-                    </div>
                 </div>
             )}
 
@@ -203,30 +237,6 @@ function DashboardHeaderComponent({
                         {activeTasks.filter((task) => !task.completed).length} remaining
                         <span aria-hidden="true"> · </span>{activeTasks.length} total
                     </span>
-                        <button
-                            className="section-clear-btn"
-                            type="button"
-                            aria-label="Clear all tasks"
-                            title="Clear all tasks"
-                            onClick={handleClearAllTasks}
-                            disabled={activeTasks.length === 0}
-                        >
-                            Clear all
-                        </button>
-                    <button
-                        className="section-add-trigger"
-                        type="button"
-                        aria-label="Add to-do item"
-                        aria-haspopup="dialog"
-                        aria-expanded={isTaskDialogOpen}
-                        onClick={() => {
-                            setTaskError("");
-                            setIsTaskDialogOpen(true);
-                        }}
-                    >
-                        <Plus size={18} aria-hidden="true" />
-                        <span>Add task</span>
-                    </button>
                 </div>
             )}
         </div>

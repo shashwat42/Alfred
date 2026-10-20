@@ -1,6 +1,6 @@
 import { notePlainText } from "../../lib/noteText.ts";
 import { useState, useMemo, memo, type KeyboardEvent } from "react";
-import { Clock } from "lucide-react";
+import { Clock, SquarePen } from "lucide-react";
 import type { ScheduleItem, TaskItem } from "../../types/dashboard.ts";
 import type { NoteItem } from "../../types/notes.ts";
 import { getRelativeTimeBadge, parseTimeToMinutes } from "../../utils/scheduleUtils.ts";
@@ -21,6 +21,8 @@ function UpcomingViewComponent({
     hasNotes = recentNotes.length > 0,
     onOpenNote,
     onSaveQuickNote,
+    onEditTask,
+    onEditSchedule,
 }: {
     scheduleItems?: ScheduleItem[];
     priorityTasks?: TaskItem[];
@@ -29,6 +31,8 @@ function UpcomingViewComponent({
     hasNotes?: boolean;
     onOpenNote?: (note: NoteItem) => void;
     onSaveQuickNote?: (text: string) => Promise<void>;
+    onEditTask?: (task: TaskItem) => void;
+    onEditSchedule?: (item: ScheduleItem) => void;
 }) {
     const [noteText, setNoteText] = useState("");
 
@@ -119,6 +123,7 @@ function UpcomingViewComponent({
                                                     {relTime}
                                                 </span>
                                             )}
+                                            {item._id && onEditSchedule && <button type="button" className="schedule-edit-btn" aria-label={`Edit schedule: ${item.topic}`} title="Edit schedule" onClick={() => onEditSchedule(item)}><SquarePen size={17} /></button>}
                                         </div>
                                     );
                                 })
@@ -146,6 +151,7 @@ function UpcomingViewComponent({
                                                 {t.priority}
                                             </span>
                                         )}
+                                            {onEditTask && <button type="button" className="task-edit-btn" title="Edit task" aria-label={`Edit "${t.task}"`} onClick={() => onEditTask(t)}><SquarePen size={17} /></button>}
                                     </div>
                                 ))
                             ) : (
@@ -174,6 +180,15 @@ function UpcomingViewComponent({
                                         className="upcoming-recent-note-card"
                                         onClick={() => onOpenNote?.(note)}
                                         title={`Open ${displayTitle}`}
+                                        role="button"
+                                        tabIndex={0}
+                                        aria-label={`Edit note: ${displayTitle}`}
+                                        onKeyDown={(event) => {
+                                            if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
+                                                event.preventDefault();
+                                                onOpenNote?.(note);
+                                            }
+                                        }}
                                     >
                                         <div className="recent-note-preview-box">
                                             <p className="recent-note-preview-text">
@@ -185,6 +200,7 @@ function UpcomingViewComponent({
                                                 {displayTitle}
                                             </span>
                                             <span className="recent-note-date">{formattedDate}</span>
+                                            <button type="button" className="note-card-edit-btn" aria-label={`Edit note: ${displayTitle}`} title="Edit note" onClick={(event) => { event.stopPropagation(); onOpenNote?.(note); }}><SquarePen size={17} /></button>
                                         </div>
                                     </div>
                                 );

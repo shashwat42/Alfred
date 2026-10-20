@@ -76,6 +76,24 @@ export function useSchedule(accountId: string | undefined, todayDateStr: string)
     const [scheduleError, setScheduleError] = useState("");
     
     const [isScheduleDialogOpen, setIsScheduleDialogOpen] = useState(false);
+    const [editingSchedule, setEditingSchedule] = useState<ScheduleItem | null>(null);
+    function handleStartNewSchedule() {
+        setEditingSchedule(null);
+        setNewScheduleDate(scheduleDate);
+        setNewScheduleTime("");
+        setNewScheduleTopic("");
+        setScheduleError("");
+        setIsScheduleDialogOpen(true);
+    }
+    function handleEditSchedule(item: ScheduleItem) {
+        if (!item._id || clearRequest.current || submission.current) return;
+        setEditingSchedule(item);
+        setNewScheduleDate(item.date);
+        setNewScheduleTime(item.time);
+        setNewScheduleTopic(item.topic);
+        setScheduleError("");
+        setIsScheduleDialogOpen(true);
+    }
     const [isCalendarOpen, setIsCalendarOpen] = useState(false);
     
     const currentHourRef = useRef<HTMLDivElement | null>(null);
@@ -207,8 +225,8 @@ export function useSchedule(accountId: string | undefined, todayDateStr: string)
 
         setScheduleError("");
         try {
-            const response = await apiFetch("/api/schedule", {
-                method: "POST",
+            const response = await apiFetch(editingSchedule ? `/api/schedule/${editingSchedule._id}` : "/api/schedule", {
+                method: editingSchedule ? "PATCH" : "POST",
                 body: JSON.stringify({ schedule: { time, topic, date: newScheduleDate } }),
             });
             if (!response.ok) {
@@ -216,25 +234,25 @@ export function useSchedule(accountId: string | undefined, todayDateStr: string)
                 throw new Error(errorData?.error || `Request failed: ${response.status}`);
             }
 
-            const data: { schedule: ScheduleItem } = await response.json();
+            const data: ScheduleItem | { schedule: ScheduleItem } = await response.json();
+            const saved = "schedule" in data ? data.schedule : data;
+            loadGeneration.current++;
+            if (editingSchedule) invalidateScheduleCache(editingSchedule.date);
             invalidateScheduleCache(newScheduleDate);
             invalidateScheduleCache(todayDateStr);
-            if (data.schedule.date === todayDateStr) {
-                setTodaySchedule((curr) =>
-                    [...curr, data.schedule].sort((a, b) => a.time.localeCompare(b.time))
-                );
-            }
-            if (data.schedule.date === scheduleDate) {
-                setTimelineSchedule((curr) =>
-                    [...curr, data.schedule].sort((a, b) => a.time.localeCompare(b.time))
-                );
-            }
+            invalidateScheduleCache(scheduleDate);
+            const updateDay = (items: ScheduleItem[], date: string) => {
+                const remaining = items.filter(item => item._id !== saved._id);
+                return (saved.date === date ? [...remaining, saved] : remaining).sort((a, b) => a.time.localeCompare(b.time));
+            };
+            setTodaySchedule(curr => updateDay(curr, todayDateStr));
+            setTimelineSchedule(curr => updateDay(curr, scheduleDate));
             setNewScheduleTime("");
             setNewScheduleTopic("");
             setIsScheduleDialogOpen(false);
         } catch (error) {
-            console.error("Could not add schedule item:", error);
-            setScheduleError(error instanceof Error ? error.message : "Could not add schedule item. Please try again.");
+            console.error("Could not save schedule item:", error);
+            setScheduleError(error instanceof Error ? error.message : "Could not save schedule item. Please try again.");
         } finally { submission.current = false; setSubmitting(false); }
     }
 
@@ -315,6 +333,9 @@ export function useSchedule(accountId: string | undefined, todayDateStr: string)
         setIsCalendarOpen,
         currentHourRef,
         handleAddSchedule,
+        handleEditSchedule,
+        handleStartNewSchedule,
+        editingSchedule,
         handleDeleteSchedule,
         handleClearSchedules,
         handlePrevDay,

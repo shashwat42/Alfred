@@ -58,6 +58,12 @@ export function NotesView({
     const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "unsaved">("saved");
     const [currentFontSize, setCurrentFontSize] = useState<number>(15);
     const [formatOpen, setFormatOpen] = useState(false);
+    const formatToggleRef = useRef<HTMLButtonElement | null>(null);
+    const closeFormatting = () => {
+        setFormatOpen(false);
+        setIsFontSizeMenuOpen(false);
+        formatToggleRef.current?.focus();
+    };
     const [copyFeedback, setCopyFeedback] = useState("");
     const selectedRange = useRef<Range | null>(null);
     const [isFontSizeMenuOpen, setIsFontSizeMenuOpen] = useState(false);
@@ -457,7 +463,12 @@ export function NotesView({
     // ----------------------------------------------------
     if (isEditorOpen) {
         return (
-            <div key="note-editor" className="note-editor-wrapper">
+            <div key="note-editor" className="note-editor-wrapper" onKeyDown={(event) => {
+                if (event.key === "Escape" && formatOpen) {
+                    event.preventDefault();
+                    closeFormatting();
+                }
+            }}>
                 <ErrorNotice message={operationError} />
                 {/* Editor Header */}
                 <div className="note-editor-header">
@@ -473,6 +484,7 @@ export function NotesView({
                         <input
                             type="text"
                             className="note-editor-title-input"
+                            aria-label="Note title"
                             placeholder="Title"
                             value={title}
                             onChange={(e) => {
@@ -483,6 +495,10 @@ export function NotesView({
                     </div>
 
                     <div className="note-editor-header-right">
+                        <button ref={formatToggleRef} type="button" className="note-format-toggle" aria-label="Toggle formatting sidebar" title="Formatting" aria-expanded={formatOpen} aria-controls="note-formatting" onPointerDown={rememberSelection} onClick={() => {
+                            setFormatOpen(!formatOpen);
+                            setIsFontSizeMenuOpen(false);
+                        }}><Type size={18} /><span>Formatting</span></button>
                         {/* Prominent Save / Status Action Button */}
                         <button
                             type="button"
@@ -513,24 +529,31 @@ export function NotesView({
                 </div>
 
                 {/* Editor Visual Canvas */}
+                <div className="note-editor-workspace">
                 <div className="note-editor-body">
                     <div
                         ref={editorRef}
                         contentEditable
                         suppressContentEditableWarning
                         className="note-editor-rich-canvas"
+                        role="textbox"
+                        aria-label="Note content"
+                        aria-multiline="true"
                         onInput={handleEditorInput}
                         onKeyDown={handleEditorKeyDown}
                         onKeyUp={() => { checkActiveFormats(); rememberSelection(); }}
                         onMouseUp={() => { checkActiveFormats(); rememberSelection(); }}
+                        onTouchEnd={rememberSelection}
                         data-placeholder="Start typing your note here..."
                     />
                 </div>
 
-                {/* Editor Bottom Formatting Bar */}
-                <button type="button" className="note-format-toggle" aria-expanded={formatOpen} aria-controls="note-formatting" onPointerDown={rememberSelection} onClick={() => setFormatOpen(!formatOpen)}><Type size={18} />Formatting</button>
-                <p className="note-copy-feedback" role="status">{copyFeedback}</p>
-                <div id="note-formatting" className="note-editor-bottom-bar" hidden={!formatOpen}>
+                <aside id="note-formatting" className="note-format-sidebar" aria-label="Formatting" hidden={!formatOpen} onPointerDownCapture={rememberSelection}>
+                    <div className="note-format-sidebar-header">
+                        <strong>Formatting</strong>
+                        <button type="button" className="note-editor-icon-btn" aria-label="Close formatting sidebar" onClick={closeFormatting}><X size={18} /></button>
+                    </div>
+                    <div className="note-format-tools">
                     <button type="button" className="note-format-btn" title="Copy content" aria-label="Copy content" onClick={() => {
                         if (!navigator.clipboard?.writeText) { setCopyFeedback("Copy is unavailable. Please select and copy the text."); return; }
                         void navigator.clipboard.writeText(notePlainText(content)).then(() => setCopyFeedback("Copied content.")).catch(() => setCopyFeedback("Could not copy. Please select and copy the text."));
@@ -664,7 +687,10 @@ export function NotesView({
                     >
                         <Redo2 size={17} />
                     </button>
+                    </div>
+                </aside>
                 </div>
+                <p className="note-copy-feedback" role="status">{copyFeedback}</p>
             </div>
         );
     }
@@ -802,6 +828,7 @@ export function NotesView({
                                                     {displayTitle}
                                                 </h4>
                                                 <span className="note-card-date">{displayDate}</span>
+                                                <button type="button" className="note-card-edit-btn" aria-label={`Edit note: ${displayTitle}`} title="Edit note" onClick={(event) => { event.stopPropagation(); onSelectNote(note); }}><SquarePen size={17} /></button>
                                             </div>
                                         </div>
                                     );

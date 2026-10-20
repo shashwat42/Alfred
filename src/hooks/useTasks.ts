@@ -18,6 +18,23 @@ export function useTasks(accountId: string | undefined) {
     const [newTaskPriority, setNewTaskPriority] = useState<TaskPriority>("normal");
     const [taskError, setTaskError] = useState("");
     const [isTaskDialogOpen, setIsTaskDialogOpen] = useState(false);
+    const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+
+    function handleStartNewTask() {
+        setEditingTaskId(null);
+        setNewTask("");
+        setNewTaskPriority("normal");
+        setTaskError("");
+        setIsTaskDialogOpen(true);
+    }
+
+    function handleEditTask(item: TaskItem) {
+        setEditingTaskId(item._id);
+        setNewTask(item.task);
+        setNewTaskPriority(item.priority ?? "normal");
+        setTaskError("");
+        setIsTaskDialogOpen(true);
+    }
 
     const loadTasks = useCallback(async () => run(async () => {
         if (!accountId) return;
@@ -63,8 +80,8 @@ export function useTasks(accountId: string | undefined) {
 
         setTaskError("");
         try {
-            const response = await apiFetch("/api/tasks", {
-                method: "POST",
+            const response = await apiFetch(editingTaskId ? `/api/tasks/${editingTaskId}` : "/api/tasks", {
+                method: editingTaskId ? "PATCH" : "POST",
                 body: JSON.stringify({ task: taskName, priority: newTaskPriority }),
             });
             if (!response.ok) {
@@ -73,13 +90,16 @@ export function useTasks(accountId: string | undefined) {
             }
 
             const data = (await response.json()) as TaskItem;
-            setTask((currentTasks) => [data, ...currentTasks]);
+            setTask((currentTasks) => editingTaskId
+                ? currentTasks.map(item => item._id === editingTaskId ? data : item)
+                : [data, ...currentTasks]);
+            if (!editingTaskId) setTaskPage(0);
             setNewTask("");
             setNewTaskPriority("normal");
             setIsTaskDialogOpen(false);
         } catch (error) {
-            console.error("Could not add to-do:", error);
-            setTaskError(error instanceof Error ? error.message : "Could not add to-do. Please try again.");
+            console.error("Could not save task:", error);
+            setTaskError(error instanceof Error ? error.message : "Could not save task. Please try again.");
         } finally { submission.current = false; setSubmitting(false); }
     }
 
@@ -164,6 +184,9 @@ export function useTasks(accountId: string | undefined) {
         isTaskDialogOpen,
         setIsTaskDialogOpen,
         handleAddTask,
+        handleEditTask,
+        handleStartNewTask,
+        editingTaskId,
         handleToggleTaskComplete,
         handleDeleteTask,
         handleClearAllTasks,

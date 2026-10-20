@@ -2,12 +2,15 @@ import assert from "node:assert/strict";
 import { act, createElement } from "react";
 import { Window } from "happy-dom";
 import { createServer } from "vite";
+import { indexedDB } from "fake-indexeddb";
+import type { useTasks as TasksHook } from "../src/hooks/useTasks.ts";
+import type { useSchedule as ScheduleHook } from "../src/hooks/useSchedule.ts";
 
 const dom = new Window({ url: "http://localhost:5173/" });
-const names = ["window", "document", "navigator", "Event", "CustomEvent", "HTMLElement", "Node", "IS_REACT_ACT_ENVIRONMENT"] as const;
+const names = ["window", "document", "navigator", "localStorage", "indexedDB", "Event", "CustomEvent", "HTMLElement", "Element", "Node", "IS_REACT_ACT_ENVIRONMENT"] as const;
 const saved = new Map(names.map(name => [name, Object.getOwnPropertyDescriptor(globalThis, name)]));
 const originalFetch = globalThis.fetch;
-for (const name of names) Object.defineProperty(globalThis, name, { configurable: true, writable: true, value: name === "IS_REACT_ACT_ENVIRONMENT" ? true : dom[name as keyof Window] });
+for (const name of names) Object.defineProperty(globalThis, name, { configurable: true, writable: true, value: name === "IS_REACT_ACT_ENVIRONMENT" ? true : name === "indexedDB" ? indexedDB : dom[name as keyof Window] });
 Object.defineProperty(document, "queryCommandState", { value: () => false });
 let copied = "";
 Object.defineProperty(navigator, "clipboard", { value: { writeText: async (text: string) => { copied = text; } } });
@@ -27,6 +30,17 @@ try {
   assert.equal(formatting().hidden, false);
   await act(async () => document.querySelector<HTMLButtonElement>('button[aria-label="Copy content"]')!.click());
   assert.equal(copied, "Today I wanted\nHello\nThird line\nHidden line");
+  assert.equal(formatting().tagName, "ASIDE", "Formatting is a sidebar beside the canvas");
+  assert.equal(formatting().parentElement, document.querySelector(".note-editor-workspace"));
+  await act(async () => document.querySelector<HTMLButtonElement>('button[aria-label="Close formatting sidebar"]')!.click());
+  assert.equal(formatting().hidden, true);
+  assert.equal(document.activeElement, document.querySelector(".note-format-toggle"));
+  await act(async () => document.querySelector<HTMLButtonElement>(".note-format-toggle")!.click());
+  await act(async () => document.querySelector(".note-format-sidebar button")!.dispatchEvent(new dom.KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+  assert.equal(formatting().hidden, true, "Escape closes the sidebar");
+  await act(async () => document.querySelector<HTMLButtonElement>(".note-format-toggle")!.click());
+  await act(async () => document.querySelector<HTMLButtonElement>(".note-format-toggle")!.click());
+  assert.equal(formatting().hidden, true, "Header toggle closes the sidebar");
   const editor = document.querySelector<HTMLElement>(".note-editor-rich-canvas")!;
   await act(async () => { editor.innerHTML = "<p>Unsaved edit</p>"; editor.dispatchEvent(new dom.Event("input", { bubbles: true })); });
   await act(async () => window.dispatchEvent(new Event("alfred:back", { cancelable: true }))); await settle();
@@ -137,7 +151,110 @@ try {
   } finally {
     if (originalAgent) Object.defineProperty(navigator, "userAgent", originalAgent); else Reflect.deleteProperty(navigator, "userAgent");
   }
-  console.log("PASS: Android header/voice states and button visibility, shared/individual empty states, four mobile destinations, workspace links, Home, collapsed formatting, multiline copy/previews, save-before-back, tutorial return, offline/server recovery, preserved drafts and 404.");
+  const { useTasks } = await server.ssrLoadModule("/src/hooks/useTasks.ts");
+  const { apiFetch } = await server.ssrLoadModule("/src/lib/api.ts");
+  const accountId = "111111111111111111111111";
+  const session = { token: "isolated-ui-token", account: { id: accountId, type: "user" } };
+  localStorage.setItem("alfred_session", JSON.stringify(session));
+  const { useSchedule } = await server.ssrLoadModule("/src/hooks/useSchedule.ts");
+  let schedule!: ReturnType<typeof ScheduleHook>;
+  function ScheduleHarness() { schedule = useSchedule(accountId, "2026-10-20"); return null; }
+  const event = (await (await apiFetch("/api/schedule", { method: "POST", body: JSON.stringify({ schedule: { topic: "Original event", date: "2026-10-20", time: "10:00" } }) })).json()).schedule;
+  await act(async () => root.render(createElement(ScheduleHarness))); await settle();
+  await act(async () => schedule.setScheduleSelectedDate(new Date("2026-10-20T12:00:00"))); await settle();
+  await act(async () => schedule.handleEditSchedule(event));
+  assert.equal(schedule.newScheduleTopic, "Original event"); assert.equal(schedule.newScheduleTime, "10:00");
+  await act(async () => { schedule.setNewScheduleDate("2026-10-21"); schedule.setNewScheduleTime("11:30"); schedule.setNewScheduleTopic("Edited event"); });
+  await act(async () => schedule.handleAddSchedule({ preventDefault() {} } as Parameters<typeof schedule.handleAddSchedule>[0]));
+  assert.equal(schedule.todaySchedule.length, 0); assert.equal(schedule.timelineSchedule.length, 0, "Moving an event removes it from its old date");
+  const moved = await (await apiFetch("/api/schedule?date=2026-10-21")).json();
+  assert.equal(moved.length, 1); assert.equal(moved[0]._id, event._id); assert.equal(moved[0].topic, "Edited event"); assert.equal(moved[0].time, "11:30");
+  await act(async () => schedule.setScheduleSelectedDate(new Date("2026-10-21T12:00:00"))); await settle();
+  assert.equal(schedule.timelineSchedule[0]._id, event._id, "Moving an event invalidates the destination date cache");
+  await act(async () => schedule.handleStartNewSchedule());
+  assert.equal(schedule.editingSchedule, null); assert.equal(schedule.newScheduleTopic, ""); assert.equal(schedule.newScheduleDate, "2026-10-21");
+  const { ScheduleTimelineView } = await server.ssrLoadModule("/src/components/dashboard/ScheduleTimelineView.tsx");
+  let editedEvent = "";
+  await act(async () => root.render(createElement(ScheduleTimelineView, { activeTimelineSchedule: moved, scheduleDate: "2026-10-21", todayDateStr: "2026-10-20", currentMinutes: 600, currentHourRef: { current: null }, handleDeleteSchedule() {}, onEditSchedule: (item: { _id: string }) => { editedEvent = item._id; } })));
+  await act(async () => document.querySelector<HTMLButtonElement>(".schedule-edit-btn")!.click());
+  assert.equal(editedEvent, event._id);
+  const previousResizeObserver = Object.getOwnPropertyDescriptor(globalThis, "ResizeObserver");
+  let resizeHeader: (width: number) => void = () => {};
+  class PanelResizeObserver {
+    constructor(callback: ResizeObserverCallback) { resizeHeader = width => callback([{ contentRect: { width } }] as ResizeObserverEntry[], this as unknown as ResizeObserver); }
+    observe() { resizeHeader(620); }
+    disconnect() {}
+  }
+  Object.defineProperty(globalThis, "ResizeObserver", { configurable: true, value: PanelResizeObserver });
+  try {
+    const { DashboardHeader } = await server.ssrLoadModule("/src/components/dashboard/DashboardHeader.tsx");
+    let navigation = "", added = 0;
+    await act(async () => root.render(createElement(DashboardHeader, { activeView: "tasks", activeTasks: [], handleViewChange: (view: string) => { navigation = view; }, onAddTask: () => { added++; }, onRefresh() {} })));
+    const controls = () => document.querySelector<HTMLElement>(".dashboard-header-controls")!;
+    const menu = () => document.querySelector<HTMLButtonElement>(".dashboard-menu-toggle")!;
+    assert.equal(controls().hidden, true, "Narrow dashboard panels collapse controls");
+    await act(async () => menu().click()); assert.equal(controls().hidden, false);
+    await act(async () => document.querySelector<HTMLButtonElement>('button[aria-label="Notes"]')!.click());
+    assert.equal(navigation, "notes"); assert.equal(controls().hidden, true);
+    await act(async () => menu().click());
+    await act(async () => document.querySelector<HTMLButtonElement>('button[aria-label="Add to-do item"]')!.click());
+    assert.equal(added, 1); assert.equal(controls().hidden, true);
+    await act(async () => menu().click());
+    await act(async () => document.dispatchEvent(new dom.KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    assert.equal(controls().hidden, true); assert.equal(document.activeElement, menu());
+    await act(async () => menu().click());
+    let defaultBack = true;
+    await act(async () => { defaultBack = window.dispatchEvent(new Event("alfred:back", { cancelable: true })); });
+    assert.equal(defaultBack, false); assert.equal(controls().hidden, true, "Android Back closes the menu first");
+    await act(async () => resizeHeader(1000));
+    assert.equal(document.querySelector(".dashboard-menu-toggle"), null); assert.equal(controls().hidden, false, "Wide panels restore inline controls");
+    await act(async () => root.render(createElement("div")));
+  } finally {
+    if (previousResizeObserver) Object.defineProperty(globalThis, "ResizeObserver", previousResizeObserver); else Reflect.deleteProperty(globalThis, "ResizeObserver");
+  }
+  const task = await (await apiFetch("/api/tasks", { method: "POST", body: JSON.stringify({ task: "Original task", priority: "high" }) })).json();
+  await apiFetch(`/api/tasks/${task._id}/complete`, { method: "PATCH", body: JSON.stringify({ completed: true }) });
+  let tasks!: ReturnType<typeof TasksHook>;
+  function TaskHarness() { tasks = useTasks(accountId); return null; }
+  await act(async () => root.render(createElement(TaskHarness))); await settle();
+  await act(async () => tasks.handleEditTask(task));
+  assert.equal(tasks.newTask, "Original task"); assert.equal(tasks.newTaskPriority, "high");
+  await act(async () => { tasks.setNewTask("Edited task"); tasks.setNewTaskPriority("urgent"); });
+  await act(async () => tasks.handleAddTask({ preventDefault() {} } as Parameters<typeof tasks.handleAddTask>[0]));
+  const persisted = await (await apiFetch("/api/tasks")).json();
+  assert.equal(persisted.length, 1, "Editing updates the task without creating a duplicate");
+  assert.equal(persisted[0]._id, task._id); assert.equal(persisted[0].task, "Edited task"); assert.equal(persisted[0].priority, "urgent");
+  assert.equal(persisted[0].completed, true, "Editing preserves completion status");
+  await act(async () => tasks.handleStartNewTask());
+  assert.equal(tasks.editingTaskId, null); assert.equal(tasks.newTask, ""); assert.equal(tasks.newTaskPriority, "normal");
+  const { TodoView } = await server.ssrLoadModule("/src/components/dashboard/TodoView.tsx");
+  let editedId = "";
+  await act(async () => root.render(createElement(TodoView, { visibleTasks: persisted, taskPage: 0, taskPageCount: 1, setTaskPage() {}, handleToggleTaskComplete() {}, handleDeleteTask() {}, onEditTask: (item: { _id: string }) => { editedId = item._id; } })));
+  await act(async () => document.querySelector<HTMLButtonElement>(".task-edit-btn")!.click());
+  assert.equal(editedId, task._id);
+  let editedNote = "";
+  await act(async () => root.render(createElement(NotesView, { ...props, activeNote: null, onSelectNote: (item: { _id: string }) => { editedNote = item._id; } })));
+  await act(async () => document.querySelector<HTMLButtonElement>(".note-card-edit-btn")!.click());
+  assert.equal(editedNote, note._id);
+  const { default: Dashboard } = await server.ssrLoadModule("/src/components/Dashboard.tsx");
+  const { AuthContext } = await server.ssrLoadModule("/src/auth/authContext.ts");
+  const renderDashboard = (view: string) => root.render(createElement(AuthContext.Provider, { value: { session } }, createElement(Dashboard, { currentView: view, onViewChange() {} })));
+  Object.defineProperty(navigator, "userAgent", { configurable: true, value: "Windows NT 10.0" });
+  await act(async () => renderDashboard("home")); await settle();
+  assert.ok(document.querySelector(".focus-session-btn"), "Desktop keeps Focus Session in the header");
+  await act(async () => renderDashboard("workspace")); await settle();
+  assert.equal(document.querySelector(".workspace-hub-focus"), null, "Desktop does not duplicate Focus Session in Workspace");
+  Object.defineProperty(navigator, "userAgent", { configurable: true, value: "Android" });
+  await act(async () => renderDashboard("home")); await settle();
+  assert.equal(document.querySelector(".focus-session-btn"), null, "Android home no longer shows Focus Session");
+  await act(async () => renderDashboard("workspace")); await settle();
+  assert.ok(document.querySelector(".workspace-hub-focus"), "Android Workspace has Focus Session");
+  await act(async () => document.querySelector<HTMLButtonElement>(".workspace-hub-focus")!.click());
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 400)); });
+  assert.ok(document.querySelector(".is-focus-mode"), "Workspace opens Focus Session");
+  const { deleteLocalWorkspace } = await server.ssrLoadModule("/src/lib/localWorkspace.ts");
+  await deleteLocalWorkspace(accountId);
+  console.log("PASS: Schedule editing/moving between dates, task editing, responsive burger menu/navigation/actions/Escape, note editing, Android Workspace focus navigation, formatting and workspace checks.");
 } finally {
   await act(async () => root.unmount()); await server.close(); await dom.happyDOM.abort();
   globalThis.fetch = originalFetch;
