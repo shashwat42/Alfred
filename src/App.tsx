@@ -152,12 +152,13 @@ const App = () => {
 
   const handleMobileNavigate = (destination: MobileNavDestination) => {
     navigateSafely(() => {
-    if (destination === "assistant") {
-      setMobileTab("assistant");
-    } else {
-      setMobileTab("dashboard");
-      setCurrentView(destination === "dashboard" ? "home" : destination);
-    }
+      if (destination === "assistant") {
+        setIsSidebarCollapsed(false);
+        setMobileTab("assistant");
+      } else {
+        setMobileTab("dashboard");
+        setCurrentView(destination === "dashboard" ? "home" : destination);
+      }
     });
   };
 

@@ -111,16 +111,6 @@ function DashboardHeaderComponent({
     return (
         <div ref={headerRef} className={`dashboard-content-header ${activeView === "schedule" ? "is-schedule-header" : ""} ${useBurgerMenu ? "is-compact" : ""}`}>
             <div className="content-header-title-row">
-                {activeView === "home" ? <span className="dashboard-back-placeholder" aria-hidden="true" /> : (
-                    <button
-                        type="button"
-                        className="dashboard-back-btn"
-                        onClick={() => { const event = new Event("alfred:back", { cancelable: true }); if (window.dispatchEvent(event)) handleViewChange("home"); }}
-                        aria-label="Back to previous screen"
-                    >
-                        <ArrowLeft size={18} aria-hidden="true" />
-                    </button>
-                )}
                 <h2 className="dashboard-section-title">
                     {activeView === "home" && "UPCOMING"}
                     {activeView === "workspace" && "WORKSPACE"}
@@ -129,6 +119,12 @@ function DashboardHeaderComponent({
                     {(activeView === "notes" || activeView === "mails") && "NOTES"}
                     {activeView === "settings" && "SETTINGS"}
                 </h2>
+                {isAndroid && activeView !== "home" && <button
+                    type="button"
+                    className="dashboard-back-btn"
+                    onClick={() => { const event = new Event("alfred:back", { cancelable: true }); if (window.dispatchEvent(event)) handleViewChange("home"); }}
+                    aria-label="Back to previous screen"
+                ><ArrowLeft size={18} aria-hidden="true" /></button>}
 
                 {activeView === "home" && !isAndroid && (
                     <button
