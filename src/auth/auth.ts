@@ -157,6 +157,7 @@ let inFlightInitPromise: Promise<AuthSession | null> | null = null;
 export function clearSession(): void {
   try {
     localStorage.removeItem(AUTH_STORAGE_KEY);
+    localStorage.removeItem(GUEST_CHOICE_KEY);
     cachedTicket = null;
     cachedAuthError = null;
     hasCheckedUrl = false;
@@ -196,7 +197,7 @@ export async function createGuestSession(replaceExisting = false): Promise<AuthS
     }
 
     const sessionData = (await response.json()) as AuthSession;
-    if (!sessionData?.token || !sessionData?.account?.id) {
+    if (!sessionData?.token || !sessionData?.account?.id || sessionData.account.type !== "guest") {
       throw new Error("Invalid guest session data received from server");
     }
     if (getSession()?.token !== previous?.token) throw new Error("Your account changed. Please try again.");
@@ -209,6 +210,31 @@ export async function createGuestSession(replaceExisting = false): Promise<AuthS
     }
     setSession(sessionData);
     return sessionData;
+}
+
+let logoutInFlight: Promise<AuthSession> | null = null;
+/** Sign out of the current account, then start a separate, empty guest workspace. */
+export function logoutToGuest(): Promise<AuthSession> {
+  if (logoutInFlight) return logoutInFlight;
+  const previous = getSession();
+  logoutInFlight = (async () => {
+    if (previous) {
+      const response = await fetch(`${API_BASE_URL}/auth/logout`, {
+        method: "POST", signal: AbortSignal.timeout(20_000),
+        headers: { Authorization: `Bearer ${previous.token}`, "ngrok-skip-browser-warning": "true" },
+      });
+      if (!response.ok && response.status !== 401) throw new Error("Sign-out failed. Please try again.");
+      if (getSession()?.token !== previous.token) throw new Error("Your account changed. Please try again.");
+    }
+    clearPendingDesktopAuth();
+    setAuthCompletionCallback(null);
+    clearSession();
+    const guest = await createGuestSession();
+    confirmGuestAccount(guest);
+    dispatchAuthChange(guest);
+    return guest;
+  })().finally(() => { logoutInFlight = null; });
+  return logoutInFlight;
 }
 
 export class SessionRecoveryError extends Error {
@@ -365,6 +391,8 @@ export function clearPendingDesktopAuth(): void {
  * Supports optional PKCE code_verifier for desktop authorization handoff.
  */
 export async function exchangeTicket(ticket: string, codeVerifier?: string, expectedState?: string): Promise<AuthSession> {
+  const sourceToken = getSession()?.token;
+  const pendingState = getPendingDesktopAuth()?.state;
   const response = await fetch(`${API_BASE_URL}/auth/exchange`, {
     method: "POST",
     headers: {
@@ -388,7 +416,9 @@ export async function exchangeTicket(ticket: string, codeVerifier?: string, expe
   }
 
   if (expectedState && getPendingDesktopAuth()?.state !== expectedState) throw new Error("This sign-in attempt was replaced. Please use the latest Google sign-in window.");
+  if (getSession()?.token !== sourceToken || (pendingState && getPendingDesktopAuth()?.state !== pendingState)) throw new Error("Your account changed. Please start Google sign-in again.");
   await migrateLocalGuest(sessionData);
+  if (getSession()?.token !== sourceToken || (pendingState && getPendingDesktopAuth()?.state !== pendingState)) throw new Error("Your account changed. Please start Google sign-in again.");
   setSession(sessionData);
   return sessionData;
 }
@@ -597,6 +627,7 @@ export async function pollDesktopAuthStatus(
         if (signal?.aborted || getPendingDesktopAuth()?.state !== state) return null;
         if (sessionData?.token && sessionData?.account?.id) {
           await migrateLocalGuest(sessionData);
+          if (signal?.aborted || getPendingDesktopAuth()?.state !== state) return null;
           clearPendingDesktopAuth();
           setSession(sessionData);
           triggerAuthCompletionCallback(sessionData);

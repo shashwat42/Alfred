@@ -7318,8 +7318,9 @@ body.is-overlay .overlay-root {
 @media(max-width:768px){.schedule-header-bulk-actions{width:100%}}
 .profile-editor form { display: grid; gap: 12px; }
 .profile-editor .settings-select-input { width: 100%; max-width: 420px; }
-.profile-photo-preview { display: flex; align-items: center; }
-.profile-photo-preview .settings-profile-avatar-img { width: 64px; height: 64px; object-fit: cover; border-radius: 50%; }
+.profile-editor .profile-save-btn { justify-self:start; width:auto; min-height:44px; padding:10px 20px; border:1px solid #f8717150; background:#ef4444; color:#fff; font-weight:600; }
+.profile-editor .profile-save-btn:hover:not(:disabled) { background:#dc2626; }
+.profile-editor .profile-save-btn:disabled { cursor:default; }
 
 /* Account settings and compact workspaces. */
 .settings-view-container input[role="switch"] { appearance:none; -webkit-appearance:none; width:40px; height:24px; border:1px solid #666; border-radius:999px; background:#3f3f46; position:relative; flex-shrink:0; cursor:pointer; transition:background .18s; }

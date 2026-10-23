@@ -61,8 +61,12 @@ export async function activateLocalStorage(accountId: string, maintenance = fals
 }
 export async function copyGuestWorkspace(sourceId: string, targetId: string) {
   const source = await readLocalWorkspace(sourceId);
+  const guestData = mergeWorkspace(source.data, source.pendingCloudData ?? emptyWorkspace());
   await updateLocalWorkspace(targetId, workspace => {
-    workspace.data = mergeWorkspace(workspace.data, mergeWorkspace(source.data, source.pendingCloudData ?? emptyWorkspace()));
+    workspace.data = mergeWorkspace(workspace.data, guestData);
+    // An already-enabled cloud account must upload these records before cloud
+    // reads can replace its device cache. Preserve the existing merge rules.
+    if (cloudSyncEnabled(targetId)) workspace.pendingCloudData = mergeWorkspace(workspace.pendingCloudData ?? emptyWorkspace(), guestData);
     workspace.profile ??= source.profile;
     workspace.sourceAccounts = [...new Set([...(workspace.sourceAccounts ?? []), sourceId, ...(source.sourceAccounts ?? [])])];
   });

@@ -3,6 +3,7 @@ import { act, createElement } from "react";
 import { Window } from "happy-dom";
 import { indexedDB } from "fake-indexeddb";
 import { createServer } from "vite";
+import type { AuthSession } from "../src/auth/auth.ts";
 const dom = new Window({ url: "http://localhost:5173/" });
 const names = ["window", "document", "navigator", "localStorage", "Event", "CustomEvent", "MutationObserver", "IS_REACT_ACT_ENVIRONMENT", "indexedDB"] as const;
 const saved = new Map(names.map(name => [name, Object.getOwnPropertyDescriptor(globalThis, name)]));
@@ -17,34 +18,42 @@ const settle = () => act(async () => { await new Promise(resolve => setTimeout(r
 try {
   const { AuthContext } = await server.ssrLoadModule("/src/auth/authContext.ts");
   const { ProfileEditor } = await server.ssrLoadModule("/src/components/dashboard/ProfileEditor.tsx");
+  const { useAccountProfile } = await server.ssrLoadModule("/src/hooks/useAccountProfile.ts");
   const { readLocalWorkspace, updateLocalWorkspace, deleteLocalWorkspace } = await server.ssrLoadModule("/src/lib/localWorkspace.ts");
-  const guest = { token: "fixture", account: { id: "111111111111111111111111", type: "guest" } };
-  const render = async (session: typeof guest) => {
+  const guest: AuthSession = { token: "fixture", account: { id: "111111111111111111111111", type: "guest" } };
+  function ProfileHarness({ session }: { session: AuthSession }) {
+    const profile = useAccountProfile(session);
+    return createElement("div", { "data-profile-picture": profile.picture ?? "" }, createElement(ProfileEditor));
+  }
+  const resolvedPicture = () => document.querySelector("[data-profile-picture]")!.getAttribute("data-profile-picture");
+  const render = async (session: AuthSession) => {
     localStorage.setItem("alfred_session", JSON.stringify(session));
-    await act(async () => root.render(createElement(AuthContext.Provider, { value: { session } }, createElement(ProfileEditor)))); await settle();
+    await act(async () => root.render(createElement(AuthContext.Provider, { value: { session } }, createElement(ProfileHarness, { session })))); await settle();
   };
   await render(guest); assert.equal(document.querySelector<HTMLInputElement>("#profile-name")!.value, "Guest");
   assert.equal(document.querySelector('input[type="file"]'), null, "Custom photo upload is removed");
-  assert.equal(document.querySelector('img[alt="Google account photo"]'), null, "Guests use initials");
+  assert.equal(document.querySelector('.profile-editor img, .profile-editor .settings-profile-avatar-circle'), null, "Edit profile only contains name editing");
+  assert.equal(resolvedPicture(), "", "Guests have no profile photo");
   const name = document.querySelector<HTMLInputElement>("#profile-name")!;
   await act(async () => { Object.getOwnPropertyDescriptor(dom.HTMLInputElement.prototype, "value")!.set!.call(name, "My guest account"); name.dispatchEvent(new dom.Event("input", { bubbles: true })); });
   await act(async () => { document.querySelector("form")!.dispatchEvent(new dom.Event("submit", { bubbles: true, cancelable: true })); }); await settle();
   assert.equal((await readLocalWorkspace(guest.account.id)).profile.name, "My guest account");
   assert.equal((await readLocalWorkspace(guest.account.id)).profile.picture, null);
-  const google = { token: "fixture", account: { id: "222222222222222222222222", type: "user", name: "Google Name", picture: "https://example.test/photo.png" } };
+  const google: AuthSession = { token: "fixture", account: { id: "222222222222222222222222", type: "user", name: "Google Name", picture: "https://example.test/photo.png" } };
   await render(google); assert.equal(document.querySelector<HTMLInputElement>("#profile-name")!.value, "Google Name");
-  assert.equal(document.querySelector<HTMLImageElement>('img[alt="Google account photo"]')?.src, google.account.picture);
+  assert.equal(resolvedPicture(), google.account.picture);
+  assert.equal(document.querySelector('.profile-editor img, .profile-editor .settings-profile-avatar-circle'), null, "Google photo stays outside the edit section");
   for (const picture of [photo, null]) {
     await updateLocalWorkspace(google.account.id, (workspace: { profile?: unknown }) => { workspace.profile = { name: "Saved name", picture, updatedAt: new Date().toISOString() }; });
     await act(async () => window.dispatchEvent(new Event("alfred:profile-changed"))); await settle();
     assert.equal(document.querySelector<HTMLInputElement>("#profile-name")!.value, "Saved name", "Custom names are preserved");
-    assert.equal(document.querySelector<HTMLImageElement>('img[alt="Google account photo"]')?.src, google.account.picture, "Saved custom or removed photos cannot override Google");
+    assert.equal(resolvedPicture(), google.account.picture, "Saved custom or removed photos cannot override Google");
   }
   assert.equal(document.querySelector('input[type="file"]'), null);
   assert.ok(!document.body.textContent!.includes("Remove photo"));
   assert.ok(!document.body.textContent!.includes("Photos are cropped"));
   await render({ token: "fixture", account: { ...google.account, picture: undefined } });
-  assert.equal(document.querySelector('img[alt="Google account photo"]'), null, "Missing Google photos fall back to initials");
+  assert.equal(resolvedPicture(), "", "Missing Google photos use the normal fallback");
   await deleteLocalWorkspace(guest.account.id); await deleteLocalWorkspace(google.account.id);
   console.log("PASS: Editable names, Google-only photos, initials fallback, ignored legacy photo overrides, removed upload controls and account isolation.");
 } finally {

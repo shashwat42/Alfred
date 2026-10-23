@@ -2,7 +2,7 @@ import "fake-indexeddb/auto";
 import { IDBObjectStore } from "fake-indexeddb";
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { AUTH_STORAGE_KEY, getSession, restoreAuthSession } from "../../src/auth/auth.ts";
+import { AUTH_STORAGE_KEY, GUEST_CHOICE_KEY, clearPendingDesktopAuth, exchangeTicket, getSession, logoutToGuest, restoreAuthSession, savePendingDesktopAuth } from "../../src/auth/auth.ts";
 import { apiFetch } from "../../src/lib/api.ts";
 import { readLocalWorkspace, updateLocalWorkspace, cloudSyncEnabled, deleteLocalWorkspace, copyGuestWorkspace, setCloudSyncEnabled } from "../../src/lib/localWorkspace.ts";
 import { changeCloudSync, reconcileCloudSync } from "../../src/lib/cloudStorage.ts";
@@ -140,6 +140,67 @@ test("guest linking copies locally without opting in and account deletion clears
   await deleteLocalWorkspace(other);
   assert.deepEqual((await readLocalWorkspace(account)).data, emptyWorkspace());
   assert.deepEqual((await readLocalWorkspace(other)).data, emptyWorkspace());
+});
+
+for (const enabled of [false, true]) test(`repeated Google sign-in merges each guest and logout starts empty (cloud=${enabled})`, async () => {
+  const target = enabled ? "333333333333333333333333" : "444444444444444444444444";
+  const source = enabled ? "555555555555555555555555" : "666666666666666666666666";
+  const google = { token: "google-token", account: { id: target, type: "user" as const } };
+  const original = globalThis.fetch;
+  const record = (id: string) => ({ _id: id, createdAt: "2026-10-01T00:00:00Z", updatedAt: "2026-10-01T00:00:00Z" });
+  let cloud = { tasks: [record("google-task")], notes: [record("google-note")], schedule: [record("google-event")] };
+  let newGuests = 0, uploads = 0;
+  await updateLocalWorkspace(target, workspace => { workspace.data = structuredClone(cloud); });
+  setCloudSyncEnabled(target, enabled);
+  storage.setItem(AUTH_STORAGE_KEY, JSON.stringify({ token: "initial-guest", account: { id: source, type: "guest" } }));
+  globalThis.fetch = async (url, init) => {
+    const path = new URL(String(url)).pathname;
+    if (path === "/auth/exchange") return Response.json(google);
+    if (path === "/auth/logout") return Response.json({ ok: true });
+    if (path === "/auth/guest") return Response.json({ token: `fresh-${++newGuests}`, account: { id: `${source}-fresh-${newGuests}`, type: "guest" } });
+    if (path.endsWith("/preference")) return Response.json({ enabled });
+    if (path === "/api/tasks") return Response.json(cloud.tasks);
+    if (path === "/api/account/cloud-sync") {
+      if (init?.method === "PUT") { uploads++; cloud = JSON.parse(String(init.body)).data; }
+      return Response.json({ data: cloud, enabled, revision: uploads });
+    }
+    throw new Error(`Unexpected test request: ${path}`);
+  };
+  try {
+    for (let cycle = 1; cycle <= 2; cycle++) {
+      const guestId = getSession()!.account.id;
+      assert.deepEqual((await readLocalWorkspace(guestId)).data, emptyWorkspace(), "Each guest starts empty");
+      await updateLocalWorkspace(guestId, workspace => {
+        workspace.data = { tasks: [record(`guest-task-${cycle}`)], notes: [record(`guest-note-${cycle}`)], schedule: [record(`guest-event-${cycle}`)] };
+      });
+      savePendingDesktopAuth(`login-${cycle}`, "verifier");
+      await exchangeTicket(`ticket-${cycle}`, "verifier", `login-${cycle}`);
+      clearPendingDesktopAuth();
+      if (enabled) {
+        // A cloud read can refresh the cache before reconciliation runs.
+        await apiFetch("/api/tasks");
+        assert.equal((await readLocalWorkspace(target)).pendingCloudData?.tasks.length, 1);
+      }
+      await reconcileCloudSync(target);
+      const merged = (await readLocalWorkspace(target)).data;
+      for (const kind of ["tasks", "notes", "schedule"] as const) {
+        assert.equal(merged[kind].length, cycle + 1, "Both Google and guest content survive without duplicates");
+        if (enabled) assert.equal(cloud[kind].length, cycle + 1, "Already-enabled Google accounts upload merged content");
+      }
+      assert.equal(cloudSyncEnabled(target), enabled, "Merging preserves the Cloud Sync choice");
+      const fresh = await logoutToGuest();
+      assert.notEqual(fresh.account.id, guestId);
+      assert.notEqual(fresh.account.id, source);
+      assert.equal(storage.getItem(GUEST_CHOICE_KEY), fresh.account.id);
+    }
+    assert.equal(newGuests, 2);
+    assert.equal(uploads, enabled ? 2 : 0);
+    assert.deepEqual((await readLocalWorkspace(getSession()!.account.id)).data, emptyWorkspace());
+  } finally {
+    globalThis.fetch = original; clearPendingDesktopAuth();
+    await deleteLocalWorkspace(target);
+    for (let i = 1; i <= newGuests; i++) await deleteLocalWorkspace(`${source}-fresh-${i}`);
+  }
 });
 
 test("editable names stay local and photos follow the Google session", async () => {
