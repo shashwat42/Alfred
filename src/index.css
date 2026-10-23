@@ -3858,9 +3858,9 @@ body.is-overlay .overlay-root {
 }
 
 .note-format-btn.is-active {
-    background: #2563eb;
-    color: #ffffff;
-    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.35);
+    background: #ef444426;
+    color: #fca5a5;
+    box-shadow: inset 0 0 0 1px #ef444466;
 }
 
 .note-format-btn:disabled {
@@ -3958,8 +3958,8 @@ body.is-overlay .overlay-root {
 }
 
 .note-size-option-btn.active {
-    background: #2563eb;
-    color: #ffffff;
+    background: #ef444426;
+    color: #fca5a5;
 }
 
 .note-format-divider {
@@ -7318,11 +7318,8 @@ body.is-overlay .overlay-root {
 @media(max-width:768px){.schedule-header-bulk-actions{width:100%}}
 .profile-editor form { display: grid; gap: 12px; }
 .profile-editor .settings-select-input { width: 100%; max-width: 420px; }
-.profile-photo-edit { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.profile-photo-edit .settings-profile-avatar-img { width: 64px; height: 64px; object-fit: cover; border-radius: 50%; }
-.profile-photo-picker { position: relative; display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
-.profile-photo-picker input { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: pointer; }
-.profile-photo-picker:focus-within { outline: 2px solid #f87171; outline-offset: 3px; }
+.profile-photo-preview { display: flex; align-items: center; }
+.profile-photo-preview .settings-profile-avatar-img { width: 64px; height: 64px; object-fit: cover; border-radius: 50%; }
 
 /* Account settings and compact workspaces. */
 .settings-view-container input[role="switch"] { appearance:none; -webkit-appearance:none; width:40px; height:24px; border:1px solid #666; border-radius:999px; background:#3f3f46; position:relative; flex-shrink:0; cursor:pointer; transition:background .18s; }
@@ -7344,9 +7341,9 @@ body.is-overlay .overlay-root {
 @media(min-width:769px) { .App:not(.is-android) .dashboard-content-header { padding-right:40px; } .App:not(.is-android) .content-header-title-row { padding-right:0; } }
 .note-editor-bottom-bar { background:transparent; border:0; box-shadow:none; flex-wrap:wrap; }
 .note-editor-bottom-bar[hidden] { display:none; }
-.note-format-toggle { display:flex; align-items:center; align-self:flex-end; gap:8px; background:#34313e; border:1px solid #ffffff14; border-radius:999px; color:#e2dced; padding:10px 18px; min-height:44px; cursor:pointer; transition:background .15s; }
-.note-format-toggle:hover, .note-format-toggle[aria-expanded="true"] { background:#454051; }
-.note-format-toggle:focus-visible { outline:2px solid #c4b5d8; outline-offset:3px; }
+.note-format-toggle { display:flex; align-items:center; align-self:flex-end; gap:8px; background:#3b2323; border:1px solid #ef444433; border-radius:999px; color:#fca5a5; padding:10px 18px; min-height:44px; cursor:pointer; transition:background .15s; }
+.note-format-toggle:hover, .note-format-toggle[aria-expanded="true"] { background:#4b2828; }
+.note-format-toggle:focus-visible { outline:2px solid #f87171; outline-offset:3px; }
 .note-copy-feedback { font-size:12px; color:#a1a1aa; margin:0; }
 .note-copy-feedback:empty { display:none; }
 .task-edit-btn, .note-card-edit-btn { display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; width:36px; height:36px; padding:0; border:0; border-radius:10px; background:transparent; color:#bfb7ca; cursor:pointer; }
@@ -7460,11 +7457,8 @@ html[data-android-keyboard="true"] .App.is-android .mobile-bottom-nav { display:
     .App:not(.is-android) .note-card-box { height:200px; }
     .App:not(.is-android) .upcoming-notes-input { min-height:44px; padding:10px 16px; border:1px solid #ffffff20; border-radius:14px; background:#1c1c1e; box-sizing:border-box; }
     .App:not(.is-android) .upcoming-notes-input:focus { border-color:#b46d6d; outline:2px solid #b46d6d30; }
-    .App:not(.is-android) .upcoming-notes-tag,
-    .App:not(.is-android) .note-format-toggle { background:#432e2e; color:#f1cece; border-color:#a7656538; }
-    .App:not(.is-android) .upcoming-notes-bar:focus-within .upcoming-notes-tag,
-    .App:not(.is-android) .note-format-toggle:hover,
-    .App:not(.is-android) .note-format-toggle[aria-expanded="true"] { background:#563838; }
+    .App:not(.is-android) .upcoming-notes-tag { background:#432e2e; color:#f1cece; border-color:#a7656538; }
+    .App:not(.is-android) .upcoming-notes-bar:focus-within .upcoming-notes-tag { background:#563838; }
 }
 
 /* Compact Android capture pill, with no reserved panel around the input. */
@@ -7493,25 +7487,36 @@ html[data-android-keyboard="true"] .App.is-android .mobile-bottom-nav { display:
     min-width:0;
     padding:8px;
     box-sizing:border-box;
-    border-left:1px solid #ffffff18;
-    background:#26242b;
+    border-left:1px solid #ef444433;
+    background:#251f1f;
     overflow-y:auto;
     overscroll-behavior:contain;
 }
 .note-format-sidebar[hidden] { display:none; }
-.note-format-sidebar-header { display:flex; justify-content:center; margin-bottom:4px; color:#e2dced; }
+.note-format-sidebar-header { display:flex; justify-content:center; margin-bottom:4px; color:#fca5a5; }
 .note-format-sidebar-header .note-editor-icon-btn { width:44px; height:44px; flex-shrink:0; }
 .note-format-tools { display:flex; flex-direction:column; align-items:center; gap:4px; }
 .note-format-tools .note-format-btn { width:44px; height:44px; min-width:44px; min-height:44px; flex-shrink:0; }
 .note-format-size-label { font-size:12px; font-weight:600; line-height:1.15; }
-.note-format-popover { position:absolute; z-index:20; top:0; right:64px; max-height:100%; overflow-y:auto; overscroll-behavior:contain; padding:8px; box-sizing:border-box; border:1px solid #ffffff20; border-radius:10px 0 0 10px; background:#26242b; box-shadow:-8px 4px 20px #0004; }
+.note-format-popover { position:absolute; z-index:20; top:0; right:64px; max-height:100%; overflow-y:auto; overscroll-behavior:contain; padding:8px; box-sizing:border-box; border:1px solid #ef444433; border-radius:10px 0 0 10px; background:#251f1f; box-shadow:-8px 4px 20px #0004; }
 .note-format-font-sizes { display:flex; flex-direction:column; gap:4px; min-width:86px; }
 .note-format-font-sizes .note-size-option-btn { min-height:44px; }
-.note-format-tools .note-format-divider { grid-column:1 / -1; width:100%; height:1px; margin:6px 0; }
+.note-format-tools .note-format-divider { grid-column:1 / -1; width:100%; height:1px; margin:6px 0; background:#ef444433; }
 .note-format-tools .note-size-control-group { grid-column:1 / -1; justify-content:space-between; flex-wrap:wrap; }
 .note-format-sidebar .note-size-adjust-btn, .note-format-sidebar .note-font-size-btn { min-height:36px; }
 .note-format-sidebar .note-size-dropdown-menu { position:static; transform:none; margin-top:4px; min-width:0; }
-.note-format-tools button:focus-visible { outline:2px solid #c4b5d8; outline-offset:1px; }
+.note-format-tools .note-format-btn,
+.note-format-font-sizes .note-size-option-btn,
+.note-format-sidebar-header .note-editor-icon-btn { color:#e5b7b7; }
+.note-format-tools .note-format-btn:hover:not(:disabled),
+.note-format-sidebar-header .note-editor-icon-btn:hover,
+.note-format-font-sizes .note-size-option-btn:hover { background:#ef44441a; color:#fecaca; }
+.note-format-tools .note-format-btn.is-active,
+.note-format-tools .note-format-btn[aria-expanded="true"],
+.note-format-font-sizes .note-size-option-btn.active { background:#ef444426; color:#fca5a5; box-shadow:inset 0 0 0 1px #ef444466; }
+.note-format-tools button:focus-visible,
+.note-format-sidebar button:focus-visible,
+.note-format-popover button:focus-visible { outline:2px solid #f87171; outline-offset:1px; }
 .note-copy-feedback:empty { display:none; }
 @media(max-width:768px) {
     .note-editor-header .note-format-toggle { padding:10px; }
@@ -7598,7 +7603,8 @@ html[data-android-keyboard="true"] .App.is-android .mobile-bottom-nav { display:
 
 /* Desktop page headers keep the title at the left and navigation/actions at the right. */
 @media(min-width:769px) {
-    .App:not(.is-android) .Dashboard { padding-top:24px; padding-bottom:24px; }
+    /* Reserve the 32px window controls plus 24px of breathing room. */
+    .App:not(.is-android) .Dashboard { padding-top:56px; padding-bottom:24px; }
     .App:not(.is-android) .Dashboard .dashboard-main-card .dashboard-content-header {
         align-items:flex-start !important; gap:16px; margin-top:0; margin-bottom:24px;
     }

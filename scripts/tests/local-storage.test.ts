@@ -142,20 +142,22 @@ test("guest linking copies locally without opting in and account deletion clears
   assert.deepEqual((await readLocalWorkspace(other)).data, emptyWorkspace());
 });
 
-test("editable names and photos stay local, persist by account, and support explicit removal", async () => {
+test("editable names stay local and photos follow the Google session", async () => {
   login(); const original = globalThis.fetch;
   globalThis.fetch = async () => { throw new Error("Local profile must not upload."); };
   try {
     assert.equal(profileDefaults({ token: "x", account: { id: account, type: "guest" } }).name, "Guest");
     assert.deepEqual(profileDefaults({ token: "x", account: { id: account, type: "user", name: "Google Name", picture: "https://example.test/google.png" } }), { name: "Google Name", picture: "https://example.test/google.png" });
-    const picture = "data:image/png;base64,aGVsbG8=";
-    await saveAccountProfile(account, "  My account  ", picture);
+    await saveAccountProfile(account, "  My account  ");
     assert.equal((await loadAccountProfile(account))?.name, "My account");
-    assert.equal((await loadAccountProfile(account))?.picture, picture);
-    assert.equal((await readLocalWorkspace(other)).profile, undefined);
-    await saveAccountProfile(account, "Updated", null);
     assert.equal((await loadAccountProfile(account))?.picture, null);
-    await assert.rejects(saveAccountProfile(account, " ", null), /account name/);
+    assert.equal((await readLocalWorkspace(other)).profile, undefined);
+    const picture = "https://example.test/google.png";
+    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({ token: "fixture", account: { id: account, type: "user", picture } }));
+    await saveAccountProfile(account, "Updated");
+    assert.equal((await loadAccountProfile(account))?.picture, picture);
+    await assert.rejects(saveAccountProfile(account, " "), /account name/);
+    await assert.rejects(saveAccountProfile(other, "Other"), /account changed/);
     assert.equal(validProfilePicture("data:image/svg+xml;base64,PHN2Zz4="), false);
     assert.equal(validProfilePicture("http://example.test/photo.png"), false);
     assert.equal(validProfilePicture("data:image/png;base64," + "a".repeat(350000)), false);
