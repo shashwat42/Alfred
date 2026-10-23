@@ -1,6 +1,6 @@
 # Alfred
 
-Windows and Android beta release: [release guide](docs/releases/README.md), [0.1.0-beta.8 notes](docs/releases/v0.1.0-beta.8.md) and [in-app updates](docs/app-updates.md).
+Alfred 1.0.0 official release for Windows and Android: [release guide](docs/releases/README.md), [1.0.0 notes](docs/releases/v1.0.0.md) and [in-app updates](docs/app-updates.md).
 
 Backend Docker setup and deployment instructions: [Alfred backend](Alfred_Backend/README.md).
 

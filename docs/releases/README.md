@@ -1,15 +1,11 @@
-# Windows and Android beta release
+# Windows and Android official release
 
-The current beta is `v0.1.0-beta.9.2`, for Windows x64 and Android ARM64. The desktop version lives in
-`package.json`, `package-lock.json`, `wrapper/tauri.conf.json`, `wrapper/Cargo.toml`
+The current stable release is `v1.0.0`, for Windows x64 and Android ARM64.
+Beta testing is complete. The version lives in `package.json`, `package-lock.json`,
+`wrapper/tauri.conf.json`, `wrapper/tauri.android.conf.json`, `wrapper/Cargo.toml`
 and `wrapper/Cargo.lock`. The separately deployed backend has its own version.
-
-Android uses the same beta version in `wrapper/tauri.android.conf.json`, with
-monotonically increasing version code `1021`. Package a non-debuggable release APK
-using the existing protected Android release keystore, verify its certificate,
-packaged version, HTTPS endpoint and 16 KB alignment, and include it with
-`android-release-manifest.json` and `SHA256SUMS-android.txt` in the same GitHub
-prerelease. Preserve the existing certificate to support in-place upgrades.
+Android version code is `1022`; preserve the existing protected Android release
+certificate for in-place upgrades.
 
 ## Validate in development mode
 
@@ -17,75 +13,45 @@ Set `MODE=development`, then run `npm test`, `npm run lint`,
 `npm --prefix Alfred_Backend run check`, `npm --prefix Alfred_Backend test`,
 `npm run test:reliability-ui`, `npm run test:updates-ui`, `npm run test:startup-ui`,
 `npm run test:overlay-lifecycle`, `npm run test:assistant-controls-ui`,
-`npm run test:storage-ui`, `npm run test:workspace-ui`, `npm run test:profile-ui` and `npm run build:development`.
-Backend tests use temporary MongoDB replica sets and stub AI providers. They need
-permission to start local processes and listen on ephemeral ports. Use the dummy
-environment from `.github/workflows/deploy-oracle.yml` and generate ephemeral
-JWT/Google test secrets rather than supplying real credentials.
-Leave `ALFRED_NOTIFICATION_TEST_MONGODB_URI` unset so notification tests use a
-temporary database. Never point integration tests at the hosted database.
+`npm run test:storage-ui`, `npm run test:workspace-ui`, `npm run test:profile-ui`,
+`npm run test:monitor-ui` and `npm run build:development`.
+Run native Windows updater and Android assistant unit tests in development mode.
+Backend tests use temporary MongoDB replica sets and stub AI providers. Use dummy
+configuration and ephemeral JWT/Google test secrets. Leave
+`ALFRED_NOTIFICATION_TEST_MONGODB_URI` unset; never use the hosted database.
 
-## Package
+## Package and publish
 
-On Windows with Node 24, npm dependencies and Rust/MSVC build tools installed:
+Commit the release source and create `v1.0.0`. Build both platforms from that exact
+clean tag. On Windows with Node 24 and Rust/MSVC tools, run
+`npm run release:windows` with `TAURI_SIGNING_PRIVATE_KEY` and its optional password
+supplied from protected storage. See [updater signing](../app-updates.md#release-signing-and-assets).
+Actual release packaging uses production frontend behavior and the hosted HTTPS
+API; it does not start or deploy a backend or alter developer app data.
 
-```powershell
-npm run release:windows
-```
+Output is `.deployment/releases/v1.0.0/`. Preserve existing output rather than
+overwriting it. Verify the installer signature, checksums and source manifest.
+No Windows Authenticode certificate is currently configured; updater signatures
+are separate. Package a non-debuggable Android ARM64 release APK using the existing
+release keystore and verify its certificate, packaged version, HTTPS endpoint and
+16 KB alignment.
 
-The command requires `TAURI_SIGNING_PRIVATE_KEY` in its process environment.
-The CI workflow inherits this from the GitHub Actions secret of the same name;
-an optional password comes from `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. See
-[updater signing](../app-updates.md#release-signing-and-assets) for key management.
+The **Prepare Windows release draft** workflow validates in development mode and
+packages Windows assets into a draft. Stable versions omit the prerelease flag;
+numbered beta versions remain supported. Attach the Android assets before
+publication. The final release must contain the Windows installer, its `.sig`,
+`latest.json`, `SHA256SUMS.txt`, `release-manifest.json`, Android APK,
+`SHA256SUMS-android.txt` and `android-release-manifest.json`.
 
-This performs the actual release packaging, with production frontend behavior,
-an explicit x64 target, the hosted HTTPS API and a CSP restricted to that API.
-It does not start or deploy a backend, install the app or modify local environment
-files. `ALFRED_RELEASE_API_URL` may override the HTTPS API origin explicitly.
-Existing `.env` tunnel and development-mode settings cannot override this build.
+Publish **Alfred v1.0.0** with tag `v1.0.0` as a regular release and mark it latest.
+Use [1.0.0 notes](v1.0.0.md). Earlier Android betas require downloading the stable
+APK manually because their update checker accepts beta version names only.
+The matching certificate supports upgrading in place. Windows beta installations
+with the signed updater can discover 1.0.0 through their existing release checks.
 
-Find the installer, its `.sig`, `latest.json`, `SHA256SUMS.txt`, release notes and source manifest in
-`.deployment/releases/v0.1.0-beta.9.2/`. The directory is ignored by Git. Existing
-version output is preserved; move it aside deliberately before rebuilding.
-The manifest records the source commit and whether source changes were present
-(including untracked files; generated caches and logs are ignored by Git).
-For a published release, commit the intended changes, create the version tag and
-build again from that exact tag. Do not publish an uncommitted local candidate.
+For installation and upgrade checks, use a separate Windows profile/VM or test
+Android device. Preserve the developer's app data. Record actual checks without
+claiming automated package checks are device acceptance testing.
 
-## Acceptance and publication
-
-For a clean CI build, push the reviewed source changes and manually run
-**Prepare Windows beta draft** in GitHub Actions on the intended release branch.
-The workflow runs development checks on Linux, packages on Windows and creates a
-draft prerelease with the installer and checksums. It does not publish the draft
-or overwrite an existing release. GitHub Actions must have permission to create
-releases. Review the draft after completing the acceptance checks below.
-
-Use a separate Windows profile or VM to avoid altering the developer's app data.
-Check clean installation, launch, guest continuation, Google browser sign-in and
-deep-link return, note/task/schedule creation, text and voice responses,
-microphone denial and retry, notifications while running, tray/overlay behavior,
-restart persistence and upgrade from an existing install. Record actual results
-before removing the release-notes testing caveat. Public `/health` and `/ready`
-responses confirm API/database availability only.
-
-Check the installer's signature with `Get-AuthenticodeSignature` and its checksum
-with `Get-FileHash -Algorithm SHA256`. This beta currently has no configured signing
-certificate. For a signed build, configure the Tauri Windows signing settings
-using credentials outside source control, then rebuild and regenerate checksums.
-
-Create a **draft GitHub prerelease** titled `Alfred v0.1.0-beta.9.2` using the tag
-`v0.1.0-beta.9.2`. Paste the version's notes and attach the installer, its `.sig`,
-`latest.json`, `SHA256SUMS.txt` and `release-manifest.json`. Mark it as a prerelease and review
-the assets and acceptance results before publishing to testers.
-
-Changes to `Alfred_Backend/**` merged/pushed to `main` trigger the existing Oracle
-deployment workflow. Review that separately when committing lint cleanup; a
-desktop beta does not require redeploying the backend.
-
-Beta 7 requires the matching backend deployed before publication: account preferences
-use new authenticated endpoints. The Windows and Android packages must use the
-same clean source tag.
-
-Beta 9 also requires its matching backend deployment before publication: the
-authenticated schedule listing accepts `all=true` for the global empty-state check.
+Backend changes pushed to `main` trigger the Oracle deployment workflow. This
+release uses the existing compatible backend and does not require a redeployment.

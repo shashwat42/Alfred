@@ -16,7 +16,7 @@ object AndroidUpdatePolicy {
 
     fun validUpdate(version: String, code: Long, currentCode: Long, apk: String, sha256: String): Boolean =
         code > currentCode && code <= 2_100_000_000L &&
-            version.matches(Regex("\\d+\\.\\d+\\.\\d+-beta\\.\\d+(?:\\.\\d+)?")) &&
+            version.matches(Regex("\\d+\\.\\d+\\.\\d+(?:-beta\\.\\d+(?:\\.\\d+)?)?")) &&
             apk == "Alfred_${version}_android_arm64-v8a.apk" &&
             sha256.matches(Regex("[a-f0-9]{64}"))
 }

@@ -15,4 +15,10 @@ test("published updater manifest identifies the exact signed Windows installer",
   assert.throws(() => createUpdateManifest({ ...input, installer: "older-setup.exe" }), /match/);
   const patch = createUpdateManifest({ ...input, version: "0.1.0-beta.5.1", installer: "Alfred_0.1.0-beta.5.1_windows_x64-setup.exe" });
   assert.equal(patch.version, "0.1.0-beta.5.1");
+  const stable = createUpdateManifest({ ...input, version: "1.0.0", installer: "Alfred_1.0.0_windows_x64-setup.exe" });
+  assert.equal(stable.version, "1.0.0");
+  assert.equal(stable.platforms["windows-x86_64"].url, "https://github.com/shashwat42/Alfred/releases/download/v1.0.0/Alfred_1.0.0_windows_x64-setup.exe");
+  for (const version of ["1.0", "1.0.0-rc.1", "v1.0.0", "1.0.0-beta."]) {
+    assert.throws(() => createUpdateManifest({ ...input, version }), /stable or numbered beta/);
+  }
 });
