@@ -29,6 +29,7 @@ export const listScheduleSchema = {
     query: z
         .object({
             date: calendarDateSchema.optional(),
+            all: z.literal("true").optional(),
         })
         .strict(),
 };

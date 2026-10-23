@@ -53,7 +53,7 @@ export async function listSchedule(req: Request, res: Response): Promise<void> {
             ? req.query.date
             : today;
 
-        const schedule = await getSchedule(accountId, date);
+        const schedule = await getSchedule(accountId, req.query.all === "true" ? undefined : date);
         res.json(schedule);
     } catch (err) {
         if (sendPolicyError(err, res)) return;

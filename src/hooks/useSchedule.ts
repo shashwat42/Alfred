@@ -51,7 +51,7 @@ async function fetchSchedule(url: string, accountId: string, maxAgeMs = 2000): P
 
 function invalidateScheduleCache(date?: string) {
     if (date) {
-        for (const key of scheduleRequestCache.keys()) if (key.endsWith(`/api/schedule?date=${date}`)) scheduleRequestCache.delete(key);
+        for (const key of scheduleRequestCache.keys()) if (key.endsWith(`/api/schedule?date=${date}`) || key.endsWith("/api/schedule?all=true")) scheduleRequestCache.delete(key);
     } else {
         scheduleRequestCache.clear();
     }
@@ -69,6 +69,7 @@ export function useSchedule(accountId: string | undefined, todayDateStr: string)
 
     const [todaySchedule, setTodaySchedule] = useState<ScheduleItem[]>([]);
     const [timelineSchedule, setTimelineSchedule] = useState<ScheduleItem[]>([]);
+    const [allSchedules, setAllSchedules] = useState<{ accountId: string; items: ScheduleItem[] } | null>(null);
     
     const [newScheduleTime, setNewScheduleTime] = useState("");
     const [newScheduleTopic, setNewScheduleTopic] = useState("");
@@ -102,8 +103,11 @@ export function useSchedule(accountId: string | undefined, todayDateStr: string)
         if (!accountId) return;
         const generation = loadGeneration.current;
         try {
-            const data = await fetchSchedule(`/api/schedule?date=${todayDateStr}`, accountId!);
-            if (generation === loadGeneration.current) setTodaySchedule(data);
+            const data = await fetchSchedule("/api/schedule?all=true", accountId);
+            if (generation === loadGeneration.current) {
+                setTodaySchedule(data.filter(item => item.date === todayDateStr));
+                setAllSchedules({ accountId, items: data });
+            }
         } catch (error) {
             console.error("Could not load today's schedule:", error);
             throw error;
@@ -138,8 +142,11 @@ export function useSchedule(accountId: string | undefined, todayDateStr: string)
         async function fetchToday() {
             const generation = loadGeneration.current;
             try {
-                const data = await run(() => fetchSchedule(`/api/schedule?date=${todayDateStr}`, accountId!));
-                if (isMounted && generation === loadGeneration.current) setTodaySchedule(data);
+                const data = await run(() => fetchSchedule("/api/schedule?all=true", accountId!));
+                if (isMounted && generation === loadGeneration.current) {
+                    setTodaySchedule(data.filter(item => item.date === todayDateStr));
+                    setAllSchedules({ accountId: accountId!, items: data });
+                }
             } catch (error) {
                 console.error("Could not load today's schedule:", error);
             }
@@ -247,6 +254,7 @@ export function useSchedule(accountId: string | undefined, todayDateStr: string)
             };
             setTodaySchedule(curr => updateDay(curr, todayDateStr));
             setTimelineSchedule(curr => updateDay(curr, scheduleDate));
+            setAllSchedules(curr => ({ accountId: accountId!, items: [...(curr && curr.accountId === accountId ? curr.items : []).filter(item => item._id !== saved._id), saved] }));
             setNewScheduleTime("");
             setNewScheduleTopic("");
             setIsScheduleDialogOpen(false);
@@ -265,6 +273,7 @@ export function useSchedule(accountId: string | undefined, todayDateStr: string)
                 invalidateScheduleCache(todayDateStr);
                 setTodaySchedule((prev) => prev.filter((item) => item._id !== id));
                 setTimelineSchedule((prev) => prev.filter((item) => item._id !== id));
+                setAllSchedules(curr => curr && ({ ...curr, items: curr.items.filter(item => item._id !== id) }));
             }
         } catch (err) {
             console.error("Could not delete schedule item:", err);
@@ -287,6 +296,7 @@ export function useSchedule(accountId: string | undefined, todayDateStr: string)
             invalidateScheduleCache();
             if (scope === "all" || date === todayDateStrRef.current) setTodaySchedule([]);
             if (scope === "all" || date === scheduleDateRef.current) setTimelineSchedule([]);
+            setAllSchedules(curr => scope === "all" ? { accountId, items: [] } : curr && ({ ...curr, items: curr.items.filter(item => item.date !== date) }));
             return true;
         } catch (error) {
             setScheduleError(error instanceof Error ? error.message : "Could not clear the schedule. Please try again.");
@@ -319,6 +329,7 @@ export function useSchedule(accountId: string | undefined, todayDateStr: string)
         scheduleDate,
         todaySchedule,
         timelineSchedule,
+        hasSchedules: allSchedules && allSchedules.accountId === accountId ? allSchedules.items.length > 0 : null,
         newScheduleTime,
         setNewScheduleTime,
         newScheduleTopic,

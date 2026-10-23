@@ -1,3 +1,4 @@
+import "./testEnvironment.ts";
 import assert from "node:assert/strict";
 import { before, after, test, mock } from "node:test";
 import { randomUUID, createHash } from "node:crypto";
@@ -61,6 +62,24 @@ after(async () => {
     if (server) await new Promise<void>(resolve => server.close(() => resolve()));
     await mongoose.disconnect();
     if (database) await database.stop();
+});
+
+test("real API: all dates schedule listing preserves account isolation and date filtering", async () => {
+    const owner = await Account.create({ cloudSyncEnabled: true, type: "user", googleId: randomUUID() });
+    const other = await Account.create({ cloudSyncEnabled: true, type: "user", googleId: randomUUID() });
+    const token = generateAuthToken(owner);
+    for (const [account, date] of [[owner, "2026-10-20"], [owner, "2026-10-24"], [other, "2026-10-25"]] as const) {
+        await scheduleService.addSchedule(String(account._id), { date, time: "10:00", topic: "Test event" });
+    }
+    const all = await request("/schedules?all=true", token);
+    assert.equal(all.status, 200);
+    const rows = await all.json();
+    assert.deepEqual(rows.map((row: { date: string }) => row.date), ["2026-10-20", "2026-10-24"]);
+    assert.ok(rows.every((row: { accountId: string }) => row.accountId === String(owner._id)));
+    const dated = await (await request("/schedules?date=2026-10-20", token)).json();
+    assert.equal(dated.length, 1);
+    assert.equal(dated[0].date, "2026-10-20");
+    assert.equal((await request("/schedules?all=true")).status, 401);
 });
 
 test("real API: two users and two guests isolate every CRUD resource and reject mass assignment", async () => {

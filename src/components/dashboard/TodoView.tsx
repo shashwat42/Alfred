@@ -12,6 +12,7 @@ export function TodoView({
     handleToggleTaskComplete,
     handleDeleteTask,
     onEditTask,
+    showEmptyArt = false,
 }: {
     visibleTasks: TaskItem[];
     taskPage: number;
@@ -20,6 +21,7 @@ export function TodoView({
     handleToggleTaskComplete: (id: string, currentCompleted?: boolean) => void;
     handleDeleteTask: (id: string) => void;
     onEditTask: (task: TaskItem) => void;
+    showEmptyArt?: boolean;
 }) {
     return (
         <div className="dashboard-list-container">
@@ -91,7 +93,7 @@ export function TodoView({
                     })}
                 </ol>
             ) : (
-                <EmptyState section="tasks" />
+                <EmptyState section="tasks" showArt={showEmptyArt} />
             )}
 
             <Pagination

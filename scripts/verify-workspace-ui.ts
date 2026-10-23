@@ -99,8 +99,18 @@ try {
   assert.ok(document.querySelector("#upcoming-quick-note"), "Quick Note stays available on an empty dashboard");
   await act(async () => root.render(createElement(UpcomingView, { hasNotes: true })));
   assert.equal(document.querySelector(".upcoming-all-empty"), null, "Unopened notes still count as content");
-  const faces = [...document.querySelectorAll(".empty-text-art")].map(element => element.textContent);
-  assert.equal(faces.length, 3); assert.equal(new Set(faces).size, 3, "Individual empty faces are related but distinct");
+  assert.equal(document.querySelectorAll(".empty-text-art").length, 0, "Existing notes suppress all section artwork");
+  assert.match(document.body.textContent!, /No upcoming schedules/);
+  assert.match(document.body.textContent!, /No priority tasks/);
+  for (const props of [
+    { showEmptyArt: false },
+    { priorityTasks: [{ _id: "normal", task: "Normal task", priority: "normal" }] },
+    { priorityTasks: [{ _id: "done", task: "Done", priority: "high", completed: true }] },
+    { scheduleItems: [{ time: "08:00", topic: "Earlier event", date: "2026-10-20" }], currentMinutes: 600 },
+  ]) {
+    await act(async () => root.render(createElement(UpcomingView, props)));
+    assert.equal(document.querySelectorAll(".empty-text-art").length, 0, "Content outside dashboard filters suppresses artwork");
+  }
   await act(async () => root.render(createElement(UpcomingView, { recentNotes: [note], scheduleItems: [{ time: "23:59", topic: "Late event", date: "2026-10-20" }], priorityTasks: [{ _id: "task", task: "Priority task", priority: "high" }] })));
   assert.equal(document.querySelectorAll(".empty-text-art").length, 0);
   assert.match(document.body.textContent!, /Late event/); assert.match(document.body.textContent!, /Priority task/);
@@ -166,6 +176,12 @@ try {
     assert.equal(document.querySelector(".dashboard-menu-toggle"), null, "Android has no burger menu");
     assert.equal(document.querySelector(".desktop-dashboard-navigation"), null, "Android uses its existing navbar");
     assert.equal(document.querySelector(".dashboard-refresh-btn")!.parentElement, document.querySelector(".content-header-title-row"), "Android sync shares the title row");
+    for (const view of ["home", "workspace", "settings"]) {
+      await act(async () => root.render(createElement(DashboardHeader, { activeView: view, handleViewChange() {}, onRefresh() {} })));
+      assert.equal(document.querySelector(".dashboard-back-btn"), null, "Navbar destinations do not need back buttons");
+    }
+    await act(async () => root.render(createElement(DashboardHeader, { activeView: "notes", handleViewChange() {}, onRefresh() {} })));
+    assert.ok(document.querySelector(".dashboard-back-btn"), "Nested workspace pages retain back navigation");
     Object.defineProperty(navigator, "userAgent", { configurable: true, value: "Windows NT 10.0" });
     await act(async () => root.render(createElement(RefreshButton)));
     assert.ok(document.querySelector(".mobile-account-refresh"), "PC refresh remains available");
@@ -188,6 +204,7 @@ try {
   await act(async () => { schedule.setNewScheduleDate("2026-10-21"); schedule.setNewScheduleTime("11:30"); schedule.setNewScheduleTopic("Edited event"); });
   await act(async () => schedule.handleAddSchedule({ preventDefault() {} } as Parameters<typeof schedule.handleAddSchedule>[0]));
   assert.equal(schedule.todaySchedule.length, 0); assert.equal(schedule.timelineSchedule.length, 0, "Moving an event removes it from its old date");
+  assert.equal(schedule.hasSchedules, true, "Schedules outside today still count as workspace content");
   const moved = await (await apiFetch("/api/schedule?date=2026-10-21")).json();
   assert.equal(moved.length, 1); assert.equal(moved[0]._id, event._id); assert.equal(moved[0].topic, "Edited event"); assert.equal(moved[0].time, "11:30");
   await act(async () => schedule.setScheduleSelectedDate(new Date("2026-10-21T12:00:00"))); await settle();

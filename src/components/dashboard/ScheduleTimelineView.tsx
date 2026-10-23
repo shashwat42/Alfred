@@ -11,6 +11,7 @@ export function ScheduleTimelineView({
     currentHourRef,
     handleDeleteSchedule,
     onEditSchedule,
+    showEmptyArt = false,
 }: {
     activeTimelineSchedule: ScheduleItem[];
     scheduleDate: string;
@@ -20,6 +21,7 @@ export function ScheduleTimelineView({
     currentHourRef: React.MutableRefObject<HTMLDivElement | null>;
     handleDeleteSchedule: (id: string) => void;
     onEditSchedule?: (item: ScheduleItem) => void;
+    showEmptyArt?: boolean;
 }) {
     const currentHour = Math.floor(currentMinutes / 60);
     // Minutes within the current hour, used to position the "now" indicator line.
@@ -27,7 +29,7 @@ export function ScheduleTimelineView({
 
     return (
         <div className="schedule-timeline-container">
-            {activeTimelineSchedule.length === 0 && <div className="timeline-empty-hint" role="status"><span className="empty-text-art" aria-hidden="true">( ˘ᴗ˘ )</span><span>No schedules for this day</span></div>}
+            {activeTimelineSchedule.length === 0 && <div className="timeline-empty-hint" role="status">{showEmptyArt && <span className="empty-text-art" aria-hidden="true">( ˘ᴗ˘ )</span>}<span>No schedules for this day</span></div>}
             <div className="timeline-grid">
                 {TIMELINE_HOURS.map((hour) => {
                     const hourLabel =

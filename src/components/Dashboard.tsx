@@ -94,6 +94,7 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
         scheduleDate,
         todaySchedule,
         timelineSchedule,
+        hasSchedules,
         newScheduleTime,
         setNewScheduleTime,
         newScheduleTopic,
@@ -171,6 +172,9 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
     const activeTasks = accountId ? task : EMPTY_ARRAY;
     const activeRecentNotes = accountId ? recentNotes : EMPTY_ARRAY;
     const activeNotes = accountId ? notes : EMPTY_ARRAY;
+    const showEmptyArt = tasksLoaded && scheduleLoaded && notesLoaded
+        && !tasksLoadError && !scheduleLoadError && !notesLoadError
+        && hasSchedules === false && activeTasks.length === 0 && activeNotes.length === 0;
 
     const taskPageCount = Math.ceil(activeTasks.length / ITEMS_PER_PAGE);
     const visibleTasks = useMemo(
@@ -340,6 +344,7 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
                     {(tasksLoadError || scheduleLoadError || notesLoadError || refreshError) && <ErrorState message={tasksLoadError || scheduleLoadError || notesLoadError || refreshError || "Refresh failed"} retry={() => void refreshAll()} />}
                     {activeView === "home" && tasksLoaded && scheduleLoaded && notesLoaded && (!(tasksLoadError || scheduleLoadError || notesLoadError) || activeTasks.length + activeTodaySchedule.length + activeRecentNotes.length > 0) && (
                         <UpcomingView
+                            showEmptyArt={showEmptyArt}
                             scheduleItems={activeTodaySchedule}
                             priorityTasks={activeTasks}
                             currentMinutes={currentMinutes}
@@ -354,6 +359,7 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
 
                     {activeView === "schedule" && scheduleLoaded && (!scheduleLoadError || activeTimelineSchedule.length > 0) && (
                         <ScheduleTimelineView
+                            showEmptyArt={showEmptyArt}
                             activeTimelineSchedule={activeTimelineSchedule}
                             scheduleDate={scheduleDate}
                             todayDateStr={todayDateStr}
@@ -366,6 +372,7 @@ export default function Dashboard({ currentView = "home", onViewChange }: Dashbo
 
                     {(activeView === "tasks" || activeView === "todo") && tasksLoaded && (!tasksLoadError || activeTasks.length > 0) && (
                         <TodoView
+                            showEmptyArt={showEmptyArt}
                             visibleTasks={visibleTasks}
                             taskPage={taskPage}
                             taskPageCount={taskPageCount}

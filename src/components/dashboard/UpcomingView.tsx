@@ -19,6 +19,7 @@ function UpcomingViewComponent({
     currentMinutes,
     recentNotes = [],
     hasNotes = recentNotes.length > 0,
+    showEmptyArt = scheduleItems.length === 0 && priorityTasks.length === 0 && !hasNotes,
     onOpenNote,
     onSaveQuickNote,
     onOpenFocusSession,
@@ -29,6 +30,7 @@ function UpcomingViewComponent({
     currentMinutes?: number;
     recentNotes?: NoteItem[];
     hasNotes?: boolean;
+    showEmptyArt?: boolean;
     onOpenNote?: (note: NoteItem) => void;
     onSaveQuickNote?: (text: string) => Promise<void>;
     onOpenFocusSession?: () => void;
@@ -79,7 +81,7 @@ function UpcomingViewComponent({
             .slice(0, 5);
     }, [priorityTasks]);
 
-    const isEmpty = displaySchedule.length === 0 && priorityTasks.length === 0 && !hasNotes;
+    const isEmpty = showEmptyArt && scheduleItems.length === 0 && priorityTasks.length === 0 && !hasNotes;
 
     return (
         <div className="upcoming-view-container">
@@ -127,7 +129,7 @@ function UpcomingViewComponent({
                                     );
                                 })
                             ) : (
-                                <div className="upcoming-empty-hint" role="status"><span className="empty-text-art" aria-hidden="true">( ˘ᴗ˘ )</span><span>No upcoming schedules</span></div>
+                                <div className="upcoming-empty-hint" role="status">No upcoming schedules</div>
                             )}
                         </div>
                     </div>
@@ -153,7 +155,7 @@ function UpcomingViewComponent({
                                     </div>
                                 ))
                             ) : (
-                                <div className="upcoming-empty-hint" role="status"><span className="empty-text-art" aria-hidden="true">( •ᴗ• )</span><span>No priority tasks</span></div>
+                                <div className="upcoming-empty-hint" role="status">No priority tasks</div>
                             )}
                         </div>
                     </div>
@@ -204,7 +206,7 @@ function UpcomingViewComponent({
                             })
                         ) : (
                             <div className="upcoming-recent-notes-empty">
-                                <span className="empty-text-art" aria-hidden="true">( •◡• )</span><span>No recently opened notes</span>
+                                <span>No recently opened notes</span>
                             </div>
                         )}
                     </div>

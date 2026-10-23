@@ -10,8 +10,8 @@ export function StateCard({ title, children, action, onAction, error = false }: 
   if (error) return <ErrorNotice title={title} message={typeof children === "string" ? children : title} retry={onAction} />;
   return <section className="alfred-state" role="status"><img src={Logo} width="46" height="46" alt="" /><h2>{title}</h2><div>{children}</div>{action && <button type="button" onClick={onAction}>{action}</button>}</section>;
 }
-export function EmptyState({ section = "dashboard" }: { section?: string }) {
-  return <div className="workspace-empty-state" role="status"><span className="empty-text-art" aria-hidden="true">{section === "tasks" ? "( •ᴗ• )" : "( ˘ᴗ˘ )"}</span><p>{section === "dashboard" ? "Your dashboard is clear" : `No ${section} yet`}</p></div>;
+export function EmptyState({ section = "dashboard", showArt = false }: { section?: string; showArt?: boolean }) {
+  return <div className={`workspace-empty-state${showArt ? "" : " is-text-only"}`} role="status">{showArt && <span className="empty-text-art" aria-hidden="true">{section === "tasks" ? "( •ᴗ• )" : "( ˘ᴗ˘ )"}</span>}<p>{section === "dashboard" ? "Your dashboard is clear" : `No ${section} yet`}</p></div>;
 }
 export function NotFound({ goHome = () => { window.location.href = "/"; } }: { goHome?: () => void }) {
   return <StateCard title="404 · A little off course" action="Return to Alfred" onAction={goHome}>This page could not be found.</StateCard>;

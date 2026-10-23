@@ -119,7 +119,7 @@ function DashboardHeaderComponent({
                     {(activeView === "notes" || activeView === "mails") && "NOTES"}
                     {activeView === "settings" && "SETTINGS"}
                 </h2>
-                {isAndroid && activeView !== "home" && <button
+                {isAndroid && !["home", "workspace", "settings"].includes(activeView) && <button
                     type="button"
                     className="dashboard-back-btn"
                     onClick={() => { const event = new Event("alfred:back", { cancelable: true }); if (window.dispatchEvent(event)) handleViewChange("home"); }}

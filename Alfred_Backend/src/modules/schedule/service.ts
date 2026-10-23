@@ -10,10 +10,8 @@ export type ScheduleItem = {
     date: string;
 };
 
-export async function getSchedule(accountId: string, date: string): Promise<ISchedule[]> {
-    return tenantRepository(Schedule, accountId).find({
-        date,
-    }, { sort: { time: 1 } });
+export async function getSchedule(accountId: string, date?: string): Promise<ISchedule[]> {
+    return tenantRepository(Schedule, accountId).find(date ? { date } : {}, { sort: { date: 1, time: 1 } });
 }
 
 export async function addSchedule(
