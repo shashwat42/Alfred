@@ -30,6 +30,8 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           persist-credentials: false
+      - name: Trust the checked-out workspace in the build container
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - run: npm ci
       - run: npm run linux:check
       - run: npm test
