@@ -35,8 +35,17 @@ jobs:
       - run: npm run lint
       - run: npm run build:linux
       - run: cargo test --locked --manifest-path wrapper/Cargo.toml
+      - name: Record RPM checksums and source
+        shell: bash
+        run: |
+          cd wrapper/target/release/bundle/rpm
+          sha256sum *.rpm > SHA256SUMS-linux.txt
+          node -e 'const fs=require("node:fs"); fs.writeFileSync("linux-release-manifest.json", JSON.stringify({version:JSON.parse(fs.readFileSync(process.env.GITHUB_WORKSPACE+"/package.json")).version, sourceCommit:process.env.GITHUB_SHA, platform:"fedora-x86_64", apiOrigin:process.env.VITE_API_BASE_URL, builtAt:new Date().toISOString()}, null, 2)+"\n")'
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: alfred-fedora-rpm
-          path: wrapper/target/release/bundle/rpm/*.rpm
+          path: |
+            wrapper/target/release/bundle/rpm/*.rpm
+            wrapper/target/release/bundle/rpm/SHA256SUMS-linux.txt
+            wrapper/target/release/bundle/rpm/linux-release-manifest.json
           if-no-files-found: error

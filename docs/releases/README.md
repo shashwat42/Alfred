@@ -1,57 +1,47 @@
-# Windows and Android official release
+# Alfred releases
 
-The current stable release is `v1.0.0`, for Windows x64 and Android ARM64.
-Beta testing is complete. The version lives in `package.json`, `package-lock.json`,
-`wrapper/tauri.conf.json`, `wrapper/tauri.android.conf.json`, `wrapper/Cargo.toml`
-and `wrapper/Cargo.lock`. The separately deployed backend has its own version.
-Android version code is `1022`; preserve the existing protected Android release
-certificate for in-place upgrades.
+The current release is **Alfred 1.0.01**, packaged as semantic version `1.0.1`
+with Git tag `v1.0.1`. Release work uses the `releases/` branch prefix; this
+release is prepared on `releases/1.0.01`.
 
-## Validate in development mode
+Windows x64 and Fedora Linux x86_64 are updated in this release. Android remains
+on the existing signed 1.0.0 APK (version code 1022). Its separate platform
+configuration is preserved until a new signed Android build is prepared.
 
-Set `MODE=development`, then run `npm test`, `npm run lint`,
-`npm --prefix Alfred_Backend run check`, `npm --prefix Alfred_Backend test`,
-`npm run test:reliability-ui`, `npm run test:updates-ui`, `npm run test:startup-ui`,
-`npm run test:overlay-lifecycle`, `npm run test:assistant-controls-ui`,
-`npm run test:storage-ui`, `npm run test:workspace-ui`, `npm run test:profile-ui`,
-`npm run test:monitor-ui` and `npm run build:development`.
-Run native Windows updater and Android assistant unit tests in development mode.
-Backend tests use temporary MongoDB replica sets and stub AI providers. Use dummy
-configuration and ephemeral JWT/Google test secrets. Leave
-`ALFRED_NOTIFICATION_TEST_MONGODB_URI` unset; never use the hosted database.
+## Validate and package
 
-## Package and publish
+Run `npm test`, `npm run lint`, `npm run build`,
+`npm --prefix Alfred_Backend run check` and backend tests with isolated fixtures.
+Backend integration tests require local subprocesses and ephemeral listening
+ports. Never point them at the hosted database.
 
-Commit the release source and create `v1.0.0`. Build both platforms from that exact
-clean tag. On Windows with Node 24 and Rust/MSVC tools, run
-`npm run release:windows` with `TAURI_SIGNING_PRIVATE_KEY` and its optional password
-supplied from protected storage. See [updater signing](../app-updates.md#release-signing-and-assets).
-Actual release packaging uses production frontend behavior and the hosted HTTPS
-API; it does not start or deploy a backend or alter developer app data.
+The Windows version must match in `package.json`, `package-lock.json`,
+`wrapper/tauri.conf.json`, `wrapper/Cargo.toml` and `wrapper/Cargo.lock`.
+Build from the committed release source. On Windows use `npm run release:windows`
+with the existing protected updater signing key. The **Prepare Windows release
+draft** workflow validates and builds the installer, signature, updater metadata,
+checksums and source manifest in a draft GitHub release.
 
-Output is `.deployment/releases/v1.0.0/`. Preserve existing output rather than
-overwriting it. Verify the installer signature, checksums and source manifest.
-No Windows Authenticode certificate is currently configured; updater signatures
-are separate. Package a non-debuggable Android ARM64 release APK using the existing
-release keystore and verify its certificate, packaged version, HTTPS endpoint and
-16 KB alignment.
+For Fedora, follow [Linux setup](../linux-fedora.md) and run
+`npm run build:linux`. The **Fedora Linux** workflow builds an RPM and checksums
+from the same commit and runs native Rust tests. Its artifacts include
+`SHA256SUMS-linux.txt` and `linux-release-manifest.json`.
 
-The **Prepare Windows release draft** workflow validates in development mode and
-packages Windows assets into a draft. Stable versions omit the prerelease flag;
-numbered beta versions remain supported. Attach the Android assets before
-publication. The final release must contain the Windows installer, its `.sig`,
-`latest.json`, `SHA256SUMS.txt`, `release-manifest.json`, Android APK,
-`SHA256SUMS-android.txt` and `android-release-manifest.json`.
+## Publish
 
-Publish **Alfred v1.0.0** with tag `v1.0.0` as a regular release and mark it latest.
-Use [1.0.0 notes](v1.0.0.md). Earlier Android betas require downloading the stable
-APK manually because their update checker accepts beta version names only.
-The matching certificate supports upgrading in place. Windows beta installations
-with the signed updater can discover 1.0.0 through their existing release checks.
+Use tag `v1.0.1` and title **Alfred 1.0.01**. Verify both builds reference the same
+source commit, the Windows updater signature is present, and checksums match the
+downloadable files. Attach the Fedora RPM and its checksums/source manifest to
+the Windows draft, then publish it as a regular release and mark it latest.
+Do not attach an older APK under a new version name.
 
-For installation and upgrade checks, use a separate Windows profile/VM or test
-Android device. Preserve the developer's app data. Record actual checks without
-claiming automated package checks are device acceptance testing.
+Deploy the matching backend before publication so Linux's `tauri://localhost`
+origin is accepted. **Deploy backend to Oracle** supports manual dispatch from
+`releases/` branches as well as the existing automatic deployment from `main`.
+The deployment uses the existing protected credentials and readiness checks.
 
-Backend changes pushed to `main` trigger the Oracle deployment workflow. This
-release uses the existing compatible backend and does not require a redeployment.
+Keep release outputs under ignored `.deployment/releases/`. Preserve developer
+app data during installation and upgrade checks. Record actual desktop checks
+without claiming automated package checks are physical-device acceptance tests.
+
+Release notes: [Alfred 1.0.01](v1.0.1.md), [Alfred 1.0.0](v1.0.0.md).
