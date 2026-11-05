@@ -32,7 +32,7 @@ export function parseAllowedOrigins(
 ): string[] {
     // Packaged Tauri desktop/Android WebViews use these exact origins in release
     // builds too. They are application origins, not development-server origins.
-    const nativeOrigins = ["http://tauri.localhost", "https://tauri.localhost"];
+    const nativeOrigins = ["http://tauri.localhost", "https://tauri.localhost", "tauri://localhost"];
     if (rawOrigins && rawOrigins.trim().length > 0) {
         const origins = rawOrigins
             .split(",")

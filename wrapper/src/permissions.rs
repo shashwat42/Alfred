@@ -16,16 +16,7 @@ pub struct MicrophoneConsent {
     prompt: Arc<Mutex<()>>,
 }
 
-pub(crate) fn trusted_origin(url: &tauri::Url) -> bool {
-    if !url.username().is_empty() || url.password().is_some() {
-        return false;
-    }
-    match (url.scheme(), url.host_str(), url.port()) {
-        ("http" | "https", Some("tauri.localhost"), None) => true,
-        ("http", Some("localhost" | "127.0.0.1"), Some(5173)) => cfg!(debug_assertions),
-        _ => false,
-    }
-}
+pub(crate) use crate::origin::trusted_origin;
 
 pub fn handle_permission(webview: Webview, kind: PermissionKind) -> PermissionResponse {
     if kind != PermissionKind::Microphone {

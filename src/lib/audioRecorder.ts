@@ -1,3 +1,4 @@
+import { desktopPlatform } from "./desktopPlatform.ts";
 import {
   AudioRecorderError,
   type AudioRecorderConfig,
@@ -107,9 +108,8 @@ export class AudioRecorder {
 
     try {
       window.dispatchEvent(new Event("alfred:pause-playback"));
-      // Windows WebView2 uses Alfred's native consent dialog instead of exposing
-      // the internal tauri.localhost origin in its microphone prompt.
-      if ("__TAURI_INTERNALS__" in window && /Windows/i.test(navigator.userAgent)) {
+      // Desktop WebViews require explicit native consent before microphone capture.
+      if ("__TAURI_INTERNALS__" in window && desktopPlatform(navigator.userAgent) !== null) {
         const { invoke } = await import("@tauri-apps/api/core");
         const allowed = await invoke<boolean>("request_microphone_consent");
         if (!allowed) throw new DOMException("Microphone permission was denied.", "NotAllowedError");

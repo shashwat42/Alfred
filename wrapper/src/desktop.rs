@@ -3,6 +3,11 @@ use tauri::{Emitter, Manager};
 
 static TOGGLING_OVERLAY: AtomicBool = AtomicBool::new(false);
 
+pub fn supports_global_shortcut() -> bool {
+    !cfg!(target_os = "linux") || (std::env::var_os("WAYLAND_DISPLAY").is_none()
+        && std::env::var("XDG_SESSION_TYPE").is_ok_and(|value| value == "x11"))
+}
+
 /// WebView creation must run outside Windows' synchronous event handlers.
 pub fn toggle_overlay(app: &tauri::AppHandle) {
     if TOGGLING_OVERLAY.swap(true, Ordering::AcqRel) {

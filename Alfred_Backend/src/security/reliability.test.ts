@@ -80,7 +80,7 @@ test("mode validation fails closed and UTC windows cover leap day and year rollo
 test("production keeps exact packaged application origins without allowing arbitrary sites", () => {
     for (const configured of [undefined, "https://alfred.example"]) {
         const origins = parseAllowedOrigins(configured, "https://alfred.example", true);
-        assert.ok(origins.includes("http://tauri.localhost")); assert.ok(origins.includes("https://tauri.localhost"));
+        assert.ok(origins.includes("http://tauri.localhost")); assert.ok(origins.includes("https://tauri.localhost")); assert.ok(origins.includes("tauri://localhost"));
         assert.ok(origins.includes("https://alfred.example")); assert.ok(!origins.includes("*"));
         assert.ok(!origins.includes("https://unrelated.example")); assert.ok(!origins.includes("http://localhost:5173"));
     }

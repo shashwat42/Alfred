@@ -1,3 +1,11 @@
+#[cfg(any(target_os = "windows", target_os = "linux"))]
+mod origin;
+#[cfg(target_os = "linux")]
+#[path = "permissions_linux.rs"]
+mod permissions;
+#[cfg(target_os = "linux")]
+#[path = "startup_linux.rs"]
+mod startup;
 #[cfg(desktop)]
 mod desktop;
 #[cfg(target_os = "windows")]
@@ -28,6 +36,18 @@ pub fn run() {
             .on_permission_request(permissions::handle_permission);
     }
 
+    #[cfg(target_os = "linux")]
+    {
+        builder = builder
+            .manage(permissions::MicrophoneConsent::default())
+            .invoke_handler(tauri::generate_handler![
+                permissions::request_microphone_consent,
+                startup::get_launch_on_startup,
+                startup::set_launch_on_startup
+            ])
+            .on_permission_request(permissions::handle_permission);
+    }
+
     #[cfg(desktop)]
     {
         use tauri::{Emitter, Manager};
@@ -38,6 +58,9 @@ pub fn run() {
                 let _ = window.unminimize();
                 let _ = window.set_focus();
             }
+            if argv.iter().any(|arg| arg == "--overlay") {
+                desktop::toggle_overlay(app);
+            }
             for arg in argv {
                 if arg.starts_with("alfred://") {
                     let _ = app.emit("alfred-deep-link", arg);
@@ -45,7 +68,11 @@ pub fn run() {
             }
         }));
 
-        builder = builder.plugin(tauri_plugin_global_shortcut::Builder::new().build());
+        // The current shortcut backend uses X11. Wayland users bind `alfred --overlay`
+        // in their desktop settings instead; do not fail startup without X11.
+        if desktop::supports_global_shortcut() {
+            builder = builder.plugin(tauri_plugin_global_shortcut::Builder::new().build());
+        }
         builder = builder.plugin(tauri_plugin_notification::init());
 
         builder = builder.on_window_event(|window, event| {
@@ -63,13 +90,23 @@ pub fn run() {
                 }
             }
             if window.label() == "main"
-                && let tauri::WindowEvent::CloseRequested { api, .. } = event
+                && let tauri::WindowEvent::CloseRequested { api: _api, .. } = event
             {
-                // Hide window instead of terminating application
-                api.prevent_close();
-                let _ = window.hide();
-                if let Some(webview) = window.app_handle().get_webview_window("main") {
-                    desktop::set_memory_target(&webview, true);
+                #[cfg(target_os = "linux")]
+                {
+                    // GNOME does not expose tray icons by default. Never strand
+                    // a hidden app or leave reminder processes running after Close.
+                    window.app_handle().exit(0);
+                    return;
+                }
+                #[cfg(not(target_os = "linux"))]
+                {
+                    // Hide window instead of terminating application
+                    _api.prevent_close();
+                    let _ = window.hide();
+                    if let Some(webview) = window.app_handle().get_webview_window("main") {
+                        desktop::set_memory_target(&webview, true);
+                    }
                 }
             }
         });
@@ -89,7 +126,12 @@ pub fn run() {
                 use tauri_plugin_deep_link::DeepLinkExt;
                 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
-                app.deep_link().register("alfred")?;
+                if let Err(error) = app.deep_link().register("alfred") {
+                    log::warn!("Could not register Alfred deep links: {error}");
+                }
+                if std::env::args().any(|arg| arg == "--overlay") {
+                    desktop::toggle_overlay(app.handle());
+                }
 
                 if let Some(window) = app.get_webview_window("main") {
                     // Supply the full-size artwork directly for the taskbar instead of
@@ -161,10 +203,13 @@ pub fn run() {
                         }
                     });
 
-                let _tray = tray_builder.build(app)?;
+                match tray_builder.build(app) {
+                    Ok(_tray) => {}
+                    Err(error) => log::warn!("System tray unavailable: {error}"),
+                }
 
                 // Register Global Shortcut: Alt+Space
-                if let Ok(shortcut) = "Alt+Space".parse::<Shortcut>() {
+                if desktop::supports_global_shortcut() && let Ok(shortcut) = "Alt+Space".parse::<Shortcut>() {
                     let handle = app.handle().clone();
                     let _ = app
                         .global_shortcut()

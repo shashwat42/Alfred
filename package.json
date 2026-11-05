@@ -31,7 +31,10 @@
     "dev:backend": "node scripts/dev-backend.js",
     "dev:ngrok": "npm run dev:backend",
     "dev:all": "concurrently -k --kill-others -n backend,tauri -c magenta,blue \"npm --prefix Alfred_Backend run dev\" \"npm run tauri:dev\"",
-    "test": "node --test scripts/tests/*.test.ts"
+    "test": "node --test scripts/tests/*.test.ts",
+    "linux:check": "node scripts/linux.js check",
+    "dev:linux": "node scripts/linux.js dev",
+    "build:linux": "node scripts/linux.js build"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",

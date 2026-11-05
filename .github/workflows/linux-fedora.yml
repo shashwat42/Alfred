@@ -1,0 +1,42 @@
+name: Fedora Linux
+
+on:
+  push:
+    paths: ['src/**', 'wrapper/**', 'scripts/**', 'package*.json', 'vite.config.ts', 'tsconfig*.json', '.github/workflows/linux-fedora.yml']
+  pull_request:
+    paths: ['src/**', 'wrapper/**', 'scripts/**', 'package*.json', 'vite.config.ts', 'tsconfig*.json', '.github/workflows/linux-fedora.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    container: fedora:44
+    timeout-minutes: 45
+    env:
+      CARGO_INCREMENTAL: '0'
+      MODE: production
+      VITE_API_BASE_URL: ${{ vars.ALFRED_LINUX_API_URL || 'https://alfred-137-23-49-88.sslip.io' }}
+    steps:
+      - name: Install Fedora build toolchain
+        run: >-
+          dnf install -y git nodejs npm rust cargo gcc gcc-c++ make
+          pkgconf-pkg-config openssl-devel gtk3-devel webkit2gtk4.1-devel
+          libappindicator-gtk3-devel librsvg2-devel libxdo-devel desktop-file-utils xdg-utils
+          gstreamer1-plugins-good
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - run: npm ci
+      - run: npm run linux:check
+      - run: npm test
+      - run: npm run lint
+      - run: npm run build:linux
+      - run: cargo test --locked --manifest-path wrapper/Cargo.toml
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: alfred-fedora-rpm
+          path: wrapper/target/release/bundle/rpm/*.rpm
+          if-no-files-found: error

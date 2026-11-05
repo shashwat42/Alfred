@@ -1,3 +1,4 @@
+import { desktopPlatform } from "../lib/desktopPlatform.ts";
 import { useEffect, useState } from "react";
 import { ErrorNotice } from "./reliability/Notifications.tsx";
 import { useAuth } from "../auth/authContext.ts";
@@ -28,8 +29,8 @@ export function StorageRuntime() {
     };
     check();
     const applyStartup = () => {
-      if (!active || getSession()?.account.id !== accountId || !isTauri() || !/Windows/i.test(navigator.userAgent)) return;
-      void import("@tauri-apps/api/core").then(({ invoke }) => invoke("set_launch_on_startup", { enabled: getAccountPreferences().launchOnStartup })).catch(() => { if (active) setPreferenceError("Your startup preference could not be applied on this PC. Retry in Settings."); });
+      if (!active || getSession()?.account.id !== accountId || !isTauri() || desktopPlatform(navigator.userAgent) === null) return;
+      void import("@tauri-apps/api/core").then(({ invoke }) => invoke("set_launch_on_startup", { enabled: getAccountPreferences().launchOnStartup })).catch(() => { if (active) setPreferenceError("Your startup preference could not be applied on this computer. Retry in Settings."); });
     };
     applyStartup();
     window.addEventListener(PREFERENCES_CHANGED_EVENT, applyStartup);

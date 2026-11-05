@@ -1,3 +1,4 @@
+import { desktopPlatform } from "../../lib/desktopPlatform.ts";
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Power } from "lucide-react";
@@ -5,7 +6,7 @@ import { getAccountPreferences, saveAccountPreferences, PREFERENCES_CHANGED_EVEN
 import { isTauri } from "../../auth/auth.ts";
 
 export function StartupSettings() {
-  const supported = isTauri() && /Windows/i.test(navigator.userAgent);
+  const supported = isTauri() && desktopPlatform(navigator.userAgent) !== null;
   const [enabled, setEnabled] = useState(() => getAccountPreferences().launchOnStartup);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -24,7 +25,7 @@ export function StartupSettings() {
       <div className="settings-feature-row">
         <div className="settings-feature-info">
           <label htmlFor="launch-on-startup" className="settings-feature-title">Launch on startup</label>
-          <span className="settings-feature-desc">Open Alfred automatically when you sign in to Windows.</span>
+          <span className="settings-feature-desc">Open Alfred automatically when you sign in to your computer.</span>
         </div>
         <input id="launch-on-startup" type="checkbox" role="switch" checked={enabled} disabled={busy} onChange={async (event) => {
           const next = event.target.checked;
