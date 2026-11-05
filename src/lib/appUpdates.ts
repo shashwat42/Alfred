@@ -1,3 +1,4 @@
+import { desktopPlatform } from "./desktopPlatform.ts";
 export interface AppUpdate { version: string; notes?: string | null }
 export type UpdateProgress = { event: "downloading"; downloaded: number; total: number | null } | { event: "installing" };
 export interface UpdateDriver {
@@ -61,4 +62,4 @@ const nativeDriver: UpdateDriver = {
 };
 export const appUpdates = new AppUpdateController(nativeDriver);
 export const supportsAppUpdates = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in window
-  && /Windows/i.test(navigator.userAgent);
+  && desktopPlatform(navigator.userAgent) !== null;

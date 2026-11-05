@@ -16,6 +16,9 @@ mod startup;
 mod startup;
 #[cfg(target_os = "windows")]
 mod updates;
+#[cfg(target_os = "linux")]
+#[path = "updates_linux.rs"]
+mod updates;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -48,8 +51,11 @@ pub fn run() {
         builder = builder
             .manage(permissions::MicrophoneConsent::default())
             .manage(shortcuts::ShortcutManager::default())
+            .manage(updates::UpdateState::default())
             .invoke_handler(tauri::generate_handler![
                 permissions::request_microphone_consent,
+                updates::check_for_app_update,
+                updates::install_app_update,
                 shortcuts::get_overlay_shortcut,
                 shortcuts::configure_overlay_shortcut,
                 shortcuts::dismiss_overlay_shortcut_setup,

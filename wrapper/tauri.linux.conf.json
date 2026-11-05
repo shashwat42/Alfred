@@ -16,7 +16,8 @@
           "xdg-utils",
           "desktop-file-utils",
           "gstreamer1-plugins-good",
-          "xdg-desktop-portal"
+          "xdg-desktop-portal",
+          "PackageKit"
         ],
         "desktopTemplate": "linux/alfred.desktop",
         "files": {

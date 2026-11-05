@@ -1,6 +1,6 @@
 [package]
 name = "app"
-version = "1.0.2"
+version = "1.0.3"
 description = "Alfred AI desktop assistant"
 authors = ["Shashwat"]
 license = ""
@@ -34,12 +34,14 @@ tauri = { version = "2.12.2", features = ["tray-icon"] }
 tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-notification = "2"
-tokio = { version = "1", features = ["sync", "time", "macros"] }
+tokio = { version = "1", features = ["sync", "time", "macros", "process", "fs"] }
 
-[target.'cfg(target_os = "windows")'.dependencies]
+[target.'cfg(any(target_os = "windows", target_os = "linux"))'.dependencies]
 reqwest = { version = "0.13.5", default-features = false, features = ["json", "rustls-no-provider"] }
 rustls = { version = "0.23", default-features = false, features = ["ring"] }
 semver = "1.0.28"
+
+[target.'cfg(target_os = "windows")'.dependencies]
 tauri-plugin-updater = "2.14.0"
 windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_System_Registry"] }
 webview2-com = "0.39.1"
@@ -48,7 +50,12 @@ windows-core = "0.62"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 gtk = "0.18"
-
 ashpd = { version = "=0.13.13", default-features = false, features = ["tokio", "global_shortcuts", "raw_handle", "wayland"] }
 futures-util = "0.3"
 raw-window-handle = "0.6"
+
+minisign-verify = "0.3"
+base64 = "0.22"
+sha2 = "0.10"
+tempfile = "3"
+zbus = { version = "5", default-features = false, features = ["tokio"] }

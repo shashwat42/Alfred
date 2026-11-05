@@ -6,7 +6,7 @@ import { mockIPC, clearMocks } from "@tauri-apps/api/mocks";
 
 const savedWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
 const savedNavigator = Object.getOwnPropertyDescriptor(globalThis, "navigator");
-Object.defineProperty(globalThis, "window", { configurable: true, value: {} });
+Object.defineProperty(globalThis, "window", { configurable: true, value: { crypto: globalThis.crypto } });
 Object.defineProperty(globalThis, "navigator", { configurable: true, value: { userAgent: "Windows" } });
 const server = await createServer({ mode: "development", cacheDir: "node_modules/.vite-update-ui", optimizeDeps: { noDiscovery: true, entries: [], include: [] }, server: { middlewareMode: true, hmr: false }, appType: "custom" });
 try {
@@ -39,7 +39,31 @@ try {
   html = render();
   assert.match(html, /up to date/);
   assert.doesNotMatch(html, /Download and install/);
-  console.log("PASS: update settings states, disabled checks, retry feedback, escaped release notes and web-preview exclusion.");
+  Object.defineProperty(globalThis, "navigator", { configurable: true, value: { userAgent: "Mozilla/5.0 (X11; Linux x86_64)" } });
+  update = { version: "1.0.4", notes: "Signed Fedora update" };
+  await appUpdates.check();
+  html = render();
+  assert.match(html, /Signed RPM updates/);
+  assert.match(html, /administrator approval/);
+  let rejectInstall!: (error: Error) => void;
+  mockIPC((command, args) => {
+    assert.equal(command, "install_app_update");
+    const channel = args!.onProgress as { onmessage: (value: { event: string }) => void };
+    channel.onmessage({ event: "installing" });
+    return new Promise((_resolve, reject) => { rejectInstall = reject; });
+  });
+  const pending = appUpdates.install();
+  await new Promise(resolve => setTimeout(resolve, 20));
+  html = render();
+  assert.match(html, /Approve Fedora/);
+  assert.match(html, /disabled=""/);
+  rejectInstall(new Error("Authorization cancelled")); await pending;
+  html = render();
+  assert.match(html, /Authorization cancelled/);
+  assert.match(html, /Download and install/);
+  Object.defineProperty(globalThis, "navigator", { configurable: true, value: { userAgent: "Mozilla/5.0 (Linux; Android 16)" } });
+  assert.equal(render(), "", "Android must use its separate update flow");
+  console.log("PASS: Windows/Linux update settings, Fedora authorization/cancellation, retry, escaped notes, browser and Android exclusion.");
 } finally {
   clearMocks();
   await server.close();

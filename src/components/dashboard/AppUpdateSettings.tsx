@@ -1,3 +1,4 @@
+import { desktopPlatform } from "../../lib/desktopPlatform.ts";
 import { useSyncExternalStore } from "react";
 import { Download, RefreshCw } from "lucide-react";
 import { appUpdates, supportsAppUpdates } from "../../lib/appUpdates.ts";
@@ -5,11 +6,12 @@ import { appUpdates, supportsAppUpdates } from "../../lib/appUpdates.ts";
 export function AppUpdateSettings() {
   const state = useSyncExternalStore(appUpdates.subscribe, appUpdates.getSnapshot, appUpdates.getSnapshot);
   if (!supportsAppUpdates()) return null;
+  const linux = desktopPlatform(navigator.userAgent) === "linux";
   const busy = ["checking", "downloading", "installing", "installed"].includes(state.status);
   const percent = state.total ? Math.min(100, Math.round(state.downloaded / state.total * 100)) : null;
   const message = state.status === "checking" ? "Checking for updates…"
     : state.status === "downloading" ? `Downloading update${percent === null ? ` (${(state.downloaded / 1024 / 1024).toFixed(1)} MB)` : `: ${percent}%`}…`
-    : state.status === "installing" || state.status === "installed" ? "Installing update. Alfred will close and restart."
+    : state.status === "installing" || state.status === "installed" ? (linux ? "Installing update. Approve Fedora’s authorization dialog. Alfred restarts after a successful installation." : "Installing update. Alfred will close and restart.")
     : state.update ? `Alfred ${state.update.version} is available.`
     : state.status === "current" ? "You’re up to date."
     : "Alfred checks automatically for new releases, including betas.";
@@ -18,7 +20,7 @@ export function AppUpdateSettings() {
     <div className="settings-feature-card">
       <div className="settings-feature-row"><div className="settings-feature-info">
         <span className="settings-feature-title" role="status" aria-live="polite">{message}</span>
-        <span className="settings-feature-desc">Updates are downloaded only when you choose to install. Save your work first; Alfred will restart.</span>
+        <span className="settings-feature-desc">{linux ? "Signed RPM updates install through your system’s package manager with administrator approval. Save your work first; Alfred will restart after installation." : "Updates are downloaded only when you choose to install. Save your work first; Alfred will restart."}</span>
         {state.lastChecked && <span className="settings-feature-desc">Last checked: {new Date(state.lastChecked).toLocaleString()}</span>}
       </div></div>
       {state.status === "downloading" && <progress aria-label="Update download progress" max={state.total ?? undefined} value={state.total ? state.downloaded : undefined} />}

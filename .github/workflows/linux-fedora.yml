@@ -38,6 +38,8 @@ jobs:
       - run: npm run lint
       - run: npm run build:linux
       - run: cargo test --locked --manifest-path wrapper/Cargo.toml
+      - name: Test the installer protocol on an isolated D-Bus session
+        run: dbus-run-session -- cargo test --locked --manifest-path wrapper/Cargo.toml --lib updates::packagekit::tests::private_bus_install_waits_for_success_and_reports_cancel_and_failure -- --ignored
       - name: Sign Linux updater artifacts for an explicit release build
         if: github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/heads/releases/')
         env:

@@ -24,7 +24,7 @@ test("Fedora capture requires consent before requesting the microphone; denial c
     mediaDevices: { async getUserMedia() { captures++; throw new Error("Must not capture without consent"); } },
   } });
   try {
-    assert.equal(supportsAppUpdates(), false, "RPM installs must not use the Windows updater");
+    assert.equal(supportsAppUpdates(), true, "RPM installs use the Linux updater commands");
     const recorder = new AudioRecorder();
     await assert.rejects(recorder.start(), /permission was denied/i);
     await assert.rejects(recorder.start(), /permission was denied/i);
