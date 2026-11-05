@@ -19,6 +19,9 @@ class AndroidUpdatePolicyTest {
     @Test fun updatesCannotDowngradeOrSwapPlatformOrInstallerName() {
         val hash = "a".repeat(64)
         assertTrue(AndroidUpdatePolicy.validUpdate("0.1.0-beta.4.1", 1005, 1004, "Alfred_0.1.0-beta.4.1_android_arm64-v8a.apk", hash))
+        assertTrue(AndroidUpdatePolicy.validUpdate("1.0.0", 1022, 1021, "Alfred_1.0.0_android_arm64-v8a.apk", hash))
+        assertFalse(AndroidUpdatePolicy.validUpdate("1.0.0", 1022, 1022, "Alfred_1.0.0_android_arm64-v8a.apk", hash))
+        assertFalse(AndroidUpdatePolicy.validUpdate("1.0.0-rc.1", 1022, 1021, "Alfred_1.0.0-rc.1_android_arm64-v8a.apk", hash))
         assertFalse(AndroidUpdatePolicy.validUpdate("0.1.0-beta.4.1", 1005, 1005, "Alfred_0.1.0-beta.4.1_android_arm64-v8a.apk", hash))
         assertFalse(AndroidUpdatePolicy.validUpdate("0.1.0-beta.4.1", 1003, 1004, "Alfred_0.1.0-beta.4.1_android_arm64-v8a.apk", hash))
         assertFalse(AndroidUpdatePolicy.validUpdate("0.1.0-beta.4.1", 1005, 1004, "other.apk", hash))

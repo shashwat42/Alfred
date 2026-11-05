@@ -7,6 +7,7 @@ export function AndroidAssistantSetup() {
   const [status, setStatus] = useState<AssistantStatus | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [setupOpened, setSetupOpened] = useState(false);
   const available = hasAndroidAssistantBridge();
   useEffect(() => {
     if (!available) return;
@@ -31,12 +32,16 @@ export function AndroidAssistantSetup() {
         <p className="settings-feature-desc">No draw-over-other-apps permission or always-listening microphone is needed. You can keep using Alfred normally if your device does not offer assistant selection.</p></details>
       </div>
       {available ? <button className="settings-action-btn is-login" disabled={busy || status?.supported === false} onClick={async () => {
-        setBusy(true); setError("");
-        try { await androidAssistantRequest("setup"); }
+        setBusy(true); setError(""); setSetupOpened(false);
+        try {
+          const result = await androidAssistantRequest("setup");
+          if (result.opened !== true) throw new Error("Could not open Android settings. Open Settings → Apps → Default apps → Digital assistant app and choose Alfred.");
+          setSetupOpened(true);
+        }
         catch (err) { setError(err instanceof Error ? err.message : "Could not open Android settings."); }
         finally { setBusy(false); }
       }}>{busy ? "Opening Android setup…" : "Open assistant setup"}</button> : <p className="settings-feature-desc">Install an updated Alfred Android build with Android System WebView to enable setup here. In a browser, assistant registration is unavailable.</p>}
-      <p className="settings-feature-desc" role="status">{status ? (!status.supported ? "System assistant requires Android 12 or newer in this build. Text and local voice remain available in the regular Alfred app." : status.active ? "Active — ready for your device’s assistant gesture." : "Not selected. Android will ask you to choose the default assistant.") : ""}</p>
+      <p className="settings-feature-desc" role="status">{status ? (!status.supported ? "System assistant requires Android 12 or newer in this build. Text and local voice remain available in the regular Alfred app." : status.active ? "Active — ready for your device’s assistant gesture." : setupOpened ? "In Android settings, open Digital assistant app and choose Alfred. If the main Settings screen opens, go to Apps → Default apps first." : "Not selected. Open setup, then choose Digital assistant app → Alfred in Android settings.") : ""}</p>
       <ErrorNotice message={error} />
     </div>
   </section>;

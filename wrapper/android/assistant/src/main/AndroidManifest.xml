@@ -8,6 +8,7 @@
     <queries>
         <intent><action android:name="android.settings.VOICE_INPUT_SETTINGS" /></intent>
         <intent><action android:name="android.settings.MANAGE_DEFAULT_APPS_SETTINGS" /></intent>
+        <intent><action android:name="android.settings.SETTINGS" /></intent>
     </queries>
     <application android:fullBackupContent="@xml/schedule_notification_backup_rules" android:dataExtractionRules="@xml/schedule_notification_extraction_rules">
         <service android:name="com.alfred.assistant.SchedulePushService" android:exported="false">

@@ -28,13 +28,8 @@ object AssistantAvailability {
     }
 
     fun openSetup(activity: Activity): Boolean {
-        if (Build.VERSION.SDK_INT >= 29) {
-            val manager = activity.getSystemService(RoleManager::class.java)
-            if (manager?.isRoleAvailable(RoleManager.ROLE_ASSISTANT) == true && !manager.isRoleHeld(RoleManager.ROLE_ASSISTANT)) {
-                try { activity.startActivity(manager.createRequestRoleIntent(RoleManager.ROLE_ASSISTANT)); return true }
-                catch (_: Exception) { /* Fall back to public Settings when the role chooser is unavailable. */ }
-            }
-        }
+        // A role request can immediately finish without showing a chooser on OEM builds.
+        // Open the public Settings screen for both first-time setup and later changes.
         return AssistantSettingsPolicy.open { activity.startActivity(Intent(it)) }
     }
 }

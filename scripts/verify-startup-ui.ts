@@ -15,11 +15,14 @@ const originalFetch = globalThis.fetch;
 const requests: string[] = [];
 const guest = { token: "isolated-guest", account: { id: "existing-guest", type: "guest" } };
 let googleFailure = false;
+let nextGuest = guest;
 globalThis.fetch = async url => {
   const path = new URL(String(url)).pathname;
   requests.push(path);
   if (path === "/health") return Response.json({ mode: "development" });
-  if (path === "/auth/guest" || path === "/auth/session") return Response.json(guest);
+  if (path === "/auth/guest") return Response.json(nextGuest);
+  if (path === "/auth/session") return Response.json(guest);
+  if (path === "/auth/logout") return Response.json({ ok: true });
   if (path === "/auth/prepare" && googleFailure) return Response.json({ error: "Google unavailable" }, { status: 503 });
   if (path === "/api/account") return Response.json({ onboardingCompleted: false, storage: {}, ai: {} });
   throw new Error(`Unexpected startup request: ${path}`);
@@ -30,6 +33,11 @@ let roots: ReturnType<typeof createRoot>[] = [];
 const settle = () => new Promise(resolve => setTimeout(resolve, 70));
 try {
   const { AuthProvider } = await server.ssrLoadModule("/src/auth/AuthContext.tsx");
+  const { useAuth } = await server.ssrLoadModule("/src/auth/authContext.ts");
+  function AccountProbe() {
+    const context = useAuth();
+    return createElement("div", { "data-active-account": context.session?.account.id }, "Workspace", createElement("button", { id: "test-logout", onClick: () => { void context.logout(); } }, "Log out"));
+  }
   const { ApplicationBoundary } = await server.ssrLoadModule("/src/components/reliability/ApplicationBoundary.tsx");
   const { OverlaySessionBoundary } = await server.ssrLoadModule("/src/components/OverlaySessionBoundary.tsx");
   const { NotificationHost } = await server.ssrLoadModule("/src/components/reliability/Notifications.tsx");
@@ -43,7 +51,7 @@ try {
     dom.document.body.innerHTML = '<div id="main"></div><div id="overlay"></div>';
     roots = [createRoot(document.getElementById("main")!), createRoot(document.getElementById("overlay")!)];
     await act(async () => {
-      roots[0].render(createElement(Fragment, null, createElement(NotificationHost), createElement(AuthProvider, null, createElement(ApplicationBoundary, null, createElement("div", null, "Workspace")))));
+      roots[0].render(createElement(Fragment, null, createElement(NotificationHost), createElement(AuthProvider, null, createElement(ApplicationBoundary, null, createElement(AccountProbe)))));
       roots[1].render(createElement(AuthProvider, null, createElement(OverlaySessionBoundary, null, createElement("div", null, "Overlay ready"))));
       await settle();
     });
@@ -90,7 +98,14 @@ try {
   await act(async () => { auth.setSession({ token: "isolated-google", account: { id: "google-user", type: "user" } }); await settle(); }); await act(settle);
   assert.equal(main().querySelector(".welcome-screen"), null);
   assert.ok(main().querySelector(".onboarding-layer"));
-  console.log("PASS: main/overlay startup waits for a choice; guest continuation, reload, legacy session preservation and Google failure/success gate the tour correctly.");
+  nextGuest = { token: "fresh-logout-token", account: { id: "fresh-logout-guest", type: "guest" } };
+  await act(async () => { main().querySelector<HTMLButtonElement>("#test-logout")!.click(); await settle(); }); await act(settle);
+  assert.equal(auth.getSession().account.id, nextGuest.account.id);
+  assert.equal(localStorage.getItem(auth.GUEST_CHOICE_KEY), nextGuest.account.id);
+  assert.equal(main().querySelector(".welcome-screen"), null, "Logout enters the fresh guest without reusing the previous guest");
+  assert.equal(main().querySelector("[data-active-account]")!.getAttribute("data-active-account"), nextGuest.account.id);
+  assert.match(document.getElementById("overlay")!.textContent!, /Overlay ready/);
+  console.log("PASS: startup choice, guest reload/recovery, Google sign-in and fresh guest logout across main/overlay.");
 } finally {
   await act(async () => { roots.forEach(root => root.unmount()); });
   globalThis.fetch = originalFetch;

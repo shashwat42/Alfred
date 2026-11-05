@@ -7,14 +7,12 @@ import {
   confirmedGuestAccount,
   confirmGuestAccount,
   createGuestSession,
-  clearSession,
+  logoutToGuest,
   DesktopAuthCancelledError,
   getPendingDesktopAuth,
   handleDesktopDeepLink,
   initAuthSession,
-  getToken,
   getSession,
-  API_BASE_URL,
   isTauri,
   loginWithGoogle as authLoginWithGoogle,
   pollDesktopAuthStatus,
@@ -238,13 +236,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = async () => {
-    const response = await fetch(`${API_BASE_URL}/auth/logout`, { method: "POST", headers: { Authorization: `Bearer ${getToken()}`, "ngrok-skip-browser-warning": "true" } });
-    if (response.ok || response.status === 401) {
-      clearSession();
-      setSession(null);
-    } else {
-      setError("Sign-out failed. Please try again.");
-    }
+    setLoading(true); setError(null);
+    try {
+      const guest = await logoutToGuest();
+      setConfirmedGuestId(guest.account.id);
+      setSession(guest);
+    } catch (err) {
+      setSession(getSession());
+      setError(err instanceof Error ? err.message : "Could not start a new guest session. Please retry.");
+    } finally { setLoading(false); }
   };
 
   return (

@@ -19,5 +19,5 @@ export function useAccountProfile(session: AuthSession | null) {
   }, [accountId]);
   const defaults = profileDefaults(session);
   const profile = saved?.accountId === accountId ? saved?.profile : undefined;
-  return { name: profile?.name || defaults.name, picture: profile?.picture === undefined ? defaults.picture : profile.picture };
+  return { name: profile?.name || defaults.name, picture: defaults.picture };
 }

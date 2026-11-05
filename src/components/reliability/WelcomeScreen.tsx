@@ -24,7 +24,7 @@ export function WelcomeScreen({ guest, google, message, errorMessage, embedded =
     catch (e) { setError(e instanceof Error ? e.message : "Could not connect. Please try again."); }
     finally { lock.current = false; setBusy(null); }
   };
-  return <main className={`welcome-screen ${embedded ? "welcome-embedded" : ""}`}>
+  return <main className={`welcome-screen ${embedded ? "welcome-embedded" : /Android/i.test(navigator.userAgent) ? "is-android" : ""}`}>
     {!embedded && !/Android/i.test(navigator.userAgent) && <Header />}
     <div className="welcome-layout">
       <section className="welcome-story" aria-label="About Alfred">
