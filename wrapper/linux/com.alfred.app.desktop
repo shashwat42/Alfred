@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Application
+Name=Alfred
+Comment=Alfred AI personal assistant
+Exec=alfred %u
+Icon=alfred
+Terminal=false
+NoDisplay=true
+Categories=Office;
+MimeType=x-scheme-handler/alfred;
+Actions=Overlay;
+
+[Desktop Action Overlay]
+Name=Quick Overlay
+Exec=alfred --overlay

@@ -2,13 +2,26 @@
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "mainBinaryName": "alfred",
   "bundle": {
-    "targets": ["rpm"],
+    "targets": [
+      "rpm"
+    ],
     "category": "Productivity",
     "shortDescription": "Alfred AI personal assistant",
     "linux": {
       "rpm": {
-        "depends": ["webkit2gtk4.1", "gtk3", "libappindicator-gtk3", "xdg-utils", "desktop-file-utils", "gstreamer1-plugins-good"],
-        "desktopTemplate": "linux/alfred.desktop"
+        "depends": [
+          "webkit2gtk4.1",
+          "gtk3",
+          "libappindicator-gtk3",
+          "xdg-utils",
+          "desktop-file-utils",
+          "gstreamer1-plugins-good",
+          "xdg-desktop-portal"
+        ],
+        "desktopTemplate": "linux/alfred.desktop",
+        "files": {
+          "/usr/share/applications/com.alfred.app.desktop": "linux/com.alfred.app.desktop"
+        }
       }
     }
   }

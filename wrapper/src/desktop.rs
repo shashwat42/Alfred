@@ -4,25 +4,30 @@ use tauri::{Emitter, Manager};
 static TOGGLING_OVERLAY: AtomicBool = AtomicBool::new(false);
 
 pub fn supports_global_shortcut() -> bool {
-    !cfg!(target_os = "linux") || (std::env::var_os("WAYLAND_DISPLAY").is_none()
-        && std::env::var("XDG_SESSION_TYPE").is_ok_and(|value| value == "x11"))
+    !cfg!(target_os = "linux")
+        || (std::env::var_os("WAYLAND_DISPLAY").is_none()
+            && std::env::var("XDG_SESSION_TYPE").is_ok_and(|value| value == "x11"))
 }
 
 /// WebView creation must run outside Windows' synchronous event handlers.
 pub fn toggle_overlay(app: &tauri::AppHandle) {
+    toggle_overlay_with_activation(app, None);
+}
+
+pub fn toggle_overlay_with_activation(app: &tauri::AppHandle, token: Option<String>) {
     if TOGGLING_OVERLAY.swap(true, Ordering::AcqRel) {
         return;
     }
     let app = app.clone();
     std::thread::spawn(move || {
-        if let Err(error) = toggle_overlay_inner(&app) {
+        if let Err(error) = toggle_overlay_inner(&app, token) {
             log::warn!("Could not toggle overlay: {error}");
         }
         TOGGLING_OVERLAY.store(false, Ordering::Release);
     });
 }
 
-fn toggle_overlay_inner(app: &tauri::AppHandle) -> tauri::Result<()> {
+fn toggle_overlay_inner(app: &tauri::AppHandle, token: Option<String>) -> tauri::Result<()> {
     if let Some(overlay) = app.get_webview_window("overlay") {
         if overlay.is_visible()? {
             overlay.emit("alfred:overlay-hidden", ())?;
@@ -33,6 +38,7 @@ fn toggle_overlay_inner(app: &tauri::AppHandle) -> tauri::Result<()> {
             overlay.show()?;
             overlay.unminimize()?;
             overlay.set_focus()?;
+            activate_overlay(&overlay, token);
             overlay.emit("alfred:overlay-summon", ())?;
         }
     } else if let Some(config) = app
@@ -44,11 +50,28 @@ fn toggle_overlay_inner(app: &tauri::AppHandle) -> tauri::Result<()> {
     {
         // Keep the existing configured appearance and permissions, but pay for
         // the second renderer only when the user actually opens the overlay.
-        tauri::WebviewWindowBuilder::from_config(app, config)?
+        let overlay = tauri::WebviewWindowBuilder::from_config(app, config)?
             .visible(false)
             .build()?;
+        activate_overlay(&overlay, token);
     }
     Ok(())
+}
+
+fn activate_overlay(window: &tauri::WebviewWindow, token: Option<String>) {
+    #[cfg(target_os = "linux")]
+    if let Some(token) = token {
+        use gtk::prelude::*;
+        let handle = window.clone();
+        let _ = window.run_on_main_thread(move || {
+            if let Ok(native) = handle.gtk_window() {
+                native.set_startup_id(&token);
+                native.present();
+            }
+        });
+    }
+    #[cfg(not(target_os = "linux"))]
+    let _ = (window, token);
 }
 
 pub fn set_memory_target(window: &tauri::WebviewWindow, inactive: bool) {

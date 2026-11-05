@@ -1,3 +1,4 @@
+import { OverlayShortcutRuntime } from "./components/dashboard/OverlayShortcutSettings.tsx";
 import App from './App.tsx';
 import { AuthProvider } from './auth/AuthContext.tsx';
 import { ScheduleNotificationRuntime } from './components/ScheduleNotificationRuntime.tsx';
@@ -9,6 +10,7 @@ import { PresenceRuntime } from './components/PresenceRuntime.tsx';
 export default function MainApp() {
   return <AuthProvider>
     <PresenceRuntime />
+    <OverlayShortcutRuntime />
     <ScheduleNotificationRuntime />
     <AppUpdateRuntime />
     <StorageRuntime />

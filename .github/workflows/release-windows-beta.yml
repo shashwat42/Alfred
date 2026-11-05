@@ -7,7 +7,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: windows-release
+  group: windows-release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -49,6 +49,7 @@ jobs:
           npm run test:startup-ui
           npm run test:overlay-lifecycle
           npm run test:assistant-controls-ui
+          npm run test:overlay-shortcut-ui
           npm run test:storage-ui
           npm run test:workspace-ui
           npm run test:profile-ui

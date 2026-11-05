@@ -1,19 +1,21 @@
+#[cfg(desktop)]
+mod desktop;
 #[cfg(any(target_os = "windows", target_os = "linux"))]
 mod origin;
 #[cfg(target_os = "linux")]
 #[path = "permissions_linux.rs"]
 mod permissions;
+#[cfg(target_os = "windows")]
+mod permissions;
+#[cfg(any(target_os = "windows", target_os = "linux"))]
+mod shortcuts;
 #[cfg(target_os = "linux")]
 #[path = "startup_linux.rs"]
 mod startup;
-#[cfg(desktop)]
-mod desktop;
-#[cfg(target_os = "windows")]
-mod permissions;
-#[cfg(target_os = "windows")]
-mod updates;
 #[cfg(target_os = "windows")]
 mod startup;
+#[cfg(target_os = "windows")]
+mod updates;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -24,10 +26,15 @@ pub fn run() {
     {
         builder = builder
             .manage(permissions::MicrophoneConsent::default())
+            .manage(shortcuts::ShortcutManager::default())
             .manage(updates::UpdateState::default())
             .plugin(tauri_plugin_updater::Builder::new().build())
             .invoke_handler(tauri::generate_handler![
                 permissions::request_microphone_consent,
+                shortcuts::get_overlay_shortcut,
+                shortcuts::configure_overlay_shortcut,
+                shortcuts::dismiss_overlay_shortcut_setup,
+                shortcuts::open_overlay_keyboard_settings,
                 updates::check_for_app_update,
                 updates::install_app_update,
                 startup::get_launch_on_startup,
@@ -40,8 +47,13 @@ pub fn run() {
     {
         builder = builder
             .manage(permissions::MicrophoneConsent::default())
+            .manage(shortcuts::ShortcutManager::default())
             .invoke_handler(tauri::generate_handler![
                 permissions::request_microphone_consent,
+                shortcuts::get_overlay_shortcut,
+                shortcuts::configure_overlay_shortcut,
+                shortcuts::dismiss_overlay_shortcut_setup,
+                shortcuts::open_overlay_keyboard_settings,
                 startup::get_launch_on_startup,
                 startup::set_launch_on_startup
             ])
@@ -124,6 +136,7 @@ pub fn run() {
                     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
                 };
                 use tauri_plugin_deep_link::DeepLinkExt;
+                #[cfg(not(any(target_os = "windows", target_os = "linux")))]
                 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
                 if let Err(error) = app.deep_link().register("alfred") {
@@ -208,12 +221,14 @@ pub fn run() {
                     Err(error) => log::warn!("System tray unavailable: {error}"),
                 }
 
-                // Register Global Shortcut: Alt+Space
-                if desktop::supports_global_shortcut() && let Ok(shortcut) = "Alt+Space".parse::<Shortcut>() {
+                #[cfg(any(target_os = "windows", target_os = "linux"))]
+                shortcuts::initialize(app.handle());
+                #[cfg(not(any(target_os = "windows", target_os = "linux")))]
+                if let Ok(shortcut) = "Alt+Space".parse::<Shortcut>() {
                     let handle = app.handle().clone();
                     let _ = app
                         .global_shortcut()
-                        .on_shortcut(shortcut, move |_app, _sc, event| {
+                        .on_shortcut(shortcut, move |_, _, event| {
                             if event.state() == ShortcutState::Pressed {
                                 desktop::toggle_overlay(&handle);
                             }

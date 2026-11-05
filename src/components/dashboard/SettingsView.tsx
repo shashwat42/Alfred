@@ -1,3 +1,4 @@
+import { OverlayShortcutSettings } from "./OverlayShortcutSettings.tsx";
 import { PREFERENCES_CHANGED_EVENT } from "../../lib/accountPreferences.ts";
 import { ProfileEditor } from "./ProfileEditor.tsx";
 import { useAccountProfile } from "../../hooks/useAccountProfile.ts";
@@ -202,6 +203,7 @@ function SettingsViewComponent() {
 
         {/* System & Privacy Section */}
         <ScheduleNotificationSettings />
+        <OverlayShortcutSettings />
         <StartupSettings />
         {/* App Info Section */}
         <AccountPanel key={session?.account.id} />
