@@ -1,0 +1,58 @@
+name: Build Alfred Android 1.0.4 candidate
+
+on:
+  push:
+    branches: ['build/android-1.0.4']
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      MODE: production
+      VITE_API_BASE_URL: https://alfred-137-23-49-88.sslip.io
+      CARGO_INCREMENTAL: '0'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: 9f7f8e96a9e5db9e16554284131a2dbf52ca982c
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Prepare Android SDK and Rust
+        run: |
+          echo "JAVA_HOME=$JAVA_HOME_21_X64" >> "$GITHUB_ENV"
+          echo "$JAVA_HOME_21_X64/bin" >> "$GITHUB_PATH"
+          export JAVA_HOME="$JAVA_HOME_21_X64"
+          export PATH="$JAVA_HOME/bin:$PATH"
+          sdk_manager="$(find "$ANDROID_HOME/cmdline-tools" -path '*/bin/sdkmanager' -type f | sort -V | tail -1)"
+          test -x "$sdk_manager"
+          set +o pipefail
+          yes | "$sdk_manager" --licenses >/dev/null
+          set -o pipefail
+          "$sdk_manager" 'platforms;android-37.0' 'build-tools;37.0.0' 'ndk;28.2.13676358'
+          echo "NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
+          rustup target add aarch64-linux-android
+      - run: npm ci
+      - run: node scripts/sync-android-assistant.js
+      - name: Build ARM64 release APK for signing
+        run: |
+          chmod +x wrapper/gen/android/gradlew
+          npm run tauri -- android build --target aarch64 --apk --ci
+          mkdir -p /tmp/alfred-android-candidate/tools
+          cp "$ANDROID_HOME/build-tools/37.0.0/lib/apksigner.jar" "$ANDROID_HOME/build-tools/37.0.0/zipalign" "$ANDROID_HOME/build-tools/37.0.0/aapt2" /tmp/alfred-android-candidate/tools/
+          mapfile -t apks < <(find wrapper/gen/android/app/build/outputs/apk -name '*.apk' -type f)
+          test "${#apks[@]}" -eq 1
+          cp -- "${apks[0]}" /tmp/alfred-android-candidate/Alfred_1.0.4_android_arm64-v8a-unsigned.apk
+          git rev-parse HEAD > /tmp/alfred-android-candidate/source-commit.txt
+          cd /tmp/alfred-android-candidate
+          sha256sum ./*.apk > SHA256SUMS-unsigned.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: alfred-android-1.0.4-unsigned
+          path: /tmp/alfred-android-candidate
+          if-no-files-found: error
