@@ -89,7 +89,8 @@ fn select(
 ) -> Option<(Version, Release)> {
     releases
         .iter()
-        .filter(|release| !release.draft)
+        // 1.0.31 was published before 1.0.4 despite its higher patch number.
+        .filter(|release| !release.draft && release.tag_name != "v1.0.31")
         .filter_map(|release| {
             let version = Version::parse(release.tag_name.strip_prefix('v')?).ok()?;
             if version <= *current || release.tag_name != format!("v{version}") {
@@ -513,6 +514,12 @@ mod tests {
                 .to_string(),
             "1.0.3"
         );
+    }
+    #[test]
+    fn skips_the_older_1_0_31_build() {
+        let current = Version::parse("1.0.4").unwrap();
+        let releases = [release("1.0.31"), release("1.0.5")];
+        assert_eq!(select(&releases, &current, "x86_64").unwrap().0.to_string(), "1.0.5");
     }
     #[test]
     fn rejects_wrong_versions_architectures_urls_and_oversized_packages() {

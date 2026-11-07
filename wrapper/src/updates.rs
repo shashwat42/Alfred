@@ -56,7 +56,8 @@ fn main_window(window: &WebviewWindow) -> Result<(), String> {
 fn newest(releases: &[Release], current: &Version) -> Option<(Version, String)> {
     releases
         .iter()
-        .filter(|release| !release.draft)
+        // 1.0.31 was published before 1.0.4 despite its higher patch number.
+        .filter(|release| !release.draft && release.tag_name != "v1.0.31")
         .filter_map(|release| {
             let version = Version::parse(release.tag_name.trim_start_matches('v')).ok()?;
             if version <= *current {
@@ -234,6 +235,12 @@ mod tests {
             )
             .is_none()
         );
+    }
+    #[test]
+    fn skips_the_older_1_0_31_build() {
+        let current = Version::parse("1.0.4").unwrap();
+        let releases = [release("v1.0.31", false), release("v1.0.5", false)];
+        assert_eq!(newest(&releases, &current).unwrap().0.to_string(), "1.0.5");
     }
     #[test]
     fn github_client_has_a_working_tls_provider() {
