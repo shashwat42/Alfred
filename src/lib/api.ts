@@ -1,5 +1,6 @@
 import {
   API_BASE_URL,
+  clearRevokedSession,
   checkUrlAuthParameters,
   getToken,
   getSession,
@@ -110,6 +111,11 @@ export async function apiFetch(
   }
   if (requestAccountId && getSession()?.account.id !== requestAccountId) throw new Error("Your account changed. Please try again.");
   if (response.status === 401 && token) {
+    const reason = await response.clone().json().catch(() => null);
+    if (reason?.code === "DEVICE_SESSION_REVOKED") {
+      clearRevokedSession(token);
+      return response;
+    }
     const current = getSession();
     if (!init._isRetry && current?.token === token && current.account.type === "guest") {
       try {

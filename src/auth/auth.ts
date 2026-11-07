@@ -168,6 +168,10 @@ export function clearSession(): void {
   }
 }
 
+export function clearRevokedSession(token: string): void {
+  if (getSession()?.token === token) clearSession();
+}
+
 /**
  * Retrieves the current session token or null if unauthenticated.
  */
@@ -280,6 +284,11 @@ export async function restoreAuthSession(existing: AuthSession): Promise<AuthSes
     throw error;
   }
   if (response.status === 401) {
+    const reason = await response.json().catch(() => null);
+    if (reason?.code === "DEVICE_SESSION_REVOKED") {
+      clearRevokedSession(existing.token);
+      throw new SessionRecoveryError("This device was signed out.");
+    }
     if (existing.account.type === "guest") return renewGuestSession(existing);
     throw new SessionRecoveryError("Your saved session needs recovery. You can continue as a guest without signing in, or use Google to return to your account.");
   }

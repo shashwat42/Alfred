@@ -66,6 +66,9 @@ Choose a signed-in Alfred installation under **Reminder device**. Open Alfred
 on each device with the same account and Cloud Sync enabled to register it.
 The device list filters out expired and revoked sessions. A selected device
 that becomes unavailable stays selected until you pick another device.
+On Windows and Linux, use the pencil to rename a listed device and the trash
+button to sign it out and remove it. A device that is offline sees the sign-out
+when it reconnects. Sign in again on a device to add it back.
 Until you choose a device, reminders follow the existing account delivery
 setting. New accounts start with delivery to all eligible devices, a ten-minute
 lead and no additional start alert.

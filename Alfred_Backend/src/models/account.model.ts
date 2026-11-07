@@ -12,6 +12,7 @@ export interface IAccount {
     name?: string | undefined;
     picture?: string | undefined;
     sessionVersion?: number;
+    revokedDeviceSessions?: Array<{ hash: string; expiresAt: Date }>;
     migratedTo?: mongoose.Types.ObjectId;
     guestWriteVersion?: number;
     storageBytes?: number;
@@ -30,6 +31,7 @@ const accountSchema = new Schema<IAccount>(
             required: true,
         },
         sessionVersion: { type: Number, default: 0 },
+        revokedDeviceSessions: { type: [{ _id: false, hash: String, expiresAt: Date }], default: undefined },
         migratedTo: { type: Schema.Types.ObjectId, ref: "Account" },
         guestWriteVersion: { type: Number, default: 0 },
         storageBytes: { type: Number, default: 0 },

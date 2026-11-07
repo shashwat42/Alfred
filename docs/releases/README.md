@@ -5,6 +5,10 @@ Linux and click-outside dismissal for Quick Overlay. The Windows and Fedora
 packages use release branch `releases/1.0.31` and Git tag `v1.0.31`.
 Android packages are built and signed separately.
 
+Merge features into `main` before cutting a release. Tag the exact commit
+that ships. Use release branches to stabilize or maintain a version, and
+merge or cherry-pick fixes from those branches back into `main`.
+
 ## Validate and package
 
 Run frontend tests, lint, UI checks and native Rust tests before packaging. The

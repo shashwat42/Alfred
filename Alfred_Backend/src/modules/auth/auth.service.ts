@@ -8,6 +8,7 @@ import { Account, type IAccount } from "../../models/account.model.ts";
 import { AuthTicket } from "../../models/authTicket.model.ts";
 import { OAuthState, type IOAuthState } from "../../models/oauthState.model.ts";
 import { observeService } from "../monitor/activity.ts";
+import { sessionWasRevoked } from "../../security/deviceSessions.ts";
 
 export interface GoogleUserProfile {
     googleId: string;
@@ -258,7 +259,7 @@ export function generateAuthToken(account: IAccount): string {
         version: account.sessionVersion ?? 0,
     };
 
-    return jwt.sign(payload, env.jwt.secret, { expiresIn: "7d", issuer: "alfred", audience: "alfred-api", algorithm: "HS256" });
+    return jwt.sign(payload, env.jwt.secret, { jwtid: crypto.randomUUID(), expiresIn: "7d", issuer: "alfred", audience: "alfred-api", algorithm: "HS256" });
 }
 
 /** Guest renewal preserves canonical ownership and quotas. Only this endpoint
@@ -280,7 +281,7 @@ export async function renewGuestAccount(token: string): Promise<AuthSessionRespo
     return mongoose.connection.transaction(async session => {
         const account = await Account.findById(accountId).session(session);
         if (!account || account.type !== "guest" || account.migratedTo || !account.guestId || account.googleId
-            || (account.sessionVersion ?? 0) !== (claims.version ?? 0)) return null;
+            || (account.sessionVersion ?? 0) !== (claims.version ?? 0) || sessionWasRevoked(account, token)) return null;
         await Account.updateOne({ _id: account._id }, { $inc: { guestWriteVersion: 1 } }, { session });
         return formatAuthResponse(account, generateAuthToken(account));
     });

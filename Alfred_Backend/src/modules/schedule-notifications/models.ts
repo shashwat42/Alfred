@@ -19,6 +19,8 @@ const devices = new Schema({
     sessionExpiresAt: { type: Date },
     sessionVersion: { type: Number },
     name: { type: String },
+    customName: { type: String },
+    customNameOwner: { type: String },
     pushToken: { type: String, select: false },
     pushSessionExpiresAt: { type: Date },
     pushSessionVersion: { type: Number },

@@ -4,6 +4,7 @@ import mongoose from "mongoose";
 import { env } from "../config/env.ts";
 import { Account, type AccountType } from "../models/account.model.ts";
 import { activity } from "../modules/monitor/activity.ts";
+import { sessionWasRevoked } from "../security/deviceSessions.ts";
 
 export type Principal =
     | { kind: "user"; accountId: string; googleSub: string | undefined }
@@ -59,6 +60,10 @@ export async function authMiddleware(
         if ((account.type === "guest" && (!account.guestId || account.googleId)) ||
             (account.type === "user" && (!account.googleId || account.guestId))) {
             res.status(401).json({ error: "Invalid account identity" });
+            return;
+        }
+        if (sessionWasRevoked(account, token)) {
+            res.status(401).json({ code: "DEVICE_SESSION_REVOKED", error: "This device was signed out." });
             return;
         }
         req.principal = account.type === "guest"

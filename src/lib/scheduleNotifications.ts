@@ -91,7 +91,11 @@ export async function notificationRequest<T>(path: string, accountId: string, bo
     _preserveAccount: true, _expectedAccountId: accountId,
   });
   if (!response.ok) {
-    const message = response.status === 409 ? "Settings changed on another device. Reloaded the latest settings; please try again."
+    const deviceError = path.startsWith("/devices/") && method !== "POST"
+      ? (await response.json().catch(() => null))?.error : undefined;
+    const message = typeof deviceError === "string" ? deviceError
+      : response.status === 404 && path.startsWith("/devices/") ? "That device is no longer signed in."
+      : response.status === 409 ? "Settings changed on another device. Reloaded the latest settings; please try again."
       : response.status === 422 ? "That device is no longer signed in. Choose another device."
         : `Schedule notification request failed (${response.status}).`;
     const err = new Error(message) as Error & { status?: number };

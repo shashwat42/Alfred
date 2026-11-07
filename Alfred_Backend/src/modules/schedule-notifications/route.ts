@@ -3,9 +3,11 @@ import { sendPolicyError } from "../../security/errors.ts";
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { authMiddleware } from "../../middleware/auth.middleware.ts";
-import { preferences, savePreferences, registerDevice, device, listDevices, plan, claim, unregisterDevice } from "./service.ts";
+import { preferences, savePreferences, registerDevice, device, listDevices, manageDevice, plan, claim, unregisterDevice } from "./service.ts";
+import { activeRevocations } from "../../security/deviceSessions.ts";
 
 const secretSchema = z.string().regex(/^[a-f0-9]{64}$/);
+const deviceNameSchema = z.string().trim().min(1).max(80).refine(value => !/\p{Cc}/u.test(value));
 export const preferenceSchema = z.object({
     destination: z.enum(["mobile", "desktop", "both"]), enabled: z.boolean(),
     deviceId: secretSchema.optional(),
@@ -16,7 +18,7 @@ export const preferenceSchema = z.object({
 }).strict();
 const registrationSchema = z.object({
     secret: secretSchema, platform: z.enum(["mobile", "desktop"]),
-    name: z.string().trim().min(1).max(80).refine(value => !/\p{Cc}/u.test(value)).optional(),
+    name: deviceNameSchema.optional(),
     pushToken: z.string().min(20).max(4096).regex(/^[\x21-\x7e]+$/).optional(),
 }).strict()
     .refine(value => !value.pushToken || value.platform === "mobile");
@@ -24,6 +26,8 @@ const keySchema = z.string().regex(/^[a-f0-9]{24}:\d{10,16}:(lead|start)$/);
 const router = Router();
 router.use(authMiddleware, requireCloudSync);
 const token = (req: Request) => req.headers.authorization!.slice(7).trim();
+const accountDevices = (req: Request, secret?: string) =>
+    listDevices(req.accountId!, req.account!.sessionVersion ?? 0, secret, Date.now(), activeRevocations(req.account!));
 const run = (handler: (req: Request, res: Response) => Promise<unknown>) => async (req: Request, res: Response) => {
     try { await handler(req, res); }
     catch (error) { if (sendPolicyError(error, res)) return; res.status(503).json({ error: "Schedule notifications are temporarily unavailable." }); }
@@ -33,7 +37,7 @@ router.put("/preferences", run(async (req, res) => {
     const parsed = preferenceSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: "Invalid schedule notification preferences." });
     if (parsed.data.deviceId) {
-        const devices = await listDevices(req.accountId!, req.account!.sessionVersion ?? 0);
+        const devices = await accountDevices(req);
         if (!devices.some(device => device.id === parsed.data.deviceId)) return res.status(422).json({ error: "That device is no longer signed in." });
     }
     if (!await savePreferences(req.accountId!, parsed.data)) return res.status(409).json({ error: "Preferences changed on another device. Reload and try again.", preferences: await preferences(req.accountId!) });
@@ -42,7 +46,20 @@ router.put("/preferences", run(async (req, res) => {
 router.post("/devices/list", run(async (req, res) => {
     const parsed = z.object({ secret: secretSchema.optional() }).strict().safeParse(req.body);
     if (!parsed.success) return res.sendStatus(400);
-    return res.json(await listDevices(req.accountId!, req.account!.sessionVersion ?? 0, parsed.data.secret));
+    return res.json(await accountDevices(req, parsed.data.secret));
+}));
+router.patch("/devices/:id", run(async (req, res) => {
+    const id = secretSchema.safeParse(req.params.id);
+    const parsed = z.object({ name: deviceNameSchema }).strict().safeParse(req.body);
+    if (!id.success || !parsed.success) return res.sendStatus(400);
+    return res.sendStatus(await manageDevice(req.account!, id.data, parsed.data.name) === "done" ? 204 : 404);
+}));
+router.delete("/devices/:id", run(async (req, res) => {
+    const id = secretSchema.safeParse(req.params.id);
+    if (!id.success) return res.sendStatus(400);
+    const result = await manageDevice(req.account!, id.data);
+    if (result === "shared") return res.status(409).json({ error: "This device shares an older sign-in with another device. Sign in again on the device you want to remove and retry." });
+    return res.sendStatus(result === "done" ? 204 : 404);
 }));
 router.post("/devices", run(async (req, res) => {
     const parsed = registrationSchema.safeParse(req.body);

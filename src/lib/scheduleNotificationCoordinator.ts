@@ -14,6 +14,7 @@ export function startScheduleNotificationCoordinator(session: AuthSession | null
     const controller = new AbortController();
     let stopped = false, busy = false;
     let registeredAt: number | undefined;
+    let checkedAt = 0;
     let syncedZone: string | null | undefined;
     let secret: string;
     try { secret = installationSecret(); } catch { return stopAccountSync; }
@@ -63,7 +64,14 @@ export function startScheduleNotificationCoordinator(session: AuthSession | null
           if (stillCurrent()) setNotificationDeliveryStatus(status.configured ? "Native schedule sync is active." : "Schedule sync needs an active sign-in session.");
           return;
         }
-        if (await notificationPermission() !== "granted") { setNotificationDeliveryStatus("Waiting for notification permission on this device."); return; }
+        if (await notificationPermission().catch(() => "unavailable") !== "granted") {
+          if (Date.now() - checkedAt >= 30_000) {
+            await notificationRequest("/preferences", accountId, undefined, "GET", controller.signal);
+            checkedAt = Date.now();
+          }
+          if (stillCurrent()) setNotificationDeliveryStatus("Waiting for notification permission on this device.");
+          return;
+        }
         let cursor: string | null = null;
         do {
           const page: NotificationPlan | null = await notificationRequest<NotificationPlan>("/sync", accountId, { secret, ...(cursor ? { cursor } : {}) }, "POST", controller.signal);

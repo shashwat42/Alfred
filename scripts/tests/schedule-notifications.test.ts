@@ -71,6 +71,20 @@ test("notification API rejects an account switch before sending a request", asyn
   try { await assert.rejects(notificationRequest("/preferences", "different-account"), /account changed/); assert.equal(calls, 0); }
   finally { globalThis.fetch = saved; }
 });
+test("a remotely revoked device clears its own session without creating a guest", async () => {
+  const { storage } = browser();
+  const saved = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls++;
+    return Response.json({ code: "DEVICE_SESSION_REVOKED" }, { status: 401 });
+  };
+  try {
+    await assert.rejects(notificationRequest("/preferences", accountId), /401/);
+    assert.equal(storage.getItem("alfred_session"), null);
+    assert.equal(calls, 1);
+  } finally { globalThis.fetch = saved; }
+});
 test("notification taps navigate to a validated schedule on the current account", () => {
   const { win } = browser(); const targets: unknown[] = [];
   win.addEventListener(NOTIFICATION_OPEN_EVENT, e => targets.push((e as CustomEvent).detail));

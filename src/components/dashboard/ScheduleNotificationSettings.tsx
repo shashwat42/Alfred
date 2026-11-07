@@ -1,9 +1,10 @@
 import { Loader } from "../reliability/States";
 import { ErrorNotice } from "../reliability/Notifications";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { Bell } from "lucide-react";
+import { Bell, Pencil, Trash2 } from "lucide-react";
 import { useAuth } from "../../auth/authContext.ts";
-import { getSession } from "../../auth/auth.ts";
+import { clearRevokedSession, getSession } from "../../auth/auth.ts";
+import { desktopPlatform } from "../../lib/desktopPlatform.ts";
 import { androidNotificationRequest, automaticTimeZone, detectedTimeZone, syncDetectedTimeZone, canOpenNotificationSettings, openNotificationSettings, getNotificationDeliveryStatus, subscribeNotificationDeliveryStatus, installationSecret, isAndroid, notificationPermission, notificationPlatform, notificationRequest, NOTIFICATION_DEVICES_EVENT, NOTIFICATION_SETTINGS_EVENT, type ScheduleNotificationDevice, type ScheduleNotificationPreferences } from "../../lib/scheduleNotifications.ts";
 import { cloudSyncEnabled, STORAGE_MODE_EVENT } from "../../lib/localWorkspace.ts";
 
@@ -21,6 +22,7 @@ function ScheduleNotificationSettingsForm({ accountId }: { accountId: string | u
   const [value, setValue] = useState<ScheduleNotificationPreferences | null>(null);
   const [devices, setDevices] = useState<ScheduleNotificationDevice[] | null>(null);
   const [devicesUnavailable, setDevicesUnavailable] = useState(false);
+  const [deviceAction, setDeviceAction] = useState<{ id: string; name?: string } | null>(null);
   const [permission, setPermission] = useState("checking");
   const [exactAlarms, setExactAlarms] = useState(false);
   const [pushRegistered, setPushRegistered] = useState(false);
@@ -90,6 +92,25 @@ function ScheduleNotificationSettingsForm({ accountId }: { accountId: string | u
     } finally { saving.current = false; setBusy(false); }
   };
   const platform = notificationPlatform();
+  const canManageDevices = platform === "desktop" && desktopPlatform(navigator.userAgent) !== null;
+  const updateDevice = async (device: ScheduleNotificationDevice, name?: string) => {
+    const session = getSession();
+    if (!accountId || session?.account.id !== accountId || saving.current) return;
+    saving.current = true; setBusy(true); setError(""); setFeedback("");
+    generation.current++;
+    try {
+      await notificationRequest(`/devices/${device.id}`, accountId, name === undefined ? undefined : { name }, name === undefined ? "DELETE" : "PATCH");
+      if (getSession()?.token !== session.token) return;
+      if (name === undefined && device.isCurrent) { clearRevokedSession(session.token); return; }
+      setDevices(rows => name === undefined
+        ? rows?.filter(row => row.id !== device.id) ?? null
+        : rows?.map(row => row.id === device.id ? { ...row, name } : row) ?? null);
+      setDeviceAction(null);
+      setFeedback(name === undefined ? `${device.name} was signed out and removed.` : "Device name saved.");
+    } catch (err) {
+      if (getSession()?.token === session.token) setError(err instanceof Error ? err.message : "Could not update the device.");
+    } finally { saving.current = false; setBusy(false); }
+  };
   const currentDevice = devices?.find(device => device.isCurrent);
   const excluded = value && (value.deviceId
     ? currentDevice && currentDevice.id !== value.deviceId
@@ -124,10 +145,30 @@ function ScheduleNotificationSettingsForm({ accountId }: { accountId: string | u
           {devices?.length === 0 && <p className="settings-feature-desc">Open the Alfred app on a device signed in to this account to add it here.</p>}
           {devices && value.deviceId && !devices.some(device => device.id === value.deviceId) && <p className="settings-feature-desc">Your selected device is no longer available. Choose another device to resume reminders.</p>}
           {devices && devices.length > 0 && !value.deviceId && <p className="settings-feature-desc">Choose a device to send reminders there. Your current delivery settings apply until you choose.</p>}
-          {devices?.map(device => <label key={device.id}>
-            <input type="radio" name="schedule-notification-device" checked={value.deviceId === device.id} onChange={() => void save({ deviceId: device.id })} />
-            <span>{device.name}{devices.some(other => other.id !== device.id && other.name === device.name) ? ` (${device.id.slice(0, 6)})` : ""}{device.isCurrent ? " · This device" : ""}</span>
-          </label>)}
+          {devices?.map(device => {
+            const action = deviceAction?.id === device.id ? deviceAction : null;
+            return <div className="schedule-device" key={device.id}>
+              <div className="schedule-device-row">
+                <label>
+                  <input type="radio" name="schedule-notification-device" checked={value.deviceId === device.id} onChange={() => void save({ deviceId: device.id })} />
+                  <span>{device.name}{devices.some(other => other.id !== device.id && other.name === device.name) ? ` (${device.id.slice(0, 6)})` : ""}{device.isCurrent ? " · This device" : ""}</span>
+                </label>
+                {canManageDevices && <>
+                  <button type="button" className="settings-action-btn" title="Rename device" aria-label={`Rename ${device.name}`} onClick={() => setDeviceAction({ id: device.id, name: device.name })}><Pencil size={16} /></button>
+                  <button type="button" className="settings-action-btn" title="Sign out and remove device" aria-label={`Sign out and remove ${device.name}`} onClick={() => setDeviceAction({ id: device.id })}><Trash2 size={16} /></button>
+                </>}
+              </div>
+              {action && (action.name !== undefined ? <form className="schedule-device-action" onSubmit={event => { event.preventDefault(); const name = action.name?.trim(); if (name) void updateDevice(device, name); }}>
+                <input className="settings-select-input" aria-label="Device name" value={action.name} required maxLength={80} onChange={event => setDeviceAction({ id: device.id, name: event.target.value })} />
+                <button className="settings-action-btn" type="submit" disabled={!action.name.trim()}>Save name</button>
+                <button className="settings-action-btn" type="button" onClick={() => setDeviceAction(null)}>Cancel</button>
+              </form> : <div className="schedule-device-action">
+                <p className="settings-feature-desc">Sign out {device.name} and remove it from this list?</p>
+                <button className="settings-action-btn" type="button" onClick={() => void updateDevice(device)}>Sign out and remove</button>
+                <button className="settings-action-btn" type="button" onClick={() => setDeviceAction(null)}>Cancel</button>
+              </div>)}
+            </div>;
+          })}
         </fieldset>
         <div className="settings-feature-row"><label htmlFor="schedule-lead-minutes" className="settings-feature-title">Remind me before</label><select id="schedule-lead-minutes" className="settings-select-input" value={value.leadMinutes} onChange={e => void save({ leadMinutes: Number(e.target.value) })}>{[...new Set([0, 5, 10, 15, 30, 60, 1440, value.leadMinutes])].sort((a,b) => a-b).map(minutes => <option key={minutes} value={minutes}>{minutes === 0 ? "At start" : minutes === 1440 ? "1 day" : `${minutes} minutes`}</option>)}</select></div>
         <div className="settings-feature-row"><label htmlFor="schedule-at-start" className="settings-feature-title">Also notify at event start</label><input id="schedule-at-start" type="checkbox" role="switch" checked={value.atStart} onChange={e => void save({ atStart: e.target.checked })} /></div>

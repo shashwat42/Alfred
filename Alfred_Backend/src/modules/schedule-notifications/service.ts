@@ -4,6 +4,8 @@ import { createHash } from "node:crypto";
 import mongoose from "mongoose";
 import jwt from "jsonwebtoken";
 import { Schedule } from "../../models/schedule.model.ts";
+import type { IAccount } from "../../models/account.model.ts";
+import { activeRevocations, revokeDeviceSession } from "../../security/deviceSessions.ts";
 import { NotificationSettings, NotificationDevice, NotificationDelivery } from "./models.ts";
 import { defaultPreferences, eligible, remindersFor, isDue, GRACE_MS, HORIZON_MS, type Preferences, type Platform } from "./policy.ts";
 
@@ -53,7 +55,7 @@ export async function device(accountId: string, secret: string, token: string, n
     return tenantRepository(NotificationDevice, accountId).findOne({ _id: hash(secret), sessionHash: hash(token), expiresAt: { $gt: new Date(now) } });
 }
 
-export async function listDevices(accountId: string, sessionVersion: number, secret?: string, now = Date.now()) {
+async function activeDevices(accountId: string, sessionVersion: number, now: number, revoked: string[]) {
     const after = { $gt: new Date(now) };
     const installations = await tenantRepository(NotificationDevice, accountId).find({
         expiresAt: after,
@@ -62,12 +64,34 @@ export async function listDevices(accountId: string, sessionVersion: number, sec
             { sessionExpiresAt: { $exists: false }, pushSessionVersion: sessionVersion, pushSessionExpiresAt: after },
         ],
     }, { sort: { expiresAt: -1, _id: 1 } });
+    const invalid = new Set(["revoked", ...revoked]);
+    return installations.filter(row => !invalid.has(row.sessionHash));
+}
+
+export async function listDevices(accountId: string, sessionVersion: number, secret?: string, now = Date.now(), revoked: string[] = []) {
     const current = secret && hash(secret);
-    return installations.filter(row => row.sessionHash !== "revoked").map(row => ({
+    return (await activeDevices(accountId, sessionVersion, now, revoked)).map(row => ({
         id: publicDeviceId(row._id),
-        name: row.name || (row.platform === "mobile" ? "Android device" : "Desktop computer"),
+        name: (row.customNameOwner === accountId && row.customName) || row.name || (row.platform === "mobile" ? "Android device" : "Desktop computer"),
         isCurrent: row._id === current,
     }));
+}
+
+export async function manageDevice(account: IAccount, publicId: string, newName?: string) {
+    const accountId = account._id.toString();
+    const now = Date.now();
+    const devices = await activeDevices(accountId, account.sessionVersion ?? 0, now, activeRevocations(account, now));
+    const target = devices.find(row => publicDeviceId(row._id) === publicId);
+    if (!target) return "missing";
+    if (newName !== undefined) {
+        const result = await tenantRepository(NotificationDevice, accountId).updateOne(
+            { _id: target._id, sessionHash: target.sessionHash }, { customName: newName, customNameOwner: accountId });
+        return result.matchedCount ? "done" : "missing";
+    }
+    // Older JWTs could be identical if issued in the same second.
+    if (devices.some(row => row._id !== target._id && row.sessionHash === target.sessionHash)) return "shared";
+    const expiry = target.sessionExpiresAt ?? target.pushSessionExpiresAt;
+    return expiry && await revokeDeviceSession(account, target.sessionHash, expiry) ? "done" : "missing";
 }
 
 /** Read-through reconciliation: every sync derives reminders from current schedules.
