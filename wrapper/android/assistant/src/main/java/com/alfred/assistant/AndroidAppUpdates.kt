@@ -2,6 +2,7 @@ package com.alfred.assistant
 
 import android.app.Activity
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.SystemClock
@@ -10,6 +11,7 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URI
 import java.io.ByteArrayOutputStream
+import java.security.MessageDigest
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -62,11 +64,19 @@ object AndroidAppUpdates {
             val deadline = SystemClock.elapsedRealtime() + 45_000
             val response = try {
                 @Suppress("DEPRECATION")
-                val info = activity.packageManager.getPackageInfo(activity.packageName, 0)
+                val info = activity.packageManager.getPackageInfo(activity.packageName,
+                    if (Build.VERSION.SDK_INT >= 28) PackageManager.GET_SIGNING_CERTIFICATES else PackageManager.GET_SIGNATURES)
                 @Suppress("DEPRECATION")
                 val currentCode = if (Build.VERSION.SDK_INT >= 28) info.longVersionCode else info.versionCode.toLong()
+                @Suppress("DEPRECATION")
+                val signer = if (Build.VERSION.SDK_INT >= 28)
+                    info.signingInfo?.signingCertificateHistory?.lastOrNull()
+                else info.signatures?.singleOrNull()
+                val certificate = signer?.let {
+                    MessageDigest.getInstance("SHA-256").digest(it.toByteArray()).joinToString("") { byte -> "%02x".format(byte) }
+                }
                 var newest: Update? = null
-                if (Build.SUPPORTED_ABIS.contains("arm64-v8a")) {
+                if (certificate != null && Build.SUPPORTED_ABIS.contains("arm64-v8a")) {
                     val releases = JSONArray(read("https://api.github.com/repos/shashwat42/Alfred/releases?per_page=20", deadline))
                     var manifests = 0
                     for (index in 0 until releases.length()) {
@@ -76,7 +86,7 @@ object AndroidAppUpdates {
                         for (assetIndex in 0 until assets.length()) {
                             val asset = assets.getJSONObject(assetIndex)
                             val manifestUrl = asset.optString("browser_download_url")
-                            if (!AndroidUpdatePolicy.manifestName(asset.optString("name")) || !AndroidUpdatePolicy.releaseAsset(manifestUrl)) continue
+                            if (asset.optString("name") != AndroidUpdatePolicy.manifestName || !AndroidUpdatePolicy.releaseAsset(manifestUrl)) continue
                             if (++manifests > 20) break
                             val manifest = JSONObject(read(manifestUrl, deadline))
                             val version = manifest.optString("version")
@@ -84,6 +94,7 @@ object AndroidAppUpdates {
                             val apk = manifest.optString("apk")
                             if (manifest.optString("applicationId") != activity.packageName ||
                                 manifest.optString("architecture") != "arm64-v8a" ||
+                                !AndroidUpdatePolicy.matchesCertificate(certificate, manifest.optString("certificateSha256")) ||
                                 manifest.optInt("minSdk", Int.MAX_VALUE) > Build.VERSION.SDK_INT ||
                                 !AndroidUpdatePolicy.validUpdate(version, code, currentCode, apk, manifest.optString("sha256"))) continue
                             for (apkIndex in 0 until assets.length()) {

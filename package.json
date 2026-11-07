@@ -23,6 +23,7 @@
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
     "release:windows": "node scripts/release-windows.js",
+    "release:android:manifest": "node scripts/android-update-manifest.js",
     "dev:pc": "node scripts/dev-pc.js",
     "dev:android": "node scripts/dev-android.js",
     "android:sync-assistant": "node scripts/sync-android-assistant.js",

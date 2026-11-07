@@ -7,6 +7,8 @@ list on Windows and Linux. Windows, Fedora and Android use release tag
 Merge features into `main` before cutting a release. Tag the exact commit
 that ships. Use release branches to stabilize or maintain a version, and
 merge or cherry-pick fixes from those branches back into `main`.
+Choose a desktop version that sorts above every previously published version
+in SemVer. Increase the Android version code for each APK.
 
 ## Validate and package
 
@@ -32,6 +34,23 @@ Attach the Fedora RPM, `.sig`, `linux-update.json`, checksums and Linux source
 manifest to the matching Windows draft. Verify both source manifests, hashes and
 pinned-key signatures before publishing the regular GitHub release and marking
 it latest. Never relabel an older package with a new version name.
+
+For Android, sign the ARM64 APK with the existing release key. Generate the
+update manifest from the signed APK using the matching Android SDK build tools.
+
+```bash
+npm run --silent release:android:manifest -- \
+  "Alfred_${version}_android_arm64-v8a.apk" "$ANDROID_HOME/build-tools/37.0.0" \
+  > android-update.json
+```
+
+Attach the APK, `android-update.json` and its checksum file to the same draft.
+The manifest records the actual APK certificate, version code, minimum SDK and
+checksum. Compare its certificate fingerprint to the previous signed APK.
+Certificate-aware Android builds offer updates only when that fingerprint
+matches their installed certificate. Install the first certificate-aware build
+manually from GitHub to enable discovery of subsequent releases. Keep the new
+manifest filename so older clients skip these updates.
 
 Linux clients running 1.0.3 or later require a newer published version with signed
 Linux updater metadata. Earlier Linux versions need one manual bootstrap upgrade.

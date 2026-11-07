@@ -9,11 +9,12 @@ class AndroidUpdatePolicyTest {
         for (url in listOf("http://github.com/shashwat42/Alfred/releases/download/v1/app.apk", "https://github.com.evil/shashwat42/Alfred/releases/download/v1/app.apk", "https://github.com/another/Alfred/releases/download/v1/app.apk", "https://user@github.com/shashwat42/Alfred/releases/download/v1/app.apk", "https://github.com/shashwat42/Alfred/releases/download/v1/../app.apk", "https://github.com/shashwat42/Alfred/releases/download/v1/app.apk?url=evil", "https://github.com/shashwat42/Alfred/releases/download/v1/%2e%2e")) assertFalse(url, AndroidUpdatePolicy.releaseAsset(url))
     }
 
-    @Test fun androidHotfixManifestsAreDistinctFromWindowsUpdaterAssets() {
-        assertTrue(AndroidUpdatePolicy.manifestName("android-release-manifest.json"))
-        assertTrue(AndroidUpdatePolicy.manifestName("android-beta.4.1-release-manifest.json"))
-        assertFalse(AndroidUpdatePolicy.manifestName("release-manifest.json"))
-        assertFalse(AndroidUpdatePolicy.manifestName("latest.json"))
+    @Test fun updateCertificateMustMatchTheInstalledSigner() {
+        val installed = "a".repeat(64)
+        assertTrue(AndroidUpdatePolicy.matchesCertificate(installed, installed))
+        assertFalse(AndroidUpdatePolicy.matchesCertificate(installed, "b".repeat(64)))
+        assertFalse(AndroidUpdatePolicy.matchesCertificate(installed, ""))
+        assertFalse(AndroidUpdatePolicy.matchesCertificate("", ""))
     }
 
     @Test fun updatesCannotDowngradeOrSwapPlatformOrInstallerName() {
