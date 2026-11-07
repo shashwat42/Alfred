@@ -29,10 +29,12 @@ jobs:
           echo "$JAVA_HOME_21_X64/bin" >> "$GITHUB_PATH"
           export JAVA_HOME="$JAVA_HOME_21_X64"
           export PATH="$JAVA_HOME/bin:$PATH"
+          sdk_manager="$(find "$ANDROID_HOME/cmdline-tools" -path '*/bin/sdkmanager' -type f | sort -V | tail -1)"
+          test -x "$sdk_manager"
           set +o pipefail
-          yes | sdkmanager --licenses >/dev/null
+          yes | "$sdk_manager" --licenses >/dev/null
           set -o pipefail
-          sdkmanager 'platforms;android-37' 'ndk;28.2.13676358'
+          "$sdk_manager" 'platforms;android-37.0' 'build-tools;37.0.0' 'ndk;28.2.13676358'
           echo "NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
           rustup target add aarch64-linux-android
       - run: npm ci
@@ -41,7 +43,8 @@ jobs:
         run: |
           chmod +x wrapper/gen/android/gradlew
           npm run tauri -- android build --target aarch64 --apk --ci
-          mkdir -p /tmp/alfred-android-candidate
+          mkdir -p /tmp/alfred-android-candidate/tools
+          cp "$ANDROID_HOME/build-tools/37.0.0/lib/apksigner.jar" "$ANDROID_HOME/build-tools/37.0.0/zipalign" "$ANDROID_HOME/build-tools/37.0.0/aapt2" /tmp/alfred-android-candidate/tools/
           mapfile -t apks < <(find wrapper/gen/android/app/build/outputs/apk -name '*.apk' -type f)
           test "${#apks[@]}" -eq 1
           cp -- "${apks[0]}" /tmp/alfred-android-candidate/Alfred_1.0.31_android_arm64-v8a-unsigned.apk
