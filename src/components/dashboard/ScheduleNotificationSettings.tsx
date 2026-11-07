@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "
 import { Bell } from "lucide-react";
 import { useAuth } from "../../auth/authContext.ts";
 import { getSession } from "../../auth/auth.ts";
-import { androidNotificationRequest, automaticTimeZone, detectedTimeZone, syncDetectedTimeZone, canOpenNotificationSettings, openNotificationSettings, getNotificationDeliveryStatus, subscribeNotificationDeliveryStatus, isAndroid, notificationPermission, notificationPlatform, notificationRequest, NOTIFICATION_SETTINGS_EVENT, type ScheduleNotificationPreferences } from "../../lib/scheduleNotifications.ts";
+import { androidNotificationRequest, automaticTimeZone, detectedTimeZone, syncDetectedTimeZone, canOpenNotificationSettings, openNotificationSettings, getNotificationDeliveryStatus, subscribeNotificationDeliveryStatus, installationSecret, isAndroid, notificationPermission, notificationPlatform, notificationRequest, NOTIFICATION_DEVICES_EVENT, NOTIFICATION_SETTINGS_EVENT, type ScheduleNotificationDevice, type ScheduleNotificationPreferences } from "../../lib/scheduleNotifications.ts";
 import { cloudSyncEnabled, STORAGE_MODE_EVENT } from "../../lib/localWorkspace.ts";
 
 export function ScheduleNotificationSettings() {
@@ -19,6 +19,8 @@ export function ScheduleNotificationSettings() {
 
 function ScheduleNotificationSettingsForm({ accountId }: { accountId: string | undefined }) {
   const [value, setValue] = useState<ScheduleNotificationPreferences | null>(null);
+  const [devices, setDevices] = useState<ScheduleNotificationDevice[] | null>(null);
+  const [devicesUnavailable, setDevicesUnavailable] = useState(false);
   const [permission, setPermission] = useState("checking");
   const [exactAlarms, setExactAlarms] = useState(false);
   const [pushRegistered, setPushRegistered] = useState(false);
@@ -29,14 +31,21 @@ function ScheduleNotificationSettingsForm({ accountId }: { accountId: string | u
   const deliveryStatus = useSyncExternalStore(subscribeNotificationDeliveryStatus, getNotificationDeliveryStatus);
   const saving = useRef(false);
   const generation = useRef(0);
+  const loadDevices = useCallback(async () => {
+    if (!accountId) return null;
+    const secret = notificationPlatform() ? installationSecret() : undefined;
+    return notificationRequest<ScheduleNotificationDevice[]>("/devices/list", accountId, { secret });
+  }, [accountId]);
   const load = useCallback(async () => {
     if (!accountId || saving.current) return;
     const requestGeneration = ++generation.current;
-    try {
-      const saved = await syncDetectedTimeZone(accountId);
-      if (getSession()?.account.id === accountId && !saving.current && requestGeneration === generation.current) { setValue(saved); setError(""); }
-    } catch { if (getSession()?.account.id === accountId && requestGeneration === generation.current) setError("Could not load schedule notification settings. Please retry."); }
-  }, [accountId]);
+    const [saved, registered] = await Promise.allSettled([syncDetectedTimeZone(accountId), loadDevices()]);
+    if (getSession()?.account.id !== accountId || saving.current || requestGeneration !== generation.current) return;
+    if (saved.status === "fulfilled") { setValue(saved.value); setError(""); }
+    else setError("Could not load schedule notification settings. Please retry.");
+    setDevices(registered.status === "fulfilled" ? registered.value : null);
+    setDevicesUnavailable(registered.status === "rejected");
+  }, [accountId, loadDevices]);
   const checkPermission = useCallback(() => {
     void notificationPermission().then(setPermission).catch(() => setPermission("unavailable"));
     if (isAndroid()) void androidNotificationRequest("status").then(status => { setExactAlarms(Boolean(status.exactAlarms)); setPushRegistered(Boolean(status.pushRegistered)); }).catch(() => { setExactAlarms(false); setPushRegistered(false); });
@@ -45,8 +54,14 @@ function ScheduleNotificationSettingsForm({ accountId }: { accountId: string | u
     const initial = window.setTimeout(() => { void load(); checkPermission(); }, 0);
     const timer = setInterval(() => { void load(); checkPermission(); }, 30_000);
     const focus = () => { void load(); checkPermission(); };
+    const registrationChanged = () => { void load(); };
     window.addEventListener("focus", focus);
-    return () => { clearTimeout(initial); clearInterval(timer); window.removeEventListener("focus", focus); };
+    window.addEventListener(NOTIFICATION_DEVICES_EVENT, registrationChanged);
+    return () => {
+      clearTimeout(initial); clearInterval(timer);
+      window.removeEventListener("focus", focus);
+      window.removeEventListener(NOTIFICATION_DEVICES_EVENT, registrationChanged);
+    };
   }, [load, checkPermission]);
   const save = async (patch: Partial<ScheduleNotificationPreferences>) => {
     if (!value || !accountId || saving.current) return;
@@ -55,7 +70,7 @@ function ScheduleNotificationSettingsForm({ accountId }: { accountId: string | u
     try {
       const merged = { ...value, ...patch };
       const { destination, enabled, leadMinutes, atStart, timeZone, timeZoneMode, revision } = merged;
-      const result = await notificationRequest<ScheduleNotificationPreferences>("/preferences", accountId, { destination, enabled, leadMinutes, atStart, timeZone, timeZoneMode, revision }, "PUT");
+      const result = await notificationRequest<ScheduleNotificationPreferences>("/preferences", accountId, { destination, deviceId: patch.deviceId, enabled, leadMinutes, atStart, timeZone, timeZoneMode, revision }, "PUT");
       if (getSession()?.account.id !== accountId) return;
       setValue(result); setFeedback("Schedule notification settings saved for this account.");
       window.dispatchEvent(new Event(NOTIFICATION_SETTINGS_EVENT));
@@ -66,9 +81,19 @@ function ScheduleNotificationSettingsForm({ accountId }: { accountId: string | u
         const fresh = await notificationRequest<ScheduleNotificationPreferences>("/preferences", accountId).catch(() => null);
         if (fresh && getSession()?.account.id === accountId) setValue(fresh);
       }
+      if ((e as { status?: number }).status === 422) {
+        const refreshed = await loadDevices().catch(() => null);
+        if (getSession()?.account.id === accountId) {
+          setDevices(refreshed); setDevicesUnavailable(refreshed === null);
+        }
+      }
     } finally { saving.current = false; setBusy(false); }
   };
   const platform = notificationPlatform();
+  const currentDevice = devices?.find(device => device.isCurrent);
+  const excluded = value && (value.deviceId
+    ? currentDevice && currentDevice.id !== value.deviceId
+    : platform && value.destination !== "both" && value.destination !== platform);
   const requestPermission = async () => {
     setPermissionAction("request"); setError(""); setFeedback("");
     try {
@@ -93,15 +118,23 @@ function ScheduleNotificationSettingsForm({ accountId }: { accountId: string | u
       {!value ? error ? null : <Loader label="Loading notification settings…" /> : <fieldset disabled={busy} className="schedule-notification-fields">
         <legend className="sr-only">Schedule notification preferences</legend>
         <div className="settings-feature-row"><label htmlFor="schedule-notifications-enabled" className="settings-feature-title">Schedule reminders</label><input id="schedule-notifications-enabled" type="checkbox" role="switch" checked={value.enabled} onChange={e => void save({ enabled: e.target.checked })} /></div>
-        <fieldset className="schedule-destination"><legend>Delivery destination</legend>
-          {([['mobile', 'Mobile only'], ['desktop', 'Desktop only'], ['both', 'Both']] as const).map(([destination, label]) => <label key={destination}><input type="radio" name="schedule-notification-destination" checked={value.destination === destination} onChange={() => void save({ destination })} />{label}</label>)}
+        <fieldset className="schedule-destination"><legend>Reminder device</legend>
+          {devicesUnavailable && <div className="settings-feature-info"><span className="settings-feature-desc">Could not load your devices.</span><button type="button" className="settings-action-btn" onClick={() => void load()}>Retry</button></div>}
+          {!devicesUnavailable && devices === null && <p className="settings-feature-desc" role="status">Loading devices…</p>}
+          {devices?.length === 0 && <p className="settings-feature-desc">Open the Alfred app on a device signed in to this account to add it here.</p>}
+          {devices && value.deviceId && !devices.some(device => device.id === value.deviceId) && <p className="settings-feature-desc">Your selected device is no longer available. Choose another device to resume reminders.</p>}
+          {devices && devices.length > 0 && !value.deviceId && <p className="settings-feature-desc">Choose a device to send reminders there. Your current delivery settings apply until you choose.</p>}
+          {devices?.map(device => <label key={device.id}>
+            <input type="radio" name="schedule-notification-device" checked={value.deviceId === device.id} onChange={() => void save({ deviceId: device.id })} />
+            <span>{device.name}{devices.some(other => other.id !== device.id && other.name === device.name) ? ` (${device.id.slice(0, 6)})` : ""}{device.isCurrent ? " · This device" : ""}</span>
+          </label>)}
         </fieldset>
         <div className="settings-feature-row"><label htmlFor="schedule-lead-minutes" className="settings-feature-title">Remind me before</label><select id="schedule-lead-minutes" className="settings-select-input" value={value.leadMinutes} onChange={e => void save({ leadMinutes: Number(e.target.value) })}>{[...new Set([0, 5, 10, 15, 30, 60, 1440, value.leadMinutes])].sort((a,b) => a-b).map(minutes => <option key={minutes} value={minutes}>{minutes === 0 ? "At start" : minutes === 1440 ? "1 day" : `${minutes} minutes`}</option>)}</select></div>
         <div className="settings-feature-row"><label htmlFor="schedule-at-start" className="settings-feature-title">Also notify at event start</label><input id="schedule-at-start" type="checkbox" role="switch" checked={value.atStart} onChange={e => void save({ atStart: e.target.checked })} /></div>
         <div className="settings-feature-row"><label htmlFor="schedule-notification-zone" className="settings-feature-title">Schedule time zone</label><select id="schedule-notification-zone" className="settings-select-input" value={automaticTimeZone(value) ? "automatic" : value.timeZone} onChange={e => void save(e.target.value === "automatic" ? { timeZoneMode: "automatic", timeZone: detectedTimeZone() ?? value.timeZone } : { timeZoneMode: "manual", timeZone: e.target.value })}><option value="automatic">Automatic — {detectedTimeZone() ?? value.timeZone}</option>{[...new Set([value.timeZone, detectedTimeZone() ?? value.timeZone, "UTC", ...(typeof Intl.supportedValuesOf === "function" ? Intl.supportedValuesOf("timeZone") : [])])].map(zone => <option key={zone} value={zone}>{zone}</option>)}</select></div>
         <p className="settings-feature-desc">Automatic detects your device’s time zone and updates the account’s reminder timing when Alfred is open. Choose a specific zone to keep it fixed across devices.</p>
       </fieldset>}
-      <div className="settings-feature-row"><div className="settings-feature-info"><span className="settings-feature-title">Permission on this device: {permission}</span><span className="settings-feature-desc">{!platform ? "Native notifications require the installed Android or desktop app." : platform === "desktop" ? "Desktop delivery works while Alfred is running, including in the system tray. OS settings may silence alerts." : "Android uses push notifications and native alarms. Internet access is needed. Android force-stop and device battery restrictions can prevent delivery."}</span><span className="settings-feature-desc">{value && value.destination !== "both" && value.destination !== platform ? "This device is excluded by your delivery destination." : permission !== "granted" ? "Your selected destination needs notification permission on each receiving device." : "Permission on other devices is managed in their own operating-system settings."} Preferences synchronize across devices using the same account.</span></div></div>
+      <div className="settings-feature-row"><div className="settings-feature-info"><span className="settings-feature-title">Permission on this device: {permission}</span><span className="settings-feature-desc">{!platform ? "Native notifications require the installed Android or desktop app." : platform === "desktop" ? "Desktop delivery works while Alfred is running in the background. OS settings may silence alerts." : "Android uses push notifications and native alarms. Internet access is needed. Android force-stop and device battery restrictions can prevent delivery."}</span><span className="settings-feature-desc">{excluded ? "Reminders are routed to another device." : "Allow notifications in the operating-system settings on the device you choose."} Preferences synchronize across devices using the same account.</span></div></div>
       {platform && <div className="schedule-permission-actions">
         <button type="button" className="settings-action-btn" aria-busy={permissionAction === "request" || permission === "checking"} disabled={permission === "granted" || permission === "checking" || permission === "unavailable" || permissionAction !== null} onClick={() => void requestPermission()}>
           {permissionAction === "request" || permission === "checking" ? "Checking permission…" : permission === "granted" ? "Notifications enabled" : permission === "unavailable" ? "Notifications unavailable" : "Enable notifications"}

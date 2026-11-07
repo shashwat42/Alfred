@@ -33,6 +33,7 @@ pub fn run() {
             .manage(updates::UpdateState::default())
             .plugin(tauri_plugin_updater::Builder::new().build())
             .invoke_handler(tauri::generate_handler![
+                desktop::notification_device_name,
                 permissions::request_microphone_consent,
                 shortcuts::get_overlay_shortcut,
                 shortcuts::configure_overlay_shortcut,
@@ -53,6 +54,8 @@ pub fn run() {
             .manage(shortcuts::ShortcutManager::default())
             .manage(updates::UpdateState::default())
             .invoke_handler(tauri::generate_handler![
+                desktop::notification_device_name,
+                desktop::quit_alfred,
                 permissions::request_microphone_consent,
                 updates::check_for_app_update,
                 updates::install_app_update,
@@ -71,13 +74,12 @@ pub fn run() {
         use tauri::{Emitter, Manager};
 
         builder = builder.plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
-            if let Some(window) = app.get_webview_window("main") {
+            if argv.iter().any(|arg| arg == "--overlay") {
+                desktop::toggle_overlay(app);
+            } else if let Some(window) = app.get_webview_window("main") {
                 let _ = window.show();
                 let _ = window.unminimize();
                 let _ = window.set_focus();
-            }
-            if argv.iter().any(|arg| arg == "--overlay") {
-                desktop::toggle_overlay(app);
             }
             for arg in argv {
                 if arg.starts_with("alfred://") {
@@ -94,6 +96,10 @@ pub fn run() {
         builder = builder.plugin(tauri_plugin_notification::init());
 
         builder = builder.on_window_event(|window, event| {
+            #[cfg(any(target_os = "windows", target_os = "linux"))]
+            if window.label() == "overlay" && matches!(event, tauri::WindowEvent::Focused(false)) {
+                desktop::dismiss_unfocused_overlay(window);
+            }
             if let Some(webview) = window.app_handle().get_webview_window(window.label()) {
                 match event {
                     tauri::WindowEvent::Focused(true) => {
@@ -108,23 +114,13 @@ pub fn run() {
                 }
             }
             if window.label() == "main"
-                && let tauri::WindowEvent::CloseRequested { api: _api, .. } = event
+                && let tauri::WindowEvent::CloseRequested { api, .. } = event
             {
-                #[cfg(target_os = "linux")]
-                {
-                    // GNOME does not expose tray icons by default. Never strand
-                    // a hidden app or leave reminder processes running after Close.
-                    window.app_handle().exit(0);
-                    return;
-                }
-                #[cfg(not(target_os = "linux"))]
-                {
-                    // Hide window instead of terminating application
-                    _api.prevent_close();
-                    let _ = window.hide();
-                    if let Some(webview) = window.app_handle().get_webview_window("main") {
-                        desktop::set_memory_target(&webview, true);
-                    }
+                // Keep the main webview alive for reminders while the window is hidden.
+                api.prevent_close();
+                let _ = window.hide();
+                if let Some(webview) = window.app_handle().get_webview_window("main") {
+                    desktop::set_memory_target(&webview, true);
                 }
             }
         });

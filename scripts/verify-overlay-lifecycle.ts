@@ -13,13 +13,16 @@ for (const name of names) Object.defineProperty(globalThis, name, {
       : dom[name as keyof Window],
 });
 const handlers = new Map<string, Set<() => void>>();
-const harness = { handlers, closes: 0, replies: [] as ((value: unknown) => void)[] };
+const harness = {
+  handlers, closes: 0, replies: [] as ((value: unknown) => void)[],
+  maximized: false, monitor: null as unknown, positions: [] as unknown[],
+};
 Object.assign(globalThis, { __overlayHarness: harness });
 Object.assign(dom, { __TAURI_INTERNALS__: {} });
 const server = await createServer({
   mode: 'development', cacheDir: 'node_modules/.vite-overlay-lifecycle',
   optimizeDeps: { noDiscovery: true, entries: [], include: [] },
-  server: { middlewareMode: true, hmr: false }, appType: 'custom',
+  server: { middlewareMode: true, hmr: false, ws: false }, appType: 'custom',
   ssr: { noExternal: ['@tauri-apps/api'] },
   plugins: [{
     name: 'isolated-overlay-native-adapter', enforce: 'pre',
@@ -28,6 +31,8 @@ const server = await createServer({
       if (id === '@tauri-apps/api/event') return '\0overlay-events';
       if (id === '@tauri-apps/api/webviewWindow') return '\0overlay-window';
       if (id === '@tauri-apps/api/window') return '\0overlay-monitor';
+      if (id === '../auth/AuthContext.tsx') return '\0overlay-auth-provider';
+      if (id === '../auth/authContext.ts') return '\0overlay-auth-context';
     },
     load(id) {
       if (id === '\0overlay-chat') return `export const boundVoiceResources=x=>x; export const buildSafeChatContext=x=>x; export const sendChatMessage=()=>new Promise(resolve=>globalThis.__overlayHarness.replies.push(resolve));`;
@@ -39,9 +44,14 @@ const server = await createServer({
         return () => handlers.get(name).delete(handler);
       }`;
       if (id === '\0overlay-window') return `export function getCurrentWebviewWindow() {
-        return { show: async () => {}, setFocus: async () => {}, close: async () => { globalThis.__overlayHarness.closes++; } };
+        return { show: async () => {}, setFocus: async () => {}, close: async () => { globalThis.__overlayHarness.closes++; },
+          isMaximized: async () => globalThis.__overlayHarness.maximized,
+          outerSize: async () => ({ width: 640 }),
+          setPosition: async ({ x, y }) => globalThis.__overlayHarness.positions.push({ x, y }) };
       }`;
-      if (id === '\0overlay-monitor') return 'export async function currentMonitor() { return null; }';
+      if (id === '\0overlay-monitor') return 'export async function currentMonitor() { return globalThis.__overlayHarness.monitor; }';
+      if (id === '\0overlay-auth-provider') return 'export const AuthProvider = ({ children }) => children;';
+      if (id === '\0overlay-auth-context') return 'export const useAuth = () => ({ session: { account: { id: "fixture" } } });';
     },
   }],
 });
@@ -124,7 +134,30 @@ try {
   await act(async () => { root.unmount(); await settle(); });
   assert.equal(handlers.get('alfred:overlay-summon')?.size, 0);
   assert.equal(handlers.get('alfred:overlay-hidden')?.size, 0);
-  console.log('PASS: clear chat in both modes, stale-response cancellation, mute preservation, one-minute expiration, mode switching, hide/summon, Escape, and StrictMode cleanup.');
+  const { default: OverlayRoot } = await server.ssrLoadModule('/src/overlay/OverlayRoot.tsx');
+  const surface = createRoot(container);
+  try {
+    await act(async () => { surface.render(createElement(OverlayRoot)); await settle(); });
+    await click('Clear chat');
+    assert.equal(harness.closes, 1, 'Clicks on overlay controls leave the window open');
+    await act(async () => { container.querySelector<HTMLElement>('.overlay-root')!.click(); await settle(); });
+    assert.equal(harness.closes, 2, 'Clicking a transparent area dismisses the overlay');
+  } finally {
+    await act(async () => surface.unmount());
+  }
+  const { positionOverlayAtTop } = await server.ssrLoadModule('/src/lib/overlayWindow.ts');
+  harness.monitor = { size: { width: 1920 }, position: { x: 1920, y: 0 }, workArea: { position: { y: 32 } } };
+  Object.defineProperty(navigator, 'userAgent', { configurable: true, value: 'Linux x86_64' });
+  await positionOverlayAtTop();
+  assert.deepEqual(harness.positions.pop(), { x: 2560, y: 40 }, 'Linux places the chat below the top panel');
+  harness.maximized = true;
+  await positionOverlayAtTop();
+  assert.deepEqual(harness.positions, [], 'A maximized Linux overlay uses the compositor work area');
+  Object.defineProperty(navigator, 'userAgent', { configurable: true, value: 'Windows NT' });
+  harness.maximized = false;
+  await positionOverlayAtTop();
+  assert.deepEqual(harness.positions.pop(), { x: 2560, y: 8 }, 'Windows retains its top offset');
+  console.log('PASS: chat lifecycle, outside dismissal, and desktop placement.');
 } finally {
   await act(async () => { root.unmount(); await settle(); });
   globalThis.setTimeout = nativeSetTimeout;

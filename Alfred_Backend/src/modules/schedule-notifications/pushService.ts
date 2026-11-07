@@ -3,8 +3,8 @@ import { observeService } from "../monitor/activity.ts";
 import { Types } from "mongoose";
 import { Account } from "../../models/account.model.ts";
 import { NotificationDevice } from "./models.ts";
-import { claim, plan } from "./service.ts";
-import { GRACE_MS, type Reminder } from "./policy.ts";
+import { claim, plan, preferences, publicDeviceId } from "./service.ts";
+import { eligible, GRACE_MS, type Reminder } from "./policy.ts";
 import { startPushDispatcher, type PushDevice, type PushDispatchAdapter } from "./pushDispatcher.ts";
 
 export function pushPayload(device: PushDevice, reminder: Reminder, now = Date.now()) {
@@ -40,9 +40,11 @@ export function createPushAdapter(send: PushDispatchAdapter["send"]): PushDispat
             ]);
             return Boolean(device && account);
         },
-        plan: (accountId, now, cursor) => plan(accountId, "mobile", now, cursor),
+        plan: (device, now, cursor) => plan(device.accountId, "mobile", now, cursor, device.id),
         claim: (device, key, now) => claim(device.accountId, device.id, "mobile", key, now),
-        send,
+        async send(device, reminder) {
+            if (eligible(await preferences(device.accountId), "mobile", publicDeviceId(device.id))) await send(device, reminder);
+        },
     };
 }
 

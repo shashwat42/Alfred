@@ -3,6 +3,7 @@ import mongoose, { Schema } from "mongoose";
 const settings = new Schema({
     accountId: { type: Schema.Types.ObjectId, required: true, unique: true },
     destination: { type: String, enum: ["mobile", "desktop", "both"], default: "both" },
+    deviceId: { type: String },
     enabled: { type: Boolean, default: true }, leadMinutes: { type: Number, default: 10 },
     atStart: { type: Boolean, default: false }, timeZone: { type: String, required: true },
     timeZoneMode: { type: String, enum: ["automatic", "manual"] },
@@ -15,6 +16,9 @@ const devices = new Schema({
     accountId: { type: Schema.Types.ObjectId, required: true, index: true },
     platform: { type: String, enum: ["mobile", "desktop"], required: true },
     sessionHash: { type: String, required: true },
+    sessionExpiresAt: { type: Date },
+    sessionVersion: { type: Number },
+    name: { type: String },
     pushToken: { type: String, select: false },
     pushSessionExpiresAt: { type: Date },
     pushSessionVersion: { type: Number },

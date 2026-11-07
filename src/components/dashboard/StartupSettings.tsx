@@ -6,10 +6,13 @@ import { getAccountPreferences, saveAccountPreferences, PREFERENCES_CHANGED_EVEN
 import { isTauri } from "../../auth/auth.ts";
 
 export function StartupSettings() {
-  const supported = isTauri() && desktopPlatform(navigator.userAgent) !== null;
+  const platform = desktopPlatform(navigator.userAgent);
+  const supported = isTauri() && platform !== null;
   const [enabled, setEnabled] = useState(() => getAccountPreferences().launchOnStartup);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [quitting, setQuitting] = useState(false);
+  const [quitError, setQuitError] = useState("");
   useEffect(() => {
     if (!supported) return;
     let active = true;
@@ -20,7 +23,7 @@ export function StartupSettings() {
   }, [supported]);
   if (!supported) return null;
   return <section className="settings-card-group">
-    <h3 className="settings-group-header"><Power size={16} className="settings-group-icon" />Startup</h3>
+    <h3 className="settings-group-header"><Power size={16} className="settings-group-icon" />{platform === "linux" ? "Startup and background" : "Startup"}</h3>
     <div className="settings-feature-card">
       <div className="settings-feature-row">
         <div className="settings-feature-info">
@@ -36,6 +39,19 @@ export function StartupSettings() {
         }} />
       </div>
       {error && <p className="settings-save-feedback" role="alert">{error}</p>}
+      {platform === "linux" && <div className="settings-feature-row">
+        <div className="settings-feature-info">
+          <span className="settings-feature-title">Run in background</span>
+          <span className="settings-feature-desc">Closing the window keeps Alfred running for reminders and Quick Overlay. Open Alfred from your app launcher to bring the window back.</span>
+          {quitError && <p className="settings-save-feedback" role="alert">{quitError}</p>}
+        </div>
+        <button type="button" className="settings-action-btn" disabled={quitting} onClick={async () => {
+          setQuitting(true);
+          setQuitError("");
+          try { await invoke("quit_alfred"); }
+          catch { setQuitError("Could not quit Alfred. Try again."); setQuitting(false); }
+        }}>Quit Alfred</button>
+      </div>}
     </div>
   </section>;
 }

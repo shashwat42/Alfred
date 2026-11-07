@@ -72,9 +72,11 @@ scheme. Keep `xdg-utils` installed and allow the browser to open Alfred.
 
 ## Fedora desktop behavior
 
-- Closing the main Linux window quits Alfred. Minimize it to keep reminders active.
-  GNOME does not display AppIndicator tray icons by default; Alfred does not require
-  a tray extension to remain accessible. Tray creation failures do not abort startup.
+- Closing the main window hides it and keeps Alfred running for reminders and
+  Quick Overlay. Open Alfred again from the app launcher or run `alfred` to
+  restore the existing window. Choose **Quit Alfred** in **Settings → Startup
+  and background** or in the tray menu to stop the app. The launcher and
+  Settings work on GNOME with its default tray configuration.
 - On Wayland, Alfred offers first-run global shortcut setup. Choose a keybind,
   select **Enable global shortcut**, then approve or choose it in the desktop
   dialog. Settings shows the actual granted binding and lets you change or
@@ -83,8 +85,10 @@ scheme. Keep `xdg-utils` installed and allow the browser to open Alfred.
   If the portal is unavailable, **Open Keyboard settings** helps you add a custom
   shortcut for `alfred --overlay`. The launcher also exposes **Quick Overlay**.
   X11 and Windows use native registration with the same keybind controls.
-  Wayland controls exact positioning and always-on-top behavior.
-- **Settings → Startup** writes an XDG autostart entry for the current user.
+  Quick Overlay appears at the top of the work area. On Wayland it uses a
+  maximized transparent window so the chat can align with the top edge.
+  Click outside the chat and its controls to dismiss the overlay.
+- **Launch on startup** writes an XDG autostart entry for the current user.
   Enable it from the installed RPM, since development executables can move.
 - Voice input asks for native microphone consent before WebKit capture. Linux uses
   WebKitGTK and the system audio stack; check the input device and mute controls
@@ -109,8 +113,9 @@ The Fedora GitHub Actions workflow builds the RPM and runs Rust tests. Native
 acceptance still requires a desktop session: launch from GNOME, create/reopen a
 local note, sign in through the browser with Alfred running and closed, deny then
 allow microphone access, send text/audio, invoke `alfred --overlay` twice, toggle
-startup, deliver a cloud reminder, close/relaunch, and upgrade the RPM while
-preserving device data. Check both Wayland and X11 where available.
+startup, close the main window and deliver a cloud reminder while it is hidden,
+reopen from the launcher, quit from Settings, and upgrade the RPM while preserving
+device data. Check both Wayland and X11 where available.
 
 Sources: [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/),
 [RPM packaging](https://v2.tauri.app/distribute/rpm/),

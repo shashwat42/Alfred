@@ -12,6 +12,10 @@ function AccountOverlay() {
   return <OverlayApp key={accountId} />;
 }
 
+function dismissOverlay() {
+  if (isTauri()) void getCurrentWebviewWindow().close().catch(() => {});
+}
+
 export default function OverlayRoot() {
   const [ready, setReady] = useState(false);
   useEffect(() => {
@@ -27,11 +31,12 @@ export default function OverlayRoot() {
   }, []);
   useEffect(() => {
     const dismiss = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || event.defaultPrevented || !isTauri()) return;
-      void getCurrentWebviewWindow().close().catch(() => {});
+      if (event.key === 'Escape' && !event.defaultPrevented) dismissOverlay();
     };
     window.addEventListener('keydown', dismiss);
     return () => window.removeEventListener('keydown', dismiss);
   }, []);
-  return <div className={ready ? 'overlay-window-surface is-ready' : 'overlay-window-surface'}><AuthProvider><OverlaySessionBoundary><AccountOverlay /></OverlaySessionBoundary></AuthProvider></div>;
+  return <div className={ready ? 'overlay-window-surface is-ready' : 'overlay-window-surface'} onClick={event => {
+    if (!(event.target as Element).closest('[data-overlay-content]')) dismissOverlay();
+  }}><AuthProvider><OverlaySessionBoundary><AccountOverlay /></OverlaySessionBoundary></AuthProvider></div>;
 }

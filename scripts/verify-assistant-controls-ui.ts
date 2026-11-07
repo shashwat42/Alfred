@@ -25,7 +25,7 @@ const mocks: Record<string, string> = {
   '/android/assistantBridge.ts': prefix + 'export const ASSISTANT_VOICE_LEVEL_EVENT="voice-level"; export const hasAndroidAssistantBridge=()=>true; export const announceAndroidActions=()=>{}; export const androidAssistantRequest=async(type)=>{h.commands.push(type);};',
   '@tauri-apps/api/core': prefix + 'export async function invoke(command,args){h.commands.push(command); if(command==="get_launch_on_startup")return h.enabled; if(h.failWrite)throw new Error("Test registration denied"); h.enabled=args.enabled;return h.enabled;}',
 };
-const server = await createServer({ ssr: { noExternal: ['@tauri-apps/api'] }, mode: 'development', cacheDir: 'node_modules/.vite-assistant-ui-tests', optimizeDeps: { noDiscovery: true, entries: [], include: [] }, server: { middlewareMode: true, hmr: false }, appType: 'custom', plugins: [{
+const server = await createServer({ ssr: { noExternal: ['@tauri-apps/api'] }, mode: 'development', cacheDir: 'node_modules/.vite-assistant-ui-tests', optimizeDeps: { noDiscovery: true, entries: [], include: [] }, server: { middlewareMode: true, hmr: false, ws: false }, appType: 'custom', plugins: [{
   name: 'isolated-assistant-ui', enforce: 'pre',
   resolveId(id) { const key = Object.keys(mocks).find(key => (id.endsWith(key) || (key.startsWith("/") && id.endsWith(key.slice(key.lastIndexOf("/")))))); if(key) return '\0assistant-test:' + key; },
   load(id) { if(id.startsWith('\0assistant-test:')) return mocks[id.slice('\0assistant-test:'.length)]; },
@@ -62,6 +62,11 @@ try {
   assert.equal(container.querySelector('.is-voice'), null);
   assert.ok(!harness.commands.includes('dismiss'), 'Mode switch must not dismiss the assistant');
   assert.ok(container.textContent?.includes('Isolated test reply'), 'Mode switch preserves the conversation');
+  await act(async () => { container.querySelector<HTMLElement>('.android-assistant-message.is-assistant p')!.click(); await settle(); });
+  assert.ok(!harness.commands.includes('dismiss'), 'Tapping a message leaves the assistant open');
+  await act(async () => { container.querySelector<HTMLElement>('.android-assistant-messages')!.click(); await settle(); });
+  assert.equal(harness.commands.at(-1), 'dismiss', 'Tapping the transparent part of the conversation dismisses the assistant');
+  harness.commands.length = 0;
   await click('Assistant options'); await click('Dismiss assistant');
   assert.equal(harness.commands.at(-1), 'dismiss');
 
@@ -78,7 +83,7 @@ try {
   harness.failWrite = false;
   await act(async () => { toggle().click(); await settle(); });
   assert.equal(harness.enabled, false);
-  console.log('PASS: Android mode switching, mute/resume, thinking animation, conversation preservation, dismiss, and isolated Windows startup toggle/error handling.');
+  console.log('PASS: Android mode switching, mute/resume, thinking animation, conversation preservation, menu and outside dismissal, and isolated Windows startup toggle/error handling.');
 } finally {
   await act(async () => root.unmount()); await server.close(); await dom.happyDOM.abort();
   Reflect.deleteProperty(globalThis, '__assistantUiHarness');

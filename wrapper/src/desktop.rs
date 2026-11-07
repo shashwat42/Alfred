@@ -3,6 +3,34 @@ use tauri::{Emitter, Manager};
 
 static TOGGLING_OVERLAY: AtomicBool = AtomicBool::new(false);
 
+#[cfg(target_os = "linux")]
+#[tauri::command]
+pub fn quit_alfred(window: tauri::WebviewWindow) -> Result<(), String> {
+    if window.label() != "main"
+        || !window
+            .url()
+            .is_ok_and(|url| crate::origin::trusted_origin(&url))
+    {
+        return Err("Quit Alfred must come from the main window.".into());
+    }
+    window.app_handle().exit(0);
+    Ok(())
+}
+
+#[cfg(any(target_os = "windows", target_os = "linux"))]
+#[tauri::command]
+pub fn notification_device_name(window: tauri::WebviewWindow) -> Option<String> {
+    if window.label() != "main"
+        || !window.url().is_ok_and(|url| crate::origin::trusted_origin(&url))
+    {
+        return None;
+    }
+    #[cfg(target_os = "windows")]
+    return std::env::var("COMPUTERNAME").ok();
+    #[cfg(target_os = "linux")]
+    return std::fs::read_to_string("/proc/sys/kernel/hostname").ok();
+}
+
 pub fn supports_global_shortcut() -> bool {
     !cfg!(target_os = "linux")
         || (std::env::var_os("WAYLAND_DISPLAY").is_none()
@@ -50,12 +78,31 @@ fn toggle_overlay_inner(app: &tauri::AppHandle, token: Option<String>) -> tauri:
     {
         // Keep the existing configured appearance and permissions, but pay for
         // the second renderer only when the user actually opens the overlay.
-        let overlay = tauri::WebviewWindowBuilder::from_config(app, config)?
-            .visible(false)
-            .build()?;
+        let builder = tauri::WebviewWindowBuilder::from_config(app, config)?.visible(false);
+        // Wayland places toplevel windows. Maximize the transparent surface so
+        // the chat can align itself with the top of the monitor's work area.
+        #[cfg(target_os = "linux")]
+        let builder = if std::env::var_os("WAYLAND_DISPLAY").is_some()
+            || std::env::var("XDG_SESSION_TYPE").is_ok_and(|value| value == "wayland")
+        {
+            builder.resizable(true).maximized(true)
+        } else {
+            builder
+        };
+        let overlay = builder.build()?;
         activate_overlay(&overlay, token);
     }
     Ok(())
+}
+
+#[cfg(any(target_os = "windows", target_os = "linux"))]
+pub fn dismiss_unfocused_overlay(window: &tauri::Window) {
+    if !TOGGLING_OVERLAY.load(Ordering::Acquire)
+        && window.is_visible().unwrap_or(false)
+        && !window.state::<crate::permissions::MicrophoneConsent>().is_prompting()
+    {
+        let _ = window.close();
+    }
 }
 
 fn activate_overlay(window: &tauri::WebviewWindow, token: Option<String>) {

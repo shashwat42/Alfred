@@ -37,7 +37,7 @@ function fixture(t: TestContext, p: Preferences | null = defaults()) {
     mock.method(NotificationSettings, "create", ((input: Preferences) => { if (settings) throw Object.assign(new Error("duplicate"), { code: 11000 }); settings = { ...input }; return Promise.resolve(input); }) as never);
     mock.method(NotificationSettings, "updateOne", (async (filter: { accountId: string; revision: number }, update: { $set: Preferences }) => {
         if (String(filter.accountId) !== account || settings?.revision !== filter.revision) return { modifiedCount: 0 };
-        settings = { ...update.$set }; return { modifiedCount: 1 };
+        settings = { ...settings, ...update.$set }; return { modifiedCount: 1 };
     }) as never);
     mock.method(Schedule, "find", ((filter: Record<string, unknown>) => ({ sort: () => ({ limit: (count: number) => ({ lean: async () => {
         const range = filter.date as { $gte: string; $lte: string };
@@ -58,7 +58,18 @@ function fixture(t: TestContext, p: Preferences | null = defaults()) {
         if (sent.has(input._id)) throw Object.assign(new Error("duplicate"), { code: 11000 });
         sent.set(input._id, input); return input;
     }) as never);
-    mock.method(NotificationDevice, "findOneAndUpdate", (async (filter: { _id: string }, update: { $set: Record<string, unknown> }) => { installations.set(filter._id, { _id: filter._id, ...update.$set }); }) as never);
+    mock.method(NotificationDevice, "findOneAndUpdate", (async (filter: { _id: string }, update: { $set: Record<string, unknown> }) => {
+        installations.set(filter._id, { ...installations.get(filter._id), _id: filter._id, ...update.$set });
+    }) as never);
+    mock.method(NotificationDevice, "find", ((filter: Record<string, unknown>) => ({ sort: () => ({ limit: () => ({ lean: async () => {
+        const after = (filter.expiresAt as { $gt: Date }).$gt;
+        const [session] = filter.$or as [{ sessionVersion: number }];
+        return [...installations.values()].filter(row =>
+            String(row.accountId) === String(filter.accountId) && (row.expiresAt as Date) > after
+            && (row.sessionExpiresAt === undefined
+                ? row.pushSessionVersion === session.sessionVersion && (row.pushSessionExpiresAt as Date) > after
+                : row.sessionVersion === session.sessionVersion && (row.sessionExpiresAt as Date) > after));
+    } }) }) })) as never);
     mock.method(NotificationDevice, "findOne", ((filter: Record<string, unknown>) => ({ lean: async () => {
         const d = installations.get(String(filter._id));
         const after = (filter.expiresAt as { $gt: Date }).$gt;
@@ -312,6 +323,35 @@ test("API concurrent preference changes report conflict instead of overwriting",
     fixture(t, null); const call = await api(t);
     const responses = await Promise.all([call("/preferences", defaults(), account, "PUT"), call("/preferences", { ...defaults(), destination: "mobile" }, account, "PUT")]);
     assert.deepEqual(responses.map(r => r.status).sort(), [200, 409]);
+});
+test("device picker lists active installations and routes reminders to one device on the same platform", async t => {
+    const f = fixture(t, null); const call = await api(t);
+    const laptop = "a".repeat(64), desktop = "b".repeat(64), foreign = "c".repeat(64);
+    for (const [secret, name, owner] of [[laptop, "Laptop", account], [desktop, "Desktop", account], [foreign, "Other account", other]] as const) {
+        assert.equal((await call("/devices", { secret, name, platform: "desktop" }, owner)).status, 204);
+    }
+    assert.equal((await call("/devices/list", {}, null)).status, 401);
+    type Entry = { id: string; name: string; isCurrent: boolean };
+    const entries = await (await call("/devices/list", { secret: laptop })).json() as Entry[];
+    assert.deepEqual(entries.map(({ name, isCurrent }) => ({ name, isCurrent })), [
+        { name: "Laptop", isCurrent: true }, { name: "Desktop", isCurrent: false },
+    ]);
+    assert.deepEqual(Object.keys(entries[0]!).sort(), ["id", "isCurrent", "name"]);
+    assert.notEqual(entries[0]!.id, [...f.installations.keys()][0]);
+    const [otherDevice] = await (await call("/devices/list", {}, other)).json() as Entry[];
+    assert.equal((await call("/preferences", { ...defaults(), deviceId: otherDevice!.id }, account, "PUT")).status, 422);
+    const choice = entries[0]!.id;
+    assert.equal((await call("/preferences", { ...defaults(), deviceId: choice }, account, "PUT")).status, 200);
+    // An older client updating settings must preserve the selected installation.
+    assert.equal((await call("/preferences", { ...defaults(), revision: 1 }, account, "PUT")).status, 200);
+    assert.equal((await (await call("/preferences")).json() as Preferences).deviceId, choice);
+    const key = remindersFor(event(), defaults())[0]!.key;
+    assert.equal((await (await call("/sync", { secret: desktop })).json() as { reminders: unknown[] }).reminders.length, 0);
+    assert.equal((await call("/claim", { secret: desktop, key })).status, 204);
+    assert.equal((await (await call("/sync", { secret: laptop })).json() as { reminders: unknown[] }).reminders.length, 1);
+    assert.equal((await call("/claim", { secret: laptop, key })).status, 200);
+    [...f.installations.values()][0]!.sessionExpiresAt = new Date(now);
+    assert.deepEqual((await (await call("/devices/list", {})).json() as Entry[]).map(row => row.name), ["Desktop"]);
 });
 test("delivery failures produce a contained API error and preserve event data", async t => {
     const f = fixture(t); const call = await api(t); const secret = "a".repeat(64);

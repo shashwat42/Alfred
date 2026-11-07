@@ -1,9 +1,9 @@
 # Alfred releases
 
-Alfred 1.0.3 adds signed Linux in-app updates to the shortcut and Fedora rendering
-fixes released in 1.0.2. Release branches use `releases/`; this source is
-`releases/1.0.3`. Windows and Fedora packages use matching version `1.0.3` and
-Git tag `v1.0.3`. Android remains on its existing signed 1.0.0 APK.
+Alfred 1.0.31 adds device-specific schedule reminders, background operation on
+Linux and click-outside dismissal for Quick Overlay. The Windows and Fedora
+packages use release branch `releases/1.0.31` and Git tag `v1.0.31`.
+Android packages are built and signed separately.
 
 ## Validate and package
 
@@ -36,4 +36,4 @@ Windows keeps its existing signed updater. Do not attach the older Android APK
 under a newer version name.
 
 See [desktop app updates](../app-updates.md), [Fedora setup](../linux-fedora.md),
-[1.0.3 notes](v1.0.3.md) and [1.0.2 notes](v1.0.2.md).
+and the [1.0.31 notes](v1.0.31.md).

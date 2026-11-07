@@ -3,17 +3,22 @@ import { sendPolicyError } from "../../security/errors.ts";
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { authMiddleware } from "../../middleware/auth.middleware.ts";
-import { preferences, savePreferences, registerDevice, device, plan, claim, unregisterDevice } from "./service.ts";
+import { preferences, savePreferences, registerDevice, device, listDevices, plan, claim, unregisterDevice } from "./service.ts";
 
+const secretSchema = z.string().regex(/^[a-f0-9]{64}$/);
 export const preferenceSchema = z.object({
     destination: z.enum(["mobile", "desktop", "both"]), enabled: z.boolean(),
+    deviceId: secretSchema.optional(),
     leadMinutes: z.number().int().min(0).max(10080), atStart: z.boolean(),
     timeZone: z.string().max(100).refine(zone => { try { new Intl.DateTimeFormat("en", { timeZone: zone }); return true; } catch { return false; } }),
     timeZoneMode: z.enum(["automatic", "manual"]).optional(),
     revision: z.number().int().min(0),
 }).strict();
-const secretSchema = z.string().regex(/^[a-f0-9]{64}$/);
-const registrationSchema = z.object({ secret: secretSchema, platform: z.enum(["mobile", "desktop"]), pushToken: z.string().min(20).max(4096).regex(/^[\x21-\x7e]+$/).optional() }).strict()
+const registrationSchema = z.object({
+    secret: secretSchema, platform: z.enum(["mobile", "desktop"]),
+    name: z.string().trim().min(1).max(80).refine(value => !/\p{Cc}/u.test(value)).optional(),
+    pushToken: z.string().min(20).max(4096).regex(/^[\x21-\x7e]+$/).optional(),
+}).strict()
     .refine(value => !value.pushToken || value.platform === "mobile");
 const keySchema = z.string().regex(/^[a-f0-9]{24}:\d{10,16}:(lead|start)$/);
 const router = Router();
@@ -27,13 +32,22 @@ router.get("/preferences", run(async (req, res) => res.json(await preferences(re
 router.put("/preferences", run(async (req, res) => {
     const parsed = preferenceSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: "Invalid schedule notification preferences." });
+    if (parsed.data.deviceId) {
+        const devices = await listDevices(req.accountId!, req.account!.sessionVersion ?? 0);
+        if (!devices.some(device => device.id === parsed.data.deviceId)) return res.status(422).json({ error: "That device is no longer signed in." });
+    }
     if (!await savePreferences(req.accountId!, parsed.data)) return res.status(409).json({ error: "Preferences changed on another device. Reload and try again.", preferences: await preferences(req.accountId!) });
     return res.json(await preferences(req.accountId!));
+}));
+router.post("/devices/list", run(async (req, res) => {
+    const parsed = z.object({ secret: secretSchema.optional() }).strict().safeParse(req.body);
+    if (!parsed.success) return res.sendStatus(400);
+    return res.json(await listDevices(req.accountId!, req.account!.sessionVersion ?? 0, parsed.data.secret));
 }));
 router.post("/devices", run(async (req, res) => {
     const parsed = registrationSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: "Invalid device registration." });
-    await registerDevice(req.accountId!, parsed.data.secret, parsed.data.platform, token(req), Date.now(), parsed.data.pushToken);
+    await registerDevice(req.accountId!, parsed.data.secret, parsed.data.platform, token(req), Date.now(), parsed.data.pushToken, parsed.data.name);
     return res.sendStatus(204);
 }));
 router.delete("/devices", run(async (req, res) => {
@@ -47,7 +61,7 @@ router.post("/sync", run(async (req, res) => {
     if (!parsed.success) return res.sendStatus(400);
     const d = await device(req.accountId!, parsed.data.secret, token(req));
     if (!d) return res.sendStatus(403);
-    return res.json(await plan(req.accountId!, d.platform as "mobile" | "desktop", Date.now(), parsed.data.cursor));
+    return res.json(await plan(req.accountId!, d.platform as "mobile" | "desktop", Date.now(), parsed.data.cursor, d._id));
 }));
 router.post("/claim", run(async (req, res) => {
     const parsed = z.object({ secret: secretSchema, key: keySchema }).strict().safeParse(req.body);

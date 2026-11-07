@@ -69,6 +69,7 @@ export function OverlayModeSwitchButton({
       title={isTargetingVoice ? "Switch to voice mode" : "Switch to text mode"}
       aria-label={isTargetingVoice ? "Switch to voice mode" : "Switch to text mode"}
       className="desktop-overlay-circle"
+      data-overlay-content
     >
       {isTargetingVoice ? <AudioLines size={24} /> : <X size={32} />}
     </button>
@@ -76,7 +77,7 @@ export function OverlayModeSwitchButton({
 }
 
 function ClearChatButton({ onClick }: { onClick: () => void }) {
-  return <button type="button" className="desktop-overlay-circle" title="Clear chat" aria-label="Clear chat" onClick={onClick}><Trash2 size={22} /></button>;
+  return <button type="button" className="desktop-overlay-circle" data-overlay-content title="Clear chat" aria-label="Clear chat" onClick={onClick}><Trash2 size={22} /></button>;
 }
 
 /**
@@ -135,6 +136,7 @@ export function OverlayConversationList({
           }`}
         >
           <div
+            data-overlay-content
             className={`px-4 py-2.5 rounded-2xl max-w-[85%] font-normal shadow-sm ${
               msg.role === "user"
                 ? "bg-[#27272a] text-white border border-red-500/25"
@@ -151,7 +153,7 @@ export function OverlayConversationList({
       ))}
 
       {isLoading && messages.length === 0 && (
-        <div className="flex items-center gap-2 self-start px-3.5 py-2 rounded-2xl bg-[#18181b] border border-white/12 text-xs text-red-400 font-medium shadow-sm">
+        <div data-overlay-content className="flex items-center gap-2 self-start px-3.5 py-2 rounded-2xl bg-[#18181b] border border-white/12 text-xs text-red-400 font-medium shadow-sm">
           <Sparkles size={14} className="animate-pulse" />
           <span>{statusLabel}</span>
         </div>
@@ -371,7 +373,7 @@ export function QuickInputOverlay({
     <div className="w-full max-w-155 flex flex-col font-sans select-none pointer-events-auto">
       <div className="desktop-overlay-dock">
         <ClearChatButton onClick={handleClear} />
-        <form className="desktop-overlay-pill desktop-overlay-composer" onSubmit={handleSubmit}>
+        <form className="desktop-overlay-pill desktop-overlay-composer" data-overlay-content onSubmit={handleSubmit}>
           <input
             ref={inputRef}
             type="text"
@@ -597,7 +599,7 @@ export function VoiceOverlay({
     <div className="w-full max-w-155 flex flex-col font-sans select-none pointer-events-auto">
       <div className="desktop-overlay-dock">
         <ClearChatButton onClick={onClearSession} />
-        <div className="desktop-overlay-pill desktop-overlay-voice">
+        <div className="desktop-overlay-pill desktop-overlay-voice" data-overlay-content>
           <span className={`desktop-overlay-logo state-${voiceState}${isMuted ? " is-muted" : ""}`}>
             <img src={Logo} alt="Alfred" />
           </span>
@@ -738,7 +740,7 @@ export default function OverlayApp() {
   }, [mode, recordUserActivity]);
 
   return (
-    <div key={appearance} style={{ visibility: visible ? "visible" : "hidden" }} className="overlay-root w-screen h-screen flex flex-col items-center justify-start pt-2 px-4 pb-4 bg-transparent overflow-hidden pointer-events-none">
+    <div key={appearance} style={{ visibility: visible ? "visible" : "hidden" }} className="overlay-root w-screen h-screen flex flex-col items-center justify-start pt-2 px-4 pb-4 bg-transparent overflow-hidden">
       {mode === "quick_input" ? (
         <QuickInputOverlay
           key={sessionVersion}

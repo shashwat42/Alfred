@@ -1,6 +1,7 @@
 import Logo from "../assets/Alfred_Logo.svg";
 import { isTauri } from "../auth/auth.ts";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { desktopPlatform } from "../lib/desktopPlatform.ts";
 
 interface HeaderProps {
   onGoHome?: () => void;
@@ -89,7 +90,7 @@ export default function Header({
             onClick={handleClose}
             onMouseDown={(e) => e.stopPropagation()}
             aria-label="Close window"
-            title="Close"
+            title={desktopPlatform(navigator.userAgent) === "linux" ? "Close and keep Alfred running" : "Close"}
             data-tauri-drag-region="false"
           >
             <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.2">

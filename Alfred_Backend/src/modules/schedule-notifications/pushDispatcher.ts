@@ -13,7 +13,7 @@ export interface PushDevice {
 export interface PushDispatchAdapter {
     devices(cursor?: string): Promise<PushDevice[]>;
     active(device: PushDevice): Promise<boolean>;
-    plan(accountId: string, now: number, cursor?: string): Promise<{ reminders: Reminder[]; next: string | null }>;
+    plan(device: PushDevice, now: number, cursor?: string): Promise<{ reminders: Reminder[]; next: string | null }>;
     claim(device: PushDevice, key: string, now: number): Promise<Reminder | null>;
     send(device: PushDevice, reminder: Reminder): Promise<void>;
 }
@@ -31,7 +31,7 @@ export async function dispatchPushPass(adapter: PushDispatchAdapter, now = Date.
             if (device.expiresAt <= now || device.sessionExpiresAt <= now || !await adapter.active(device)) continue;
             let next: string | undefined;
             for (let page = 0; page < 50 && !stopped(); page++) {
-                const plan = await adapter.plan(device.accountId, now, next);
+                const plan = await adapter.plan(device, now, next);
                 for (const reminder of plan.reminders) {
                     if (stopped()) return;
                     if (!isDue(reminder, now)) continue;

@@ -20,7 +20,7 @@ let messageSequence = 0;
 const messageId = () => `${Date.now()}-${++messageSequence}`;
 
 function ModeSwitchButton({ voice, disabled, onClick }: { voice: boolean; disabled?: boolean; onClick: () => void }) {
-  return <button type="button" className="android-assistant-mode-switch" aria-label={voice ? "Switch to text mode" : "Switch to voice mode"} title={voice ? "Switch to text mode" : "Switch to voice mode"} disabled={disabled} onClick={onClick}>{voice ? <X size={36} strokeWidth={2.5} /> : <AudioLines size={24} />}</button>;
+  return <button type="button" className="android-assistant-mode-switch" data-overlay-content aria-label={voice ? "Switch to text mode" : "Switch to voice mode"} title={voice ? "Switch to text mode" : "Switch to voice mode"} disabled={disabled} onClick={onClick}>{voice ? <X size={36} strokeWidth={2.5} /> : <AudioLines size={24} />}</button>;
 }
 
 function AssistantLogo({ state }: { state: State }) {
@@ -205,9 +205,11 @@ export default function AndroidAssistantApp() {
       setState("Paused");
     }
   };
-  return <main className={`android-assistant${voice ? " is-voice" : ""}`} aria-label="Alfred floating assistant">
+  return <main className={`android-assistant${voice ? " is-voice" : ""}`} aria-label="Alfred floating assistant" onClick={event => {
+    if (bridgeAvailable && !(event.target as Element).closest("[data-overlay-content]")) native("dismiss");
+  }}>
     {voice && <div className="android-assistant-dock">
-      <div className="android-assistant-voice-bar">
+      <div className="android-assistant-voice-bar" data-overlay-content>
         <button className="android-assistant-logo-button" aria-label="Assistant options" aria-expanded={menuOpen} aria-haspopup="menu" onClick={() => setMenuOpen(!menuOpen)}><AssistantLogo state={state} /></button>
         <span className="android-assistant-activity" role="status" aria-label={state}>
           {state === "Thinking" || state === "Preparing audio" || state === "Preparing voice" ? <LoaderCircle className="android-assistant-spinner" size={30} /> : <span className={`android-assistant-wave${state === "Listening" && !micMuted ? " is-recording" : ""}`} style={{ "--voice-level": state === "Listening" && !micMuted ? Math.min(1, audioLevel * 4) : 0 } as CSSProperties} aria-hidden="true">{[12, 25, 17, 34, 24, 40, 28, 18, 30, 14].map((height, index) => <i key={index} style={{ height, animationDelay: `${index * -0.09}s` }} />)}</span>}
@@ -221,14 +223,14 @@ export default function AndroidAssistantApp() {
       const text = prompt; setPrompt("");
       void send(text).catch((err: unknown) => { setPrompt(text); setError(err instanceof Error ? err.message : "Could not connect. Check your network and try again."); });
     }}>
-      <div className="android-assistant-composer">
+      <div className="android-assistant-composer" data-overlay-content>
         <input aria-label="Ask Alfred" placeholder="Ask Alfred" maxLength={MAX_MESSAGE_CHAR_LIMIT} value={prompt} onChange={(event) => setPrompt(event.target.value)} disabled={voice} />
         {busy ? <button type="button" className="android-assistant-stop" aria-label="Stop response" onClick={stop}><Square size={20} /></button> : <button type="submit" aria-label="Send message" disabled={voice || !prompt.trim()}><SendHorizontal size={30} /></button>}
       </div>
       <ModeSwitchButton voice={false} disabled={busy} onClick={() => { setMenuOpen(false); void toggleVoice(); }} />
     </form>
-    {!voice && <button className="android-assistant-options" aria-label="Assistant options" aria-expanded={menuOpen} aria-haspopup="menu" onClick={() => setMenuOpen(!menuOpen)}>Options</button>}
-    {menuOpen && <div className="android-assistant-menu" role="menu" aria-label="Assistant options">
+    {!voice && <button className="android-assistant-options" data-overlay-content aria-label="Assistant options" aria-expanded={menuOpen} aria-haspopup="menu" onClick={() => setMenuOpen(!menuOpen)}>Options</button>}
+    {menuOpen && <div className="android-assistant-menu" data-overlay-content role="menu" aria-label="Assistant options">
       <button role="menuitem" onClick={() => native("dismiss")}><X size={16} />Dismiss assistant</button>
       <button role="menuitem" onClick={() => native("openApp")}><ExternalLink size={16} />Open Alfred app</button>
       <button role="menuitem" disabled={!messages.length && !error} onClick={() => { stop(); history.current = []; setMessages([]); setError(""); setRetryPrompt(null); setPrompt(""); setMenuOpen(false); }}><Trash2 size={16} />New conversation</button>
@@ -239,8 +241,8 @@ export default function AndroidAssistantApp() {
       else setError("");
     } : undefined} />
     <div className="android-assistant-messages" ref={list} role="log" aria-label="Conversation">
-      {messages.map((message) => <article key={message.id} className={`android-assistant-message is-${message.role}`} aria-label={message.role === "user" ? "You" : "Alfred"}>{message.role === "assistant" ? <SafeMarkdown content={message.content} /> : <p>{message.recording ? <VoiceNote recording={message.recording} /> : message.content}</p>}</article>)}
-      {messages.length === 0 && (busy || state === "Preparing audio") && <div className="android-assistant-thinking" role="status"><Sparkles size={14} />{state === "Preparing audio" ? "Preparing audio…" : "Alfred is thinking…"}</div>}
+      {messages.map((message) => <article key={message.id} data-overlay-content className={`android-assistant-message is-${message.role}`} aria-label={message.role === "user" ? "You" : "Alfred"}>{message.role === "assistant" ? <SafeMarkdown content={message.content} /> : <p>{message.recording ? <VoiceNote recording={message.recording} /> : message.content}</p>}</article>)}
+      {messages.length === 0 && (busy || state === "Preparing audio") && <div className="android-assistant-thinking" role="status" data-overlay-content><Sparkles size={14} />{state === "Preparing audio" ? "Preparing audio…" : "Alfred is thinking…"}</div>}
     </div>
   </main>;
 }

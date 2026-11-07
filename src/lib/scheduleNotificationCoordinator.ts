@@ -1,5 +1,5 @@
 import { API_BASE_URL, AUTH_STORAGE_KEY, dispatchAuthChange, getSession, type AuthSession } from "../auth/auth.ts";
-import { androidNotificationRequest, deliverDesktopReminder, detectedTimeZone, syncDetectedTimeZone, installationSecret, isAndroid, notificationPermission, notificationPlatform, notificationRequest, NOTIFICATION_SETTINGS_EVENT, NOTIFICATION_TAP_EVENT, openScheduleTarget, setNotificationDeliveryStatus, type NotificationPlan, type ScheduleReminder } from "./scheduleNotifications.ts";
+import { androidNotificationRequest, deliverDesktopReminder, detectedTimeZone, syncDetectedTimeZone, installationSecret, isAndroid, notificationDeviceName, notificationPermission, notificationPlatform, notificationRequest, NOTIFICATION_DEVICES_EVENT, NOTIFICATION_SETTINGS_EVENT, NOTIFICATION_TAP_EVENT, openScheduleTarget, setNotificationDeliveryStatus, type NotificationPlan, type ScheduleReminder } from "./scheduleNotifications.ts";
 
 /** Exactly one coordinator: mounted only in the normal main document, never overlays. */
 export function startScheduleNotificationCoordinator(session: AuthSession | null) {
@@ -12,7 +12,8 @@ export function startScheduleNotificationCoordinator(session: AuthSession | null
     const accountId = session.account.id;
     setNotificationDeliveryStatus("Connecting to schedule notifications…");
     const controller = new AbortController();
-    let stopped = false, busy = false, registered = false;
+    let stopped = false, busy = false;
+    let registeredAt: number | undefined;
     let syncedZone: string | null | undefined;
     let secret: string;
     try { secret = installationSecret(); } catch { return stopAccountSync; }
@@ -42,19 +43,23 @@ export function startScheduleNotificationCoordinator(session: AuthSession | null
           if (!stillCurrent()) return;
           syncedZone = zone;
         }
-        if (!registered) {
-          await notificationRequest("/devices", accountId, { secret, platform }, "POST", controller.signal);
+        if (registeredAt === undefined || Date.now() - registeredAt >= 86400_000) {
+          const name = await notificationDeviceName(platform);
+          if (!stillCurrent()) return;
+          await notificationRequest("/devices", accountId, { secret, platform, name }, "POST", controller.signal);
           if (!stillCurrent()) return;
           if (isAndroid()) {
             await androidNotificationRequest("configure", { baseUrl: API_BASE_URL, token: session.token, secret, accountId });
             const target = await androidNotificationRequest("openTarget");
             if (stillCurrent()) openScheduleTarget(target);
           }
-          registered = true;
+          if (!stillCurrent()) return;
+          registeredAt = Date.now();
+          window.dispatchEvent(new Event(NOTIFICATION_DEVICES_EVENT));
         }
         if (isAndroid()) {
           const status = await androidNotificationRequest("sync");
-          if (!status.configured) registered = false;
+          if (!status.configured) registeredAt = undefined;
           if (stillCurrent()) setNotificationDeliveryStatus(status.configured ? "Native schedule sync is active." : "Schedule sync needs an active sign-in session.");
           return;
         }
@@ -73,7 +78,7 @@ export function startScheduleNotificationCoordinator(session: AuthSession | null
         } while (cursor && stillCurrent());
         if (stillCurrent()) setNotificationDeliveryStatus("Schedule notification service is connected.");
       } catch (e) {
-        if ((e as { status?: number }).status === 403) registered = false;
+        if ((e as { status?: number }).status === 403) registeredAt = undefined;
         if (stillCurrent()) setNotificationDeliveryStatus("Schedule sync is unavailable. Alfred will retry automatically.");
         // Retry next tick. Never log session/device credentials or event content.
       } finally { busy = false; }

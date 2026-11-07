@@ -3,9 +3,12 @@ import { getSession, isTauri } from "../auth/auth.ts";
 
 export interface ScheduleNotificationPreferences {
   destination: "mobile" | "desktop" | "both";
+  deviceId?: string;
   enabled: boolean; leadMinutes: number; atStart: boolean; timeZone: string; revision: number;
   timeZoneMode?: "automatic" | "manual";
 }
+
+export interface ScheduleNotificationDevice { id: string; name: string; isCurrent: boolean }
 
 export function detectedTimeZone(): string | null {
   try { return Intl.DateTimeFormat().resolvedOptions().timeZone || null; }
@@ -39,6 +42,7 @@ export interface ScheduleReminder {
 }
 export interface NotificationPlan { preferences: ScheduleNotificationPreferences; reminders: ScheduleReminder[]; next: string | null }
 export const NOTIFICATION_SETTINGS_EVENT = "alfred:schedule-notification-settings";
+export const NOTIFICATION_DEVICES_EVENT = "alfred:schedule-notification-devices";
 export const NOTIFICATION_OPEN_EVENT = "alfred:open-schedule";
 export const NOTIFICATION_TAP_EVENT = "alfred:schedule-notification-tap";
 export const isAndroid = () => /Android/i.test(navigator.userAgent);
@@ -61,6 +65,25 @@ export function installationSecret(): string {
   return value;
 }
 
+export async function notificationDeviceName(platform: "mobile" | "desktop"): Promise<string> {
+  let name: unknown;
+  try {
+    if (platform === "mobile") {
+      name = (await androidNotificationRequest("status")).deviceName;
+    } else {
+      const { invoke } = await import("@tauri-apps/api/core");
+      name = await invoke("notification_device_name");
+    }
+  } catch { /* Older native builds use a platform label. */ }
+  const label = typeof name === "string" ? name.replace(/\s+/g, " ").trim().slice(0, 80) : "";
+  if (label && !/\p{Cc}/u.test(label)) return label;
+  if (platform === "mobile") return "Android device";
+  if (/Windows/i.test(navigator.userAgent)) return "Windows PC";
+  if (/Linux/i.test(navigator.userAgent)) return "Linux computer";
+  if (/Macintosh|Mac OS X/i.test(navigator.userAgent)) return "Mac";
+  return "Desktop computer";
+}
+
 export async function notificationRequest<T>(path: string, accountId: string, body?: unknown, method = body === undefined ? "GET" : "POST", signal?: AbortSignal): Promise<T | null> {
   const timeout = AbortSignal.timeout(10_000);
   const response = await apiFetch(`/api/schedule-notifications${path}`, {
@@ -68,7 +91,10 @@ export async function notificationRequest<T>(path: string, accountId: string, bo
     _preserveAccount: true, _expectedAccountId: accountId,
   });
   if (!response.ok) {
-    const err = new Error(response.status === 409 ? "Settings changed on another device. Reloaded the latest settings; please try again." : `Schedule notification request failed (${response.status}).`) as Error & { status?: number };
+    const message = response.status === 409 ? "Settings changed on another device. Reloaded the latest settings; please try again."
+      : response.status === 422 ? "That device is no longer signed in. Choose another device."
+        : `Schedule notification request failed (${response.status}).`;
+    const err = new Error(message) as Error & { status?: number };
     err.status = response.status; throw err;
   }
   return response.status === 204 ? null : response.json() as Promise<T>;

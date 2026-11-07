@@ -7,7 +7,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
-import android.graphics.Rect
 import android.graphics.drawable.ColorDrawable
 import android.net.Uri
 import android.os.Bundle
@@ -49,8 +48,7 @@ class AlfredAssistantSession(context: Context) : VoiceInteractionSession(context
         setDisabledShowContext(SHOW_WITH_ASSIST or SHOW_WITH_SCREENSHOT)
         window.window?.apply {
             setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
-            addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
-            setDimAmount(0.22f)
+            clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
             setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
             // Own the system/IME insets below; do not also fit them in the decor.
             if (Build.VERSION.SDK_INT >= 30) setDecorFitsSystemWindows(false)
@@ -65,6 +63,7 @@ class AlfredAssistantSession(context: Context) : VoiceInteractionSession(context
             }
         }
         container.setBackgroundColor(Color.TRANSPARENT)
+        container.setOnClickListener { finish() }
         container.setOnApplyWindowInsetsListener { view, insets ->
             if (Build.VERSION.SDK_INT >= 30) {
                 val safe = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
@@ -251,15 +250,9 @@ class AlfredAssistantSession(context: Context) : VoiceInteractionSession(context
     }
 
     override fun onComputeInsets(outInsets: Insets) {
-        val view = browser ?: root?.getChildAt(0)
         outInsets.contentInsets.set(0, 0, 0, 0)
-        outInsets.touchableInsets = Insets.TOUCHABLE_INSETS_REGION
-        outInsets.touchableRegion.setEmpty()
-        if (view != null) {
-            val location = IntArray(2)
-            view.getLocationInWindow(location)
-            outInsets.touchableRegion.set(Rect(location[0], location[1], location[0] + view.width, location[1] + view.height))
-        }
+        // The transparent margins outside the WebView also dismiss the session.
+        outInsets.touchableInsets = Insets.TOUCHABLE_INSETS_FRAME
     }
     override fun onShow(args: Bundle?, showFlags: Int) {
         super.onShow(args, showFlags)

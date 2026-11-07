@@ -2,6 +2,7 @@ import { isValidCalendarDate } from "../../utils/dateUtils.ts";
 
 export interface Preferences {
     destination: "mobile" | "desktop" | "both";
+    deviceId?: string | undefined;
     enabled: boolean;
     leadMinutes: number;
     atStart: boolean;
@@ -21,8 +22,8 @@ export interface Reminder {
 }
 export const GRACE_MS = 120_000;
 export const HORIZON_MS = 48 * 60 * 60_000;
-export function eligible(p: Preferences, platform: Platform): boolean {
-    return p.enabled && (p.destination === "both" || p.destination === platform);
+export function eligible(p: Preferences, platform: Platform, deviceId?: string): boolean {
+    return p.enabled && (p.deviceId ? p.deviceId === deviceId : p.destination === "both" || p.destination === platform);
 }
 
 /** Existing dates/times are wall-clock values in the backend's system zone.

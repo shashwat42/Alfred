@@ -72,7 +72,8 @@ object ScheduleNotifications {
                 if (!id.matches(Regex("[a-zA-Z0-9-]{1,64}"))) return@addWebMessageListener
                 val complete: (JSONObject) -> Unit = { value -> view.post { reply.postMessage(value.put("id", id).toString()) } }
                 when (request.optString("type")) {
-                    "status" -> complete(JSONObject().put("granted", granted(activity)).put("exactAlarms", exactAlarms(activity)).put("pushRegistered", pushRegistered(activity)))
+                    "status" -> complete(JSONObject().put("granted", granted(activity)).put("exactAlarms", exactAlarms(activity))
+                        .put("pushRegistered", pushRegistered(activity)).put("deviceName", Build.MODEL))
                     "timing" -> {
                         if (Build.VERSION.SDK_INT >= 31) activity.startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:${activity.packageName}")))
                         complete(JSONObject().put("exactAlarms", exactAlarms(activity)))

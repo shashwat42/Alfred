@@ -5,6 +5,12 @@ use tauri::{Manager, State, Webview, WebviewWindow, webview::{PermissionKind, Pe
 #[derive(Default)]
 pub struct MicrophoneConsent { granted: AtomicBool, prompting: AtomicBool }
 
+impl MicrophoneConsent {
+    pub fn is_prompting(&self) -> bool {
+        self.prompting.load(Ordering::SeqCst)
+    }
+}
+
 pub fn handle_permission(webview: Webview, kind: PermissionKind) -> PermissionResponse {
     if kind != PermissionKind::Microphone { return PermissionResponse::Default; }
     if matches!(webview.label(), "main" | "overlay")

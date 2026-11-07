@@ -62,7 +62,13 @@ version before sending; it never stores a user bearer token for push.
 
 ## Settings and storage
 
-Settings default to Both, enabled, ten-minute lead, no additional start alert.
+Choose a signed-in Alfred installation under **Reminder device**. Open Alfred
+on each device with the same account and Cloud Sync enabled to register it.
+The device list filters out expired and revoked sessions. A selected device
+that becomes unavailable stays selected until you pick another device.
+Until you choose a device, reminders follow the existing account delivery
+setting. New accounts start with delivery to all eligible devices, a ten-minute
+lead and no additional start alert.
 Lead time accepts 0–10080 minutes. Zero lead produces one start-time alert.
 Preferences are account-scoped and revisioned to prevent concurrent lost updates.
 New settings use automatic device time-zone detection. The main app resolves its
@@ -80,8 +86,9 @@ accepted); ambiguous prose is skipped without changing the schedule. DST gaps ar
 skipped; repeated wall-clock times choose the first instant.
 
 New collections: ScheduleNotificationSettings (one/account),
-ScheduleNotificationDevices (hashed installation secret and session fingerprint,
-platform and expiry), ScheduleNotificationDeliveries (minimal atomic claim ledger).
+ScheduleNotificationDevices (device name and platform, hashed installation
+secret and session fingerprint, and expiry), ScheduleNotificationDeliveries
+(minimal atomic claim ledger).
 Indexes initialize before accepting API requests; existing schedule rows need no
 migration. The installation capability is generated from 32 random bytes. Account
 identity always comes from existing JWT/account middleware. Device claims also
@@ -179,8 +186,9 @@ and system-settings action. Both actions show progress and success/failure feedb
    installation and sign into the same account (independent guest sessions are
    different accounts). Enable notifications on receiving devices. Android can
    optionally grant Alarms & reminders access through Settings.
-2. Create events through both chat and the dashboard. Test each destination,
-   disable/re-enable, change lead time and enable start alerts. Use events far
+2. Create events through both chat and the dashboard. Select one of two signed-in
+   devices on the same platform and verify that it alone receives the reminder.
+   Test disabling and re-enabling reminders, changing lead time and start alerts. Use events far
    enough in the future to allow a full lead-time window after saving settings.
 3. Hide the desktop app in the tray; close the Android main/assistant WebViews.
    Verify one notification per eligible installation. Tap and verify the event's

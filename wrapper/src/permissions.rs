@@ -16,6 +16,12 @@ pub struct MicrophoneConsent {
     prompt: Arc<Mutex<()>>,
 }
 
+impl MicrophoneConsent {
+    pub fn is_prompting(&self) -> bool {
+        self.prompt.try_lock().is_err()
+    }
+}
+
 pub(crate) use crate::origin::trusted_origin;
 
 pub fn handle_permission(webview: Webview, kind: PermissionKind) -> PermissionResponse {

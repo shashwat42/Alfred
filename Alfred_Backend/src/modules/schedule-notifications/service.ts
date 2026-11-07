@@ -8,9 +8,10 @@ import { NotificationSettings, NotificationDevice, NotificationDelivery } from "
 import { defaultPreferences, eligible, remindersFor, isDue, GRACE_MS, HORIZON_MS, type Preferences, type Platform } from "./policy.ts";
 
 export const hash = (value: string) => createHash("sha256").update(value).digest("hex");
+export const publicDeviceId = (installationId: string) => hash(`schedule-device:${installationId}`);
 export async function preferences(accountId: string): Promise<Preferences> {
     const doc = await tenantRepository(NotificationSettings, accountId).findOne();
-    return doc ? { destination: doc.destination as Preferences["destination"], enabled: doc.enabled, leadMinutes: doc.leadMinutes, atStart: doc.atStart, timeZone: doc.timeZone, timeZoneMode: doc.timeZoneMode ?? (doc.timeZone === "UTC" ? "automatic" : "manual"), revision: doc.revision, ...(doc.effectiveFrom ? { effectiveFrom: doc.effectiveFrom.getTime() } : {}) } : defaultPreferences();
+    return doc ? { destination: doc.destination as Preferences["destination"], ...(doc.deviceId ? { deviceId: doc.deviceId } : {}), enabled: doc.enabled, leadMinutes: doc.leadMinutes, atStart: doc.atStart, timeZone: doc.timeZone, timeZoneMode: doc.timeZoneMode ?? (doc.timeZone === "UTC" ? "automatic" : "manual"), revision: doc.revision, ...(doc.effectiveFrom ? { effectiveFrom: doc.effectiveFrom.getTime() } : {}) } : defaultPreferences();
 }
 export async function savePreferences(accountId: string, input: Preferences): Promise<boolean> {
     assertSafeFields(input);
@@ -30,7 +31,7 @@ export async function savePreferences(accountId: string, input: Preferences): Pr
     const result = await tenantRepository(NotificationSettings, accountId).updateOne({ revision: input.revision }, { ...input, revision: input.revision + 1, effectiveFrom: new Date(Date.now()) });
     return result.modifiedCount === 1;
 }
-export async function registerDevice(accountId: string, secret: string, platform: Platform, token: string, now = Date.now(), pushToken?: string) {
+export async function registerDevice(accountId: string, secret: string, platform: Platform, token: string, now = Date.now(), pushToken?: string, name?: string) {
     // token has already passed authMiddleware. Retain only its expiry/version and
     // fingerprint so the background dispatcher never stores a bearer credential.
     const payload = jwt.decode(token);
@@ -39,6 +40,8 @@ export async function registerDevice(accountId: string, secret: string, platform
     // Possession of the unguessable installation secret permits account transfer on login.
     await withTenantWrite(accountId, session => NotificationDevice.findOneAndUpdate({ _id: hash(secret) }, { $set: {
         accountId, platform, sessionHash: hash(token), expiresAt: new Date(now + 30 * 86400_000),
+        ...(tokenSession ? { sessionExpiresAt: new Date(tokenSession.exp! * 1000), sessionVersion: tokenSession.version ?? 0 } : {}),
+        ...(name ? { name } : {}),
         ...(platform === "mobile" ? {
             pushSessionExpiresAt: tokenSession ? new Date(tokenSession.exp! * 1000) : null,
             pushSessionVersion: tokenSession?.version ?? 0,
@@ -50,12 +53,29 @@ export async function device(accountId: string, secret: string, token: string, n
     return tenantRepository(NotificationDevice, accountId).findOne({ _id: hash(secret), sessionHash: hash(token), expiresAt: { $gt: new Date(now) } });
 }
 
+export async function listDevices(accountId: string, sessionVersion: number, secret?: string, now = Date.now()) {
+    const after = { $gt: new Date(now) };
+    const installations = await tenantRepository(NotificationDevice, accountId).find({
+        expiresAt: after,
+        $or: [
+            { sessionVersion, sessionExpiresAt: after },
+            { sessionExpiresAt: { $exists: false }, pushSessionVersion: sessionVersion, pushSessionExpiresAt: after },
+        ],
+    }, { sort: { expiresAt: -1, _id: 1 } });
+    const current = secret && hash(secret);
+    return installations.filter(row => row.sessionHash !== "revoked").map(row => ({
+        id: publicDeviceId(row._id),
+        name: row.name || (row.platform === "mobile" ? "Android device" : "Desktop computer"),
+        isCurrent: row._id === current,
+    }));
+}
+
 /** Read-through reconciliation: every sync derives reminders from current schedules.
  * No second schedule store or stale pending queue; edits/deletes apply at claim time.
  * Bounded indexed date scan; keyset pagination avoids dropping busy accounts. */
-export async function plan(accountId: string, platform: Platform, now = Date.now(), cursor?: string) {
+export async function plan(accountId: string, platform: Platform, now = Date.now(), cursor?: string, installationId?: string) {
     const p = await preferences(accountId);
-    if (!eligible(p, platform)) return { preferences: p, reminders: [], next: null };
+    if (!eligible(p, platform, installationId && publicDeviceId(installationId))) return { preferences: p, reminders: [], next: null };
     const firstDate = new Date(now - 2 * 86400_000).toISOString().slice(0, 10);
     const lastDate = new Date(now + HORIZON_MS + (p.leadMinutes + 1440) * 60_000).toISOString().slice(0, 10);
     const [cursorDate, cursorId] = cursor?.split(":") ?? [];
@@ -73,7 +93,7 @@ export async function claim(accountId: string, deviceId: string, platform: Platf
     const schedule = await tenantRepository(Schedule, accountId).findOne({ _id: new mongoose.Types.ObjectId(scheduleId) });
     if (!schedule) return null;
     const p = await preferences(accountId);
-    if (!eligible(p, platform)) return null;
+    if (!eligible(p, platform, publicDeviceId(deviceId))) return null;
     const reminder = remindersFor(schedule, p).find(r => r.key === key && isDue(r, now));
     if (!reminder) return null;
     // Preserve already-consumed reminders across guest transfer without changing
