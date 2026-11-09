@@ -5,6 +5,7 @@ const settings = new Schema({
     destination: { type: String, enum: ["mobile", "desktop", "both"], default: "both" },
     deviceId: { type: String },
     enabled: { type: Boolean, default: true }, leadMinutes: { type: Number, default: 10 },
+    alertType: { type: String, enum: ["notification", "alarm"], default: "notification" },
     atStart: { type: Boolean, default: false }, timeZone: { type: String, required: true },
     timeZoneMode: { type: String, enum: ["automatic", "manual"] },
     revision: { type: Number, default: 0 },

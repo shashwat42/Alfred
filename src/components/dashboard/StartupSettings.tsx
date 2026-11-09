@@ -28,7 +28,7 @@ export function StartupSettings() {
       <div className="settings-feature-row">
         <div className="settings-feature-info">
           <label htmlFor="launch-on-startup" className="settings-feature-title">Launch on startup</label>
-          <span className="settings-feature-desc">Open Alfred automatically when you sign in to your computer.</span>
+          <span className="settings-feature-desc">Start Alfred in the background when you sign in. Open it from the system tray or your app launcher.</span>
         </div>
         <input id="launch-on-startup" type="checkbox" role="switch" checked={enabled} disabled={busy} onChange={async (event) => {
           const next = event.target.checked;

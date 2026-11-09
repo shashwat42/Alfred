@@ -10,6 +10,7 @@ const secretSchema = z.string().regex(/^[a-f0-9]{64}$/);
 const deviceNameSchema = z.string().trim().min(1).max(80).refine(value => !/\p{Cc}/u.test(value));
 export const preferenceSchema = z.object({
     destination: z.enum(["mobile", "desktop", "both"]), enabled: z.boolean(),
+    alertType: z.enum(["notification", "alarm"]).optional(),
     deviceId: secretSchema.optional(),
     leadMinutes: z.number().int().min(0).max(10080), atStart: z.boolean(),
     timeZone: z.string().max(100).refine(zone => { try { new Intl.DateTimeFormat("en", { timeZone: zone }); return true; } catch { return false; } }),

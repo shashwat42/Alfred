@@ -158,37 +158,42 @@ test("OS settings action is unavailable in a browser and surfaces native open fa
   try { await assert.rejects(openNotificationSettings(), /OS settings launch failed/); }
   finally { clearMocks(); }
 });
-test("coordinator prevents overlapping polls and stops native delivery on sign-out", async () => {
-  const { win, storage } = browser(); win.isTauri = true;
-  Object.assign(win, { Notification: { permission: "granted" } });
-  let tick: (() => void) | undefined; let cleared = false;
-  Object.assign(win, { setInterval: (callback: () => void) => { tick = callback; return 1; }, clearInterval: () => { cleared = true; } });
-  let completeSync!: (response: Response) => void;
-  let started!: () => void;
-  const syncStarted = new Promise<void>(resolve => { started = resolve; });
-  const delayedSync = new Promise<Response>(resolve => { completeSync = resolve; });
-  let delivered!: () => void;
-  const delivery = new Promise<void>(resolve => { delivered = resolve; });
-  let syncs = 0, notifications = 0, deletions = 0;
-  const savedFetch = globalThis.fetch;
-  const dueAt = Date.now();
-  const reminder = { key: `${scheduleId}:${dueAt + 600000}:lead`, scheduleId, date: "2026-10-17", title: "Call Sam", body: "10:00 UTC", kind: "lead", dueAt, eventAt: dueAt + 600000 };
-  globalThis.fetch = async (url, init) => {
-    if (String(url).endsWith("/preferences")) return Response.json({ destination: "both", enabled: true, leadMinutes: 10, atStart: false, timeZone: "UTC", timeZoneMode: "manual", revision: 1 });
-    if (init?.method === "DELETE") { deletions++; return new Response(null, { status: 204 }); }
-    if (String(url).endsWith("/devices")) return new Response(null, { status: 204 });
-    if (String(url).endsWith("/sync")) { syncs++; started(); return delayedSync; }
-    if (String(url).endsWith("/claim")) return Response.json(reminder);
-    throw new Error("Unexpected request");
-  };
-  mockIPC(cmd => { if (cmd === "plugin:notification|notify") { notifications++; delivered(); } });
-  const stop = startScheduleNotificationCoordinator({ token: "current-token", account: { id: accountId, type: "user" } });
-  try {
-    await syncStarted; tick?.(); tick?.(); assert.equal(syncs, 1);
-    completeSync(Response.json({ preferences: {}, reminders: [reminder], next: null }));
-    await delivery; assert.equal(notifications, 1);
-    storage.removeItem("alfred_session"); stop();
-    tick?.(); assert.equal(notifications, 1); assert.equal(syncs, 1);
-    assert.equal(cleared, true); assert.equal(deletions, 1);
-  } finally { stop(); globalThis.fetch = savedFetch; clearMocks(); }
-});
+for (const alertType of [undefined, "alarm"] as const) {
+  test(`coordinator delivers ${alertType ?? "legacy notifications"} once and stops on sign-out`, async () => {
+    const { win, storage } = browser(); win.isTauri = true;
+    Object.assign(win, { Notification: { permission: "granted" } });
+    let tick: (() => void) | undefined; let cleared = false;
+    Object.assign(win, { setInterval: (callback: () => void) => { tick = callback; return 1; }, clearInterval: () => { cleared = true; } });
+    let completeSync!: (response: Response) => void;
+    let started!: () => void;
+    const syncStarted = new Promise<void>(resolve => { started = resolve; });
+    const delayedSync = new Promise<Response>(resolve => { completeSync = resolve; });
+    let delivered!: () => void;
+    const delivery = new Promise<void>(resolve => { delivered = resolve; });
+    let syncs = 0, notifications = 0, deletions = 0;
+    const alarms: unknown[] = [];
+    const savedFetch = globalThis.fetch;
+    const dueAt = Date.now();
+    const reminder = { key: `${scheduleId}:${dueAt + 600000}:lead`, scheduleId, date: "2026-10-17", title: "Call Sam", body: "10:00 UTC", kind: "lead", dueAt, eventAt: dueAt + 600000 };
+    globalThis.fetch = async (url, init) => {
+      if (String(url).endsWith("/preferences")) return Response.json({ destination: "both", enabled: true, leadMinutes: 10, atStart: false, timeZone: "UTC", timeZoneMode: "manual", revision: 1 });
+      if (init?.method === "DELETE") { deletions++; return new Response(null, { status: 204 }); }
+      if (String(url).endsWith("/devices")) return new Response(null, { status: 204 });
+      if (String(url).endsWith("/sync")) { syncs++; started(); return delayedSync; }
+      if (String(url).endsWith("/claim")) return Response.json({ ...reminder, alertType });
+      throw new Error("Unexpected request");
+    };
+    mockIPC(cmd => { if (cmd === "plugin:notification|notify") { notifications++; delivered(); } });
+    const stop = startScheduleNotificationCoordinator({ token: "current-token", account: { id: accountId, type: "user" } }, alarm => { alarms.push(alarm); delivered(); });
+    try {
+      await syncStarted; tick?.(); tick?.(); assert.equal(syncs, 1);
+      completeSync(Response.json({ preferences: {}, reminders: [reminder], next: null }));
+      await delivery;
+      assert.equal(notifications, alertType === "alarm" ? 0 : 1);
+      assert.deepEqual(alarms, alertType === "alarm" ? [{ ...reminder, alertType }] : []);
+      storage.removeItem("alfred_session"); stop();
+      tick?.(); assert.equal(notifications + alarms.length, 1); assert.equal(syncs, 1);
+      assert.equal(cleared, true); assert.equal(deletions, 1);
+    } finally { stop(); globalThis.fetch = savedFetch; clearMocks(); }
+  });
+}

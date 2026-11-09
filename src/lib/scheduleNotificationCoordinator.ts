@@ -2,7 +2,7 @@ import { API_BASE_URL, AUTH_STORAGE_KEY, dispatchAuthChange, getSession, type Au
 import { androidNotificationRequest, deliverDesktopReminder, detectedTimeZone, syncDetectedTimeZone, installationSecret, isAndroid, notificationDeviceName, notificationPermission, notificationPlatform, notificationRequest, NOTIFICATION_DEVICES_EVENT, NOTIFICATION_SETTINGS_EVENT, NOTIFICATION_TAP_EVENT, openScheduleTarget, setNotificationDeliveryStatus, type NotificationPlan, type ScheduleReminder } from "./scheduleNotifications.ts";
 
 /** Exactly one coordinator: mounted only in the normal main document, never overlays. */
-export function startScheduleNotificationCoordinator(session: AuthSession | null) {
+export function startScheduleNotificationCoordinator(session: AuthSession | null, ringAlarm?: (reminder: ScheduleReminder) => void) {
     const changed = (event: StorageEvent) => { if (event.key === AUTH_STORAGE_KEY) dispatchAuthChange(getSession()); };
     // Android already installs its shared account bridge.
     if (!isAndroid()) window.addEventListener("storage", changed);
@@ -80,7 +80,9 @@ export function startScheduleNotificationCoordinator(session: AuthSession | null
             if (!stillCurrent()) return;
             if (reminder.dueAt > Date.now()) continue;
             const claimed = await notificationRequest<ScheduleReminder>("/claim", accountId, { secret, key: reminder.key }, "POST", controller.signal);
-            if (claimed && stillCurrent()) await deliverDesktopReminder(claimed, accountId);
+            if (!claimed || !stillCurrent()) continue;
+            if (claimed.alertType === "alarm" && ringAlarm) ringAlarm(claimed);
+            else await deliverDesktopReminder(claimed, accountId);
           }
           cursor = page.next;
         } while (cursor && stillCurrent());

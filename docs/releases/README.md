@@ -1,8 +1,8 @@
 # Alfred releases
 
-Alfred 1.0.41 adds device renaming and remote sign-out to the reminder device
-list on Windows and Linux. Windows, Fedora and Android use release tag
-`v1.0.41`. Android packages are built and signed separately.
+Alfred 1.0.42 adds schedule alarms and starts in the tray at sign-in on Windows
+and Fedora. Windows, Fedora and Android use release tag `v1.0.42`.
+Android packages are built and signed separately.
 
 Merge features into `main` before cutting a release. Tag the exact commit
 that ships. Use release branches to stabilize or maintain a version, and
@@ -58,4 +58,4 @@ Windows keeps its existing signed updater. Do not attach the older Android APK
 under a newer version name.
 
 See [desktop app updates](../app-updates.md), [Fedora setup](../linux-fedora.md),
-and the [1.0.41 notes](v1.0.41.md).
+and the [1.0.42 notes](v1.0.42.md).

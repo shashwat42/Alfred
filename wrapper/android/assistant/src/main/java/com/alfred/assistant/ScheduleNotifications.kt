@@ -42,6 +42,8 @@ import com.google.firebase.messaging.FirebaseMessaging
 /** Native scheduling owns Android delivery; neither React surface shows OS alerts. */
 object ScheduleNotifications {
     private const val CHANNEL = "alfred_schedule_events"
+    private const val ALARM_CHANNEL = "alfred_schedule_alarms"
+    private const val ALARM_TIMEOUT = 60_000L
     private const val JOB_ID = 73102
     private const val PREFS = "alfred_schedule_notifications"
     private const val GRACE = 120000L
@@ -50,16 +52,19 @@ object ScheduleNotifications {
     private fun prefs(c: Context) = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
     private fun digest(value: String) = MessageDigest.getInstance("SHA-256").digest(value.toByteArray()).joinToString("") { "%02x".format(it) }
 
-    fun granted(c: Context): Boolean {
+    private fun granted(c: Context, channel: String? = null): Boolean {
         if (Build.VERSION.SDK_INT >= 33 && c.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return false
         val manager = c.getSystemService(NotificationManager::class.java)
         if (!manager.areNotificationsEnabled()) return false
-        return Build.VERSION.SDK_INT < 26 || manager.getNotificationChannel(CHANNEL)?.importance != NotificationManager.IMPORTANCE_NONE
+        return channel == null || Build.VERSION.SDK_INT < 26 ||
+            manager.getNotificationChannel(channel)?.importance != NotificationManager.IMPORTANCE_NONE
     }
+    private fun alertChannel(alarm: Boolean) = if (alarm) ALARM_CHANNEL else CHANNEL
     private fun exactAlarms(c: Context) = Build.VERSION.SDK_INT < 31 || c.getSystemService(AlarmManager::class.java).canScheduleExactAlarms()
 
     fun install(activity: Activity, view: WebView) {
-        ensureChannel(activity)
+        ensureChannel(activity, false)
+        ensureChannel(activity, true)
         mainView = WeakReference(view)
         if (!WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) return
         WebViewCompat.addWebMessageListener(view, "AlfredScheduleNotifications", setOf(AssistantBridge.ORIGIN)) { _, message, source, mainFrame, reply ->
@@ -70,9 +75,10 @@ object ScheduleNotifications {
                 val request = JSONObject(text)
                 val id = request.optString("id")
                 if (!id.matches(Regex("[a-zA-Z0-9-]{1,64}"))) return@addWebMessageListener
+                val channel = alertChannel(request.optString("alertType") == "alarm")
                 val complete: (JSONObject) -> Unit = { value -> view.post { reply.postMessage(value.put("id", id).toString()) } }
                 when (request.optString("type")) {
-                    "status" -> complete(JSONObject().put("granted", granted(activity)).put("exactAlarms", exactAlarms(activity))
+                    "status" -> complete(JSONObject().put("granted", granted(activity, channel)).put("exactAlarms", exactAlarms(activity))
                         .put("pushRegistered", pushRegistered(activity)).put("deviceName", Build.MODEL))
                     "timing" -> {
                         if (Build.VERSION.SDK_INT >= 31) activity.startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:${activity.packageName}")))
@@ -81,7 +87,7 @@ object ScheduleNotifications {
                     "permission" -> {
                         val receiver = object : ResultReceiver(Handler(Looper.getMainLooper())) {
                             override fun onReceiveResult(resultCode: Int, resultData: Bundle?) {
-                                complete(JSONObject().put("granted", granted(activity)))
+                                complete(JSONObject().put("granted", granted(activity, channel)))
                             }
                         }
                         activity.startActivity(Intent(activity, ScheduleNotificationPermissionActivity::class.java).putExtra("result", receiver))
@@ -113,7 +119,7 @@ object ScheduleNotifications {
         }
     }
 
-    private fun configure(c: Context, request: JSONObject) {
+    @Synchronized private fun configure(c: Context, request: JSONObject) {
         val base = request.getString("baseUrl").trimEnd('/')
         val uri = URI(base)
         require(uri.userInfo == null && uri.query == null && uri.fragment == null && uri.path.orEmpty().isEmpty())
@@ -122,9 +128,16 @@ object ScheduleNotifications {
         val secret = request.getString("secret")
         val accountId = request.getString("accountId") // Navigation scope only; backend identity is always JWT-derived.
         require(token.length in 1..4096 && secret.matches(Regex("[a-f0-9]{64}")) && accountId.matches(Regex("[a-f0-9]{24}")))
-        val previous = prefs(c).getString("token", "")
-        if (previous != token) { cancelAlarms(c); prefs(c).edit().remove("pushSession").remove("delivered").commit() }
-        prefs(c).edit().putString("base", base).putString("token", token).putString("secret", secret).putString("account", accountId).commit()
+        val p = prefs(c)
+        val previousAccount = p.getString("account", null)
+        if (previousAccount != null && previousAccount != accountId) {
+            c.getSystemService(NotificationManager::class.java).cancelAll()
+        }
+        if (p.getString("token", "") != token) {
+            cancelAlarms(c)
+            p.edit().remove("pushSession").remove("delivered").commit()
+        }
+        p.edit().putString("base", base).putString("token", token).putString("secret", secret).putString("account", accountId).commit()
         val job = JobInfo.Builder(JOB_ID, ComponentName(c, ScheduleNotificationJob::class.java))
             .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY).setPeriodic(15 * 60 * 1000L).setPersisted(true).build()
         check(c.getSystemService(JobScheduler::class.java).schedule(job) == JobScheduler.RESULT_SUCCESS)
@@ -265,11 +278,10 @@ object ScheduleNotifications {
         val p = prefs(c)
         val delivered = JSONObject(p.getString("delivered", "{}")!!)
         if (delivered.has(key)) return
+        val alarm = reminder.optString("alertType") == "alarm"
+        val channel = alertChannel(alarm)
         val manager = c.getSystemService(NotificationManager::class.java)
-        val chime = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-        val audio = AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_NOTIFICATION_EVENT)
-            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build()
-        ensureChannel(c)
+        ensureChannel(c, alarm)
         val launch = c.packageManager.getLaunchIntentForPackage(c.packageName) ?: return
         launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
         launch.data = Uri.parse("alfred://schedule/${reminder.getString("scheduleId")}")
@@ -278,31 +290,47 @@ object ScheduleNotifications {
         launch.putExtra("alfred_schedule_session", digest(activeToken))
         val tap = PendingIntent.getActivity(c, 0, launch, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         @Suppress("DEPRECATION")
-        val builder = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(c, CHANNEL) else Notification.Builder(c)
-        if (Build.VERSION.SDK_INT < 26) builder.setSound(chime, audio)
+        val builder = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(c, channel) else Notification.Builder(c)
+        if (Build.VERSION.SDK_INT < 26) {
+            builder.setSound(alertSound(alarm), alertAudio(alarm))
+            if (alarm) builder.setPriority(Notification.PRIORITY_HIGH)
+        } else if (alarm) builder.setTimeoutAfter(ALARM_TIMEOUT)
         val notification = builder.setSmallIcon(R.drawable.ic_alfred_notification)
             .setContentTitle(reminder.getString("title")).setContentText(reminder.getString("body"))
-            .setContentIntent(tap).setAutoCancel(true).setVisibility(Notification.VISIBILITY_PRIVATE).setCategory(Notification.CATEGORY_EVENT).build()
+            .setContentIntent(tap).setAutoCancel(true).setVisibility(Notification.VISIBILITY_PRIVATE)
+            .setCategory(if (alarm) Notification.CATEGORY_ALARM else Notification.CATEGORY_EVENT).build()
+        if (alarm) notification.flags = notification.flags or Notification.FLAG_INSISTENT
         // Permission can be revoked during the request; never crash the receiver.
-        if (granted(c) && p.getString("token", null) == activeToken) {
+        if (granted(c, channel) && p.getString("token", null) == activeToken) {
             // Bound receipt history to the retry window. Both alarm and FCM use it.
             val cutoff = System.currentTimeMillis() - GRACE
             delivered.keys().asSequence().toList().filter { delivered.optLong(it) < cutoff }.forEach { delivered.remove(it) }
             delivered.put(key, System.currentTimeMillis())
             p.edit().putString("delivered", delivered.toString()).commit()
-            manager.notify(digest(key), 1, notification)
+            val tag = digest(key)
+            manager.notify(tag, 1, notification)
+            if (alarm && Build.VERSION.SDK_INT < 26) {
+                Handler(Looper.getMainLooper()).postDelayed({ manager.cancel(tag, 1) }, ALARM_TIMEOUT)
+            }
         }
     }
 
     fun enqueueSync(c: Context, complete: () -> Unit = {}) {
         executor.execute { try { sync(c.applicationContext) } catch (_: Exception) { /* Next job retries safely. */ } finally { complete() } }
     }
-    private fun ensureChannel(c: Context) {
+    private fun alertSound(alarm: Boolean) = RingtoneManager.getDefaultUri(
+        if (alarm) RingtoneManager.TYPE_ALARM else RingtoneManager.TYPE_NOTIFICATION)
+
+    private fun alertAudio(alarm: Boolean) = AudioAttributes.Builder()
+        .setUsage(if (alarm) AudioAttributes.USAGE_ALARM else AudioAttributes.USAGE_NOTIFICATION_EVENT)
+        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build()
+
+    private fun ensureChannel(c: Context, alarm: Boolean) {
         if (Build.VERSION.SDK_INT < 26) return
-        val channel = NotificationChannel(CHANNEL, "Schedule events", NotificationManager.IMPORTANCE_DEFAULT)
-        channel.setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION),
-            AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_NOTIFICATION_EVENT)
-                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
+        val channel = NotificationChannel(alertChannel(alarm),
+            if (alarm) "Schedule alarms" else "Schedule events",
+            if (alarm) NotificationManager.IMPORTANCE_HIGH else NotificationManager.IMPORTANCE_DEFAULT)
+        channel.setSound(alertSound(alarm), alertAudio(alarm))
         // Reusing the channel preserves the user's sound and mute choices.
         c.getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
     }

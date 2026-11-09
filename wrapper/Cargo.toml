@@ -1,6 +1,6 @@
 [package]
 name = "app"
-version = "1.0.41"
+version = "1.0.42"
 description = "Alfred AI desktop assistant"
 authors = ["Shashwat"]
 license = ""

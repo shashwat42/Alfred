@@ -1,6 +1,6 @@
 # Alfred
 
-Alfred 1.0.41 for Windows, Fedora Linux and Android. See the [release guide](docs/releases/README.md), [1.0.41 notes](docs/releases/v1.0.41.md) and [in-app updates](docs/app-updates.md).
+Alfred 1.0.42 for Windows, Fedora Linux and Android. See the [release guide](docs/releases/README.md), [1.0.42 notes](docs/releases/v1.0.42.md) and [in-app updates](docs/app-updates.md).
 
 Fedora Linux: [build, install and desktop setup](docs/linux-fedora.md). Use
 `npm run dev:linux` for development and `npm run build:linux` to produce an RPM.

@@ -9,11 +9,12 @@ const now = Date.parse("2026-10-19T10:00:00Z");
 const reminder: Reminder = { key: "event:lead", scheduleId: "event", date: "2026-10-19", title: "Call", body: "10:10", kind: "lead", eventAt: now + 600_000, dueAt: now };
 const device: PushDevice = { id: "installation", accountId: "account", sessionHash: "session", sessionVersion: 0, expiresAt: now + 100000, sessionExpiresAt: now + 100000, pushToken: "isolated-device-token" };
 test("FCM carries bounded data-only reminders with no bearer credential and short expiry", () => {
-    const payload = pushPayload(device, { ...reminder, title: "x".repeat(10000) }, now);
+    const payload = pushPayload(device, { ...reminder, title: "x".repeat(10000), alertType: "alarm" }, now);
     assert.equal(payload.message.android.priority, "HIGH");
     assert.equal(payload.message.android.ttl, "100s");
     assert.equal(payload.message.data.title!.length, 160);
     assert.equal(payload.message.data.sessionHash, device.sessionHash);
+    assert.equal(payload.message.data.alertType, "alarm");
     assert.equal("notification" in payload.message, false);
     assert.equal("secret" in payload.message.data, false);
     assert.equal(pushPayload(device, reminder, now + 200000).message.android.ttl, "0s");

@@ -48,10 +48,22 @@ function ScheduleNotificationSettingsForm({ accountId }: { accountId: string | u
     setDevices(registered.status === "fulfilled" ? registered.value : null);
     setDevicesUnavailable(registered.status === "rejected");
   }, [accountId, loadDevices]);
+  const alertType = value?.alertType ?? "notification";
   const checkPermission = useCallback(() => {
-    void notificationPermission().then(setPermission).catch(() => setPermission("unavailable"));
-    if (isAndroid()) void androidNotificationRequest("status").then(status => { setExactAlarms(Boolean(status.exactAlarms)); setPushRegistered(Boolean(status.pushRegistered)); }).catch(() => { setExactAlarms(false); setPushRegistered(false); });
-  }, []);
+    if (!isAndroid()) {
+      void notificationPermission().then(setPermission).catch(() => setPermission("unavailable"));
+      return;
+    }
+    void androidNotificationRequest("status", { alertType }).then(status => {
+      setPermission(status.granted ? "granted" : "denied");
+      setExactAlarms(Boolean(status.exactAlarms));
+      setPushRegistered(Boolean(status.pushRegistered));
+    }).catch(() => {
+      setPermission("unavailable");
+      setExactAlarms(false);
+      setPushRegistered(false);
+    });
+  }, [alertType]);
   useEffect(() => {
     const initial = window.setTimeout(() => { void load(); checkPermission(); }, 0);
     const timer = setInterval(() => { void load(); checkPermission(); }, 30_000);
@@ -72,7 +84,7 @@ function ScheduleNotificationSettingsForm({ accountId }: { accountId: string | u
     try {
       const merged = { ...value, ...patch };
       const { destination, enabled, leadMinutes, atStart, timeZone, timeZoneMode, revision } = merged;
-      const result = await notificationRequest<ScheduleNotificationPreferences>("/preferences", accountId, { destination, deviceId: patch.deviceId, enabled, leadMinutes, atStart, timeZone, timeZoneMode, revision }, "PUT");
+      const result = await notificationRequest<ScheduleNotificationPreferences>("/preferences", accountId, { destination, deviceId: patch.deviceId, alertType: patch.alertType, enabled, leadMinutes, atStart, timeZone, timeZoneMode, revision }, "PUT");
       if (getSession()?.account.id !== accountId) return;
       setValue(result); setFeedback("Schedule notification settings saved for this account.");
       window.dispatchEvent(new Event(NOTIFICATION_SETTINGS_EVENT));
@@ -118,7 +130,7 @@ function ScheduleNotificationSettingsForm({ accountId }: { accountId: string | u
   const requestPermission = async () => {
     setPermissionAction("request"); setError(""); setFeedback("");
     try {
-      const result = await notificationPermission(true);
+      const result = await notificationPermission(true, alertType);
       setPermission(result);
       setFeedback(result === "granted" ? "Notifications are enabled on this device." : platform === "mobile" ? "Allow notifications in the Android permission prompt. If Android no longer shows a prompt, open Android settings." : "Check your operating system’s notification settings to allow alerts.");
       window.dispatchEvent(new Event(NOTIFICATION_SETTINGS_EVENT));
@@ -139,6 +151,16 @@ function ScheduleNotificationSettingsForm({ accountId }: { accountId: string | u
       {!value ? error ? null : <Loader label="Loading notification settings…" /> : <fieldset disabled={busy} className="schedule-notification-fields">
         <legend className="sr-only">Schedule notification preferences</legend>
         <div className="settings-feature-row"><label htmlFor="schedule-notifications-enabled" className="settings-feature-title">Schedule reminders</label><input id="schedule-notifications-enabled" type="checkbox" role="switch" checked={value.enabled} onChange={e => void save({ enabled: e.target.checked })} /></div>
+        <div className="settings-feature-row">
+          <div className="settings-feature-info">
+            <label htmlFor="schedule-alert-type" className="settings-feature-title">Alert type</label>
+            <span id="schedule-alert-type-help" className="settings-feature-desc">Alarms repeat a sound and can be dismissed on the device receiving the reminder.</span>
+          </div>
+          <select id="schedule-alert-type" className="settings-select-input" aria-describedby="schedule-alert-type-help" value={alertType} onChange={e => void save({ alertType: e.target.value === "alarm" ? "alarm" : "notification" })}>
+            <option value="notification">Notification</option>
+            <option value="alarm">Alarm</option>
+          </select>
+        </div>
         <fieldset className="schedule-destination"><legend>Reminder device</legend>
           {devicesUnavailable && <div className="settings-feature-info"><span className="settings-feature-desc">Could not load your devices.</span><button type="button" className="settings-action-btn" onClick={() => void load()}>Retry</button></div>}
           {!devicesUnavailable && devices === null && <p className="settings-feature-desc" role="status">Loading devices…</p>}

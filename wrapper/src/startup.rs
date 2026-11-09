@@ -1,4 +1,4 @@
-use std::{os::windows::ffi::OsStrExt, ptr};
+use std::{os::windows::ffi::OsStrExt, ptr, sync::Mutex};
 use tauri::WebviewWindow;
 use windows_sys::Win32::{
     Foundation::{ERROR_FILE_NOT_FOUND, ERROR_SUCCESS},
@@ -6,6 +6,8 @@ use windows_sys::Win32::{
         HKEY_CURRENT_USER, REG_SZ, RRF_RT_REG_SZ, RegDeleteKeyValueW, RegGetValueW, RegSetKeyValueW,
     },
 };
+
+static STARTUP_WRITE: Mutex<()> = Mutex::new(());
 
 fn wide(value: &str) -> Vec<u16> {
     value.encode_utf16().chain(Some(0)).collect()
@@ -26,15 +28,22 @@ fn key() -> Vec<u16> {
     wide(r"Software\Microsoft\Windows\CurrentVersion\Run")
 }
 
-fn startup_command() -> Result<Vec<u16>, String> {
+fn startup_command(minimized: bool) -> Result<Vec<u16>, String> {
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    let arguments = if minimized {
+        format!(" {}", crate::START_MINIMIZED_ARG)
+    } else {
+        String::new()
+    };
     Ok(std::iter::once(b'"' as u16)
         .chain(exe.as_os_str().encode_wide())
-        .chain([b'"' as u16, 0])
+        .chain(Some(b'"' as u16))
+        .chain(arguments.encode_utf16())
+        .chain(Some(0))
         .collect())
 }
 
-fn read_enabled() -> Result<bool, String> {
+fn read_command() -> Result<Option<Vec<u16>>, String> {
     let mut data = vec![0u16; 32768];
     let mut bytes = (data.len() * 2) as u32;
     // All buffers and nul-terminated names live through the registry call.
@@ -50,7 +59,7 @@ fn read_enabled() -> Result<bool, String> {
         )
     };
     if result == ERROR_FILE_NOT_FOUND {
-        return Ok(false);
+        return Ok(None);
     }
     if result != ERROR_SUCCESS {
         return Err(format!(
@@ -58,20 +67,19 @@ fn read_enabled() -> Result<bool, String> {
         ));
     }
     data.truncate(bytes as usize / 2);
-    Ok(data == startup_command()?)
+    Ok(Some(data))
 }
 
-#[tauri::command]
-pub fn get_launch_on_startup(window: WebviewWindow) -> Result<bool, String> {
-    authorize(&window)?;
-    read_enabled()
+fn read_enabled() -> Result<bool, String> {
+    let Some(command) = read_command()? else {
+        return Ok(false);
+    };
+    Ok(command == startup_command(true)? || command == startup_command(false)?)
 }
 
-#[tauri::command]
-pub fn set_launch_on_startup(window: WebviewWindow, enabled: bool) -> Result<bool, String> {
-    authorize(&window)?;
+fn write_startup(enabled: bool) -> Result<(), String> {
     let result = if enabled {
-        let command = startup_command()?;
+        let command = startup_command(true)?;
         unsafe {
             RegSetKeyValueW(
                 HKEY_CURRENT_USER,
@@ -90,5 +98,29 @@ pub fn set_launch_on_startup(window: WebviewWindow, enabled: bool) -> Result<boo
             "Could not update Windows startup settings ({result})."
         ));
     }
+    Ok(())
+}
+
+pub fn upgrade_legacy_startup() -> Result<(), String> {
+    let _guard = STARTUP_WRITE.lock().map_err(|e| e.to_string())?;
+    if let Some(command) = read_command()?
+        && command == startup_command(false)?
+    {
+        write_startup(true)?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_launch_on_startup(window: WebviewWindow) -> Result<bool, String> {
+    authorize(&window)?;
+    read_enabled()
+}
+
+#[tauri::command]
+pub fn set_launch_on_startup(window: WebviewWindow, enabled: bool) -> Result<bool, String> {
+    authorize(&window)?;
+    let _guard = STARTUP_WRITE.lock().map_err(|e| e.to_string())?;
+    write_startup(enabled)?;
     read_enabled()
 }

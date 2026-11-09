@@ -13,7 +13,14 @@ export const hash = (value: string) => createHash("sha256").update(value).digest
 export const publicDeviceId = (installationId: string) => hash(`schedule-device:${installationId}`);
 export async function preferences(accountId: string): Promise<Preferences> {
     const doc = await tenantRepository(NotificationSettings, accountId).findOne();
-    return doc ? { destination: doc.destination as Preferences["destination"], ...(doc.deviceId ? { deviceId: doc.deviceId } : {}), enabled: doc.enabled, leadMinutes: doc.leadMinutes, atStart: doc.atStart, timeZone: doc.timeZone, timeZoneMode: doc.timeZoneMode ?? (doc.timeZone === "UTC" ? "automatic" : "manual"), revision: doc.revision, ...(doc.effectiveFrom ? { effectiveFrom: doc.effectiveFrom.getTime() } : {}) } : defaultPreferences();
+    return doc ? {
+        destination: doc.destination as Preferences["destination"],
+        ...(doc.deviceId ? { deviceId: doc.deviceId } : {}),
+        enabled: doc.enabled, alertType: doc.alertType === "alarm" ? "alarm" : "notification",
+        leadMinutes: doc.leadMinutes, atStart: doc.atStart, timeZone: doc.timeZone,
+        timeZoneMode: doc.timeZoneMode ?? (doc.timeZone === "UTC" ? "automatic" : "manual"),
+        revision: doc.revision, ...(doc.effectiveFrom ? { effectiveFrom: doc.effectiveFrom.getTime() } : {}),
+    } : defaultPreferences();
 }
 export async function savePreferences(accountId: string, input: Preferences): Promise<boolean> {
     assertSafeFields(input);
@@ -30,7 +37,10 @@ export async function savePreferences(accountId: string, input: Preferences): Pr
             return true;
         } catch (e) { if ((e as { code?: number }).code === 11000) return false; throw e; }
     }
-    const result = await tenantRepository(NotificationSettings, accountId).updateOne({ revision: input.revision }, { ...input, revision: input.revision + 1, effectiveFrom: new Date(Date.now()) });
+    // Older clients and automatic time-zone updates omit the alert type.
+    const { alertType, ...settings } = input;
+    const result = await tenantRepository(NotificationSettings, accountId).updateOne({ revision: input.revision },
+        { ...settings, ...(alertType ? { alertType } : {}), revision: input.revision + 1, effectiveFrom: new Date(Date.now()) });
     return result.modifiedCount === 1;
 }
 export async function registerDevice(accountId: string, secret: string, platform: Platform, token: string, now = Date.now(), pushToken?: string, name?: string) {
@@ -133,7 +143,7 @@ export async function claim(accountId: string, deviceId: string, platform: Platf
             preferences(accountId),
         ]);
         if (!current || latest.revision !== p.revision) return null;
-        return reminder;
+        return { ...reminder, alertType: latest.alertType ?? "notification" };
     } catch (e) { if ((e as { code?: number }).code === 11000) return null; throw e; }
 }
 

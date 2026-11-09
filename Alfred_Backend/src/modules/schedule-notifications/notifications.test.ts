@@ -117,6 +117,19 @@ test("automatic zones persist and older clients preserve the mode unless they ch
     assert.equal(await savePreferences(account, { ...defaults(), timeZone: "UTC", timeZoneMode: undefined, revision: 3 }), true);
     assert.equal((await preferences(account)).timeZoneMode, "manual");
 });
+test("legacy reminders default to notifications and older settings writes preserve an alarm choice", async t => {
+    fixture(t, { ...defaults(), alertType: undefined, revision: 1 });
+    mock.method(Date, "now", () => now - 1);
+    assert.equal((await preferences(account)).alertType, "notification");
+    assert.equal(await savePreferences(account, { ...defaults(), alertType: "alarm", revision: 1 }), true);
+    assert.equal(await savePreferences(account, { ...defaults(), alertType: undefined, revision: 2 }), true);
+    assert.equal((await preferences(account)).alertType, "alarm");
+    const key = remindersFor(event(), defaults())[0]!.key;
+    assert.equal((await claim(account, "desktop", "desktop", key, now))?.alertType, "alarm");
+    assert.equal((await claim(account, "phone", "mobile", key, now))?.alertType, "alarm");
+    assert.equal(await savePreferences(account, { ...defaults(), alertType: "notification", revision: 3 }), true);
+    assert.equal((await claim(account, "other-phone", "mobile", key, now))?.alertType, "notification");
+});
 test("strict legacy time parsing handles midnight, noon, 24h and invalid prose", () => {
     for (const [time, iso] of [["12 AM", "00:00"], ["12:30 PM", "12:30"], ["23:59", "23:59"], ["9 am", "09:00"]]) assert.equal(eventInstant("2026-10-17", time!, "UTC"), Date.parse(`2026-10-17T${iso}:00Z`));
     for (const time of ["tomorrow morning", "25:00", "9:99", "0 PM", "13 PM", ""]) assert.equal(eventInstant("2026-10-17", time, "UTC"), null);
@@ -302,6 +315,7 @@ test("authenticated API rejects missing sessions, spoofed identity and invalid s
     assert.equal((await call("/preferences", undefined, null)).status, 401);
     assert.equal((await call("/preferences", { ...defaults(), accountId: other }, account, "PUT")).status, 400);
     assert.equal((await call("/preferences", { ...defaults(), timeZone: "invalid" }, account, "PUT")).status, 400);
+    assert.equal((await call("/preferences", { ...defaults(), alertType: "invalid" }, account, "PUT")).status, 400);
     assert.equal((await call("/preferences", { ...defaults(), leadMinutes: -1 }, account, "PUT")).status, 400);
     assert.equal((await call("/devices", { secret: "a".repeat(64), platform: "mobile", accountId: other })).status, 400);
 });

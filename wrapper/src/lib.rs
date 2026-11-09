@@ -20,6 +20,9 @@ mod updates;
 #[path = "updates_linux.rs"]
 mod updates;
 
+#[cfg(any(target_os = "windows", target_os = "linux"))]
+const START_MINIMIZED_ARG: &str = "--start-minimized";
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     #[allow(unused_mut)]
@@ -74,6 +77,10 @@ pub fn run() {
         use tauri::{Emitter, Manager};
 
         builder = builder.plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            #[cfg(any(target_os = "windows", target_os = "linux"))]
+            if argv.iter().skip(1).any(|arg| arg == START_MINIMIZED_ARG) {
+                return;
+            }
             if argv.iter().any(|arg| arg == "--overlay") {
                 desktop::toggle_overlay(app);
             } else if let Some(window) = app.get_webview_window("main") {
@@ -126,6 +133,24 @@ pub fn run() {
         });
     }
 
+    #[allow(unused_mut)]
+    let mut context = tauri::generate_context!();
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
+    if std::env::args_os()
+        .skip(1)
+        .any(|arg| arg == START_MINIMIZED_ARG)
+        && let Some(window) = context
+            .config_mut()
+            .app
+            .windows
+            .iter_mut()
+            .find(|window| window.label == "main")
+    {
+        // Create the webview hidden so login startup never flashes the window.
+        window.visible = false;
+        window.focus = false;
+    }
+
     builder
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_deep_link::init())
@@ -140,6 +165,11 @@ pub fn run() {
                 use tauri_plugin_deep_link::DeepLinkExt;
                 #[cfg(not(any(target_os = "windows", target_os = "linux")))]
                 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
+
+                #[cfg(any(target_os = "windows", target_os = "linux"))]
+                if let Err(error) = startup::upgrade_legacy_startup() {
+                    log::warn!("Could not upgrade Alfred's startup entry: {error}");
+                }
 
                 if let Err(error) = app.deep_link().register("alfred") {
                     log::warn!("Could not register Alfred deep links: {error}");
@@ -246,6 +276,6 @@ pub fn run() {
             }
             Ok(())
         })
-        .run(tauri::generate_context!())
+        .run(context)
         .expect("error while building tauri application");
 }

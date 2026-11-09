@@ -73,6 +73,12 @@ Until you choose a device, reminders follow the existing account delivery
 setting. New accounts start with delivery to all eligible devices, a ten-minute
 lead and no additional start alert.
 Lead time accepts 0–10080 minutes. Zero lead produces one start-time alert.
+Under **Settings → Schedule Notifications → Alert type**, choose **Notification**
+or **Alarm**. The choice follows your account and uses the same reminder timing
+and destination. Desktop alarms bring Alfred forward and repeat a tone for up to
+one minute. Open the schedule or dismiss the alarm to silence it sooner. Android
+uses the **Schedule alarms** channel and the system alarm tone. Tap or dismiss the
+alert to stop it. Android controls the channel, alarm volume and Do Not Disturb.
 Preferences are account-scoped and revisioned to prevent concurrent lost updates.
 New settings use automatic device time-zone detection. The main app resolves its
 IANA zone with Intl, persists it with a revision check before notification sync,

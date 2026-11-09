@@ -1,11 +1,14 @@
 import { apiFetch } from "./api.ts";
 import { getSession, isTauri } from "../auth/auth.ts";
 
+export type ScheduleAlertType = "notification" | "alarm";
+
 export interface ScheduleNotificationPreferences {
   destination: "mobile" | "desktop" | "both";
   deviceId?: string;
   enabled: boolean; leadMinutes: number; atStart: boolean; timeZone: string; revision: number;
   timeZoneMode?: "automatic" | "manual";
+  alertType?: ScheduleAlertType;
 }
 
 export interface ScheduleNotificationDevice { id: string; name: string; isCurrent: boolean }
@@ -39,6 +42,7 @@ export async function syncDetectedTimeZone(accountId: string, signal?: AbortSign
 export interface ScheduleReminder {
   key: string; scheduleId: string; date: string; title: string; body: string;
   kind: "lead" | "start"; eventAt: number; dueAt: number;
+  alertType?: ScheduleAlertType;
 }
 export interface NotificationPlan { preferences: ScheduleNotificationPreferences; reminders: ScheduleReminder[]; next: string | null }
 export const NOTIFICATION_SETTINGS_EVENT = "alfred:schedule-notification-settings";
@@ -122,10 +126,10 @@ export function androidNotificationRequest(type: "status" | "permission" | "sett
   });
 }
 
-export async function notificationPermission(request = false): Promise<string> {
+export async function notificationPermission(request = false, alertType: ScheduleAlertType = "notification"): Promise<string> {
   if (isAndroid()) {
     if (!window.AlfredScheduleNotifications) return "unavailable";
-    const result = await androidNotificationRequest(request ? "permission" : "status");
+    const result = await androidNotificationRequest(request ? "permission" : "status", { alertType });
     return result.granted ? "granted" : "denied";
   }
   if (!isTauri()) return "unavailable";

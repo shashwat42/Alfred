@@ -1,9 +1,12 @@
 import { isValidCalendarDate } from "../../utils/dateUtils.ts";
 
+export type AlertType = "notification" | "alarm";
+
 export interface Preferences {
     destination: "mobile" | "desktop" | "both";
     deviceId?: string | undefined;
     enabled: boolean;
+    alertType?: AlertType | undefined;
     leadMinutes: number;
     atStart: boolean;
     timeZone: string;
@@ -12,13 +15,14 @@ export interface Preferences {
     effectiveFrom?: number;
 }
 export const defaultPreferences = (): Preferences => ({
-    destination: "both", enabled: true, leadMinutes: 10, atStart: false,
+    destination: "both", enabled: true, alertType: "notification", leadMinutes: 10, atStart: false,
     timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC", timeZoneMode: "automatic", revision: 0,
 });
 export type Platform = "mobile" | "desktop";
 export interface Reminder {
     key: string; scheduleId: string; date: string; title: string; body: string;
     kind: "lead" | "start"; eventAt: number; dueAt: number;
+    alertType?: AlertType;
 }
 export const GRACE_MS = 120_000;
 export const HORIZON_MS = 48 * 60 * 60_000;
