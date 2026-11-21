@@ -1,8 +1,18 @@
 # Alfred releases
 
-Alfred 1.0.42 adds schedule alarms and starts in the tray at sign-in on Windows
-and Fedora. Windows, Fedora and Android use release tag `v1.0.42`.
-Android packages are built and signed separately.
+Alfred 1.1.0 uses one checked version across Windows, Fedora Linux, Android
+and the backend. Run `npm run release:check` before packaging; production and
+development frontend builds run it automatically. App versions are independent
+of the server's account session-revocation counters.
+
+Sign-out revokes only the current device token, preserving sessions and pending
+sign-ins on other devices. Existing account credentials remain compatible.
+
+Android 1.1.0 starts a new signing identity (version code 1027). Older Android
+installations require a manual replacement; export local data before uninstalling.
+Keep the new private keystore and password in `Projects/Keys/Alfred-Android` and
+back them up securely. Future APKs must use this same key. Do not archive older
+public releases until the complete new release is published and verified.
 
 Merge features into `main` before cutting a release. Tag the exact commit
 that ships. Use release branches to stabilize or maintain a version, and
@@ -46,7 +56,7 @@ npm run --silent release:android:manifest -- \
 
 Attach the APK, `android-update.json` and its checksum file to the same draft.
 The manifest records the actual APK certificate, version code, minimum SDK and
-checksum. Compare its certificate fingerprint to the previous signed APK.
+checksum. Compare its certificate fingerprint to the previous signed APK (except the deliberate 1.1.0 key transition).
 Certificate-aware Android builds offer updates only when that fingerprint
 matches their installed certificate. Install the first certificate-aware build
 manually from GitHub to enable discovery of subsequent releases. Keep the new
@@ -58,4 +68,4 @@ Windows keeps its existing signed updater. Do not attach the older Android APK
 under a newer version name.
 
 See [desktop app updates](../app-updates.md), [Fedora setup](../linux-fedora.md),
-and the [1.0.42 notes](v1.0.42.md).
+and the [1.1.0 notes](v1.1.0.md).

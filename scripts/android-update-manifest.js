@@ -1,3 +1,4 @@
+import { checkReleaseVersions } from "./release-config.js";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -10,6 +11,7 @@ if (!apk || !buildTools) {
 }
 
 try {
+  checkReleaseVersions();
   const config = JSON.parse(readFileSync(new URL("../wrapper/tauri.android.conf.json", import.meta.url), "utf8"));
   const aapt = join(buildTools, process.platform === "win32" ? "aapt2.exe" : "aapt2");
   const badging = execFileSync(aapt, ["dump", "badging", apk], { encoding: "utf8" });

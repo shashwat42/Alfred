@@ -1,3 +1,4 @@
+import { checkReleaseVersions, releaseApiOrigin } from "./release-config.js";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -6,7 +7,6 @@ import { spawnSync, execFileSync } from "node:child_process";
 import { createLinuxUpdateManifest } from "./linux-update-manifest.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const readJson = name => JSON.parse(fs.readFileSync(path.join(root, name), "utf8"));
 const cli = path.join(root, "node_modules/@tauri-apps/cli/tauri.js");
 function run(args, env = process.env) {
   const result = spawnSync(process.execPath, [cli, ...args], { cwd: root, env, stdio: "inherit" });
@@ -16,15 +16,12 @@ function run(args, env = process.env) {
 function main() {
   if (process.platform !== "linux") throw new Error("Build RPM releases on Linux.");
   if (!process.env.TAURI_SIGNING_PRIVATE_KEY) throw new Error("The protected updater signing key is required for Linux releases.");
-  const version = readJson("package.json").version;
-  const config = readJson("wrapper/tauri.conf.json"), lock = readJson("package-lock.json");
-  const cargo = fs.readFileSync(path.join(root, "wrapper/Cargo.toml"), "utf8").match(/^version = "([^"]+)"/m)?.[1];
-  if ([config.version, lock.version, lock.packages[""].version, cargo].some(value => value !== version)) throw new Error("Release versions must match.");
+  const version = checkReleaseVersions();
   const architecture = ({ x64: "x86_64", arm64: "aarch64" })[process.arch];
   if (!architecture) throw new Error("Unsupported Linux release architecture.");
   const rpm = `Alfred-${version}-1.${architecture}.rpm`;
   const notes = fs.readFileSync(path.join(root, "docs/releases", `v${version}.md`), "utf8");
-  const api = new URL(process.env.ALFRED_RELEASE_API_URL || "https://alfred-137-23-49-88.sslip.io");
+  const api = new URL(process.env.ALFRED_RELEASE_API_URL || releaseApiOrigin);
   if (api.protocol !== "https:" || api.username || api.password || api.search || api.hash || api.pathname !== "/") throw new Error("The release API must be a public HTTPS origin.");
   const changed = execFileSync("git", ["status", "--porcelain", "--untracked-files=all"], { cwd: root, encoding: "utf8" }).trim();
   if (changed) throw new Error("Commit the release source before creating signed artifacts.");

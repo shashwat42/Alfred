@@ -1,7 +1,7 @@
 {
   "name": "alfred-frontend",
   "private": true,
-  "version": "1.0.42",
+  "version": "1.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -37,7 +37,10 @@
     "dev:linux": "node scripts/linux.js dev",
     "build:linux": "node scripts/linux.js build",
     "test:overlay-shortcut-ui": "node scripts/verify-overlay-shortcut-ui.ts",
-    "release:linux": "node scripts/release-linux.js"
+    "release:linux": "node scripts/release-linux.js",
+    "release:check": "node scripts/check-release-version.js",
+    "prebuild": "npm run release:check",
+    "prebuild:development": "npm run release:check"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",

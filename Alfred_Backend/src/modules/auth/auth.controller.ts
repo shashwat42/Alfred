@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import jwt from "jsonwebtoken";
 import type { Request, Response } from "express";
 import {
     atomicConsumeTicket,
@@ -17,6 +18,7 @@ import { OAuthState } from "../../models/oauthState.model.ts";
 import { Account } from "../../models/account.model.ts";
 import { migrateGuest } from "../../security/guestMigration.ts";
 import { env } from "../../config/env.ts";
+import { activeRevocations, revokeDeviceSession } from "../../security/deviceSessions.ts";
 
 export function restoreSession(req: Request, res: Response): void {
     // Return the existing token: validating a Google session must not refresh
@@ -52,7 +54,8 @@ export async function prepareOAuth(req: Request, res: Response): Promise<void> {
     const flow = req.body.flow as "browser" | "desktop";
     const state = `${flow === "desktop" ? "desktop_" : ""}${crypto.randomBytes(32).toString("hex")}`;
     await createPendingOAuthState({ state, flow, codeChallenge: req.body.code_challenge,
-        codeChallengeMethod: "S256", initiatorId: req.account!._id, initiatorVersion: req.account!.sessionVersion ?? 0 });
+        codeChallengeMethod: "S256", initiatorId: req.account!._id, initiatorVersion: req.account!.sessionVersion ?? 0,
+        initiatorSessionHash: crypto.createHash("sha256").update(req.headers.authorization!.slice(7).trim()).digest("hex") });
     res.json({ state, url: `${env.google.callbackUrl.replace(/\/callback$/, "")}?state=${encodeURIComponent(state)}` });
 }
 
@@ -68,7 +71,13 @@ export async function googleAuth(req: Request, res: Response): Promise<void> {
 }
 
 export async function logout(req: Request, res: Response): Promise<void> {
-    await Account.updateOne({ _id: req.account!._id }, { $inc: { sessionVersion: 1 } });
+    // Middleware has verified this token. Revoke this device even when cloud
+    // sync is disabled, without invalidating other devices or pending logins.
+    const token = req.headers.authorization!.slice(7).trim();
+    const claims = jwt.decode(token) as jwt.JwtPayload;
+    const revoked = await revokeDeviceSession(req.account!, crypto.createHash("sha256").update(token).digest("hex"),
+        new Date(claims.exp! * 1000), { requireCloudSync: false });
+    if (!revoked) { res.sendStatus(401); return; }
     res.sendStatus(204);
 }
 
@@ -139,7 +148,8 @@ export async function googleAuthCallback(req: Request, res: Response): Promise<v
         const account = await findOrCreateGoogleAccount(userProfile);
 
         const initiator = await Account.findById(pendingState.initiatorId);
-        if (!initiator || (initiator.sessionVersion ?? 0) !== pendingState.initiatorVersion || initiator.migratedTo) {
+        if (!initiator || (initiator.sessionVersion ?? 0) !== pendingState.initiatorVersion || initiator.migratedTo
+            || (pendingState.initiatorSessionHash && activeRevocations(initiator).includes(pendingState.initiatorSessionHash))) {
             throw new Error("Login session is no longer valid");
         }
         let ticket = "";

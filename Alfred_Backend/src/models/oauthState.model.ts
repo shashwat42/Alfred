@@ -4,6 +4,7 @@ export interface IOAuthState extends Document {
     state: string;
     initiatorId: mongoose.Types.ObjectId;
     initiatorVersion: number;
+    initiatorSessionHash?: string;
     callbackBinding?: string;
     nonce: string;
     codeChallenge?: string | undefined;
@@ -24,6 +25,7 @@ const oauthStateSchema = new Schema<IOAuthState>(
         },
         initiatorId: { type: Schema.Types.ObjectId, required: true },
         initiatorVersion: { type: Number, required: true },
+        initiatorSessionHash: { type: String },
         callbackBinding: { type: String },
         nonce: { type: String, required: true },
         codeChallenge: {

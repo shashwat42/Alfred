@@ -1,0 +1,62 @@
+name: Prepare Android release APK
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    if: startsWith(github.ref, 'refs/heads/releases/')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      MODE: production
+      CARGO_INCREMENTAL: '0'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Prepare Android SDK and Rust
+        run: |
+          echo "JAVA_HOME=$JAVA_HOME_21_X64" >> "$GITHUB_ENV"
+          echo "$JAVA_HOME_21_X64/bin" >> "$GITHUB_PATH"
+          export JAVA_HOME="$JAVA_HOME_21_X64"
+          export PATH="$JAVA_HOME/bin:$PATH"
+          sdk_manager="$(find "$ANDROID_HOME/cmdline-tools" -path '*/bin/sdkmanager' -type f | sort -V | tail -1)"
+          test -x "$sdk_manager"
+          set +o pipefail
+          yes | "$sdk_manager" --licenses >/dev/null
+          set -o pipefail
+          "$sdk_manager" 'platforms;android-37.0' 'build-tools;37.0.0' 'ndk;28.2.13676358'
+          echo "NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
+          rustup target add aarch64-linux-android
+      - run: npm ci
+      - run: npm run release:check
+      - name: Select the shared production API
+        run: node --input-type=module -e 'import {releaseApiOrigin} from "./scripts/release-config.js"; console.log(`VITE_API_BASE_URL=${releaseApiOrigin}`)' >> "$GITHUB_ENV"
+      - run: node scripts/sync-android-assistant.js
+      - name: Build ARM64 release APK for local signing
+        run: |
+          chmod +x wrapper/gen/android/gradlew
+          npm run tauri -- android build --target aarch64 --apk --ci
+          output=/tmp/alfred-android-release
+          mkdir -p "$output/tools/lib"
+          cp "$ANDROID_HOME/build-tools/37.0.0/lib/apksigner.jar" "$output/tools/lib/"
+          cp "$ANDROID_HOME/build-tools/37.0.0/zipalign" "$ANDROID_HOME/build-tools/37.0.0/aapt2" "$output/tools/"
+          mapfile -t apks < <(find wrapper/gen/android/app/build/outputs/apk -name '*.apk' -type f)
+          test "${#apks[@]}" -eq 1
+          version=$(node -p 'JSON.parse(require("node:fs").readFileSync("package.json")).version')
+          cp -- "${apks[0]}" "$output/Alfred_${version}_android_arm64-v8a-unsigned.apk"
+          git rev-parse HEAD > "$output/source-commit.txt"
+          cd "$output"
+          sha256sum ./*.apk > SHA256SUMS-unsigned.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: alfred-android-unsigned-release
+          path: /tmp/alfred-android-release
+          if-no-files-found: error

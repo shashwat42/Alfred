@@ -44,11 +44,13 @@ export async function createPendingOAuthState(params: {
     flow: "browser" | "desktop";
     initiatorId: mongoose.Types.ObjectId;
     initiatorVersion: number;
+    initiatorSessionHash?: string;
 }): Promise<IOAuthState> {
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
     const doc: Record<string, unknown> = {
         initiatorId: params.initiatorId,
         initiatorVersion: params.initiatorVersion,
+        initiatorSessionHash: params.initiatorSessionHash,
         nonce: crypto.randomBytes(32).toString("hex"),
         state: params.state,
         flow: params.flow,

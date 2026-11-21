@@ -1,3 +1,4 @@
+import { checkReleaseVersions, releaseApiOrigin } from "./release-config.js";
 import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
@@ -6,23 +7,14 @@ import { fileURLToPath } from "node:url";
 import { createUpdateManifest } from "./update-manifest.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const readJson = (name) => JSON.parse(fs.readFileSync(path.join(root, name), "utf8"));
-const pkg = readJson("package.json");
-const config = readJson("wrapper/tauri.conf.json");
-const version = pkg.version;
-const api = new URL(process.env.ALFRED_RELEASE_API_URL || "https://alfred-137-23-49-88.sslip.io");
+const version = checkReleaseVersions();
+const api = new URL(process.env.ALFRED_RELEASE_API_URL || releaseApiOrigin);
 const target = "x86_64-pc-windows-msvc";
 
 async function main() {
   if (process.platform !== "win32") throw new Error("Build the Windows release on Windows with the Rust MSVC toolchain.");
   if (!process.env.TAURI_SIGNING_PRIVATE_KEY) throw new Error("Set TAURI_SIGNING_PRIVATE_KEY from the protected updater signing secret before packaging. Unsigned updates cannot be released.");
   if (!/^\d+\.\d+\.\d+(?:-beta\.\d+(?:\.\d+)?)?$/.test(version)) throw new Error("Expected a stable or numbered beta version in package.json.");
-  const cargo = fs.readFileSync(path.join(root, "wrapper/Cargo.toml"), "utf8");
-  const cargoVersion = cargo.match(/^version = "([^"]+)"/m)?.[1];
-  const lock = readJson("package-lock.json");
-  if ([config.version, cargoVersion, lock.version, lock.packages[""].version].some((value) => value !== version)) {
-    throw new Error("Frontend, npm lockfile, Tauri and Cargo versions must match.");
-  }
   if (api.protocol !== "https:" || api.username || api.password || api.search || api.hash || api.pathname !== "/") {
     throw new Error("The release API must be a public HTTPS origin without credentials, path or query.");
   }

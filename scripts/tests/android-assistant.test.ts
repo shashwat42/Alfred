@@ -16,8 +16,8 @@ test("Android packages only its main app window and preserves desktop windows", 
   const config = readAndroidRuntimeConfig(wrapper);
   assert.deepEqual(config.app.windows, [{ label: "main", title: "Alfred", url: "index.html" }]);
   assert.equal(config.build.devUrl, null);
-  assert.equal(config.version, "1.0.42");
-  assert.equal(config.bundle.android.versionCode, 1026);
+  assert.equal(config.version, JSON.parse((await import("node:fs")).readFileSync(new URL("../../package.json", import.meta.url), "utf8")).version);
+  assert.ok(Number.isSafeInteger(config.bundle.android.versionCode) && config.bundle.android.versionCode > 0);
   const { readFile } = await import("node:fs/promises");
   const desktop = JSON.parse(await readFile(new URL("../../wrapper/tauri.conf.json", import.meta.url), "utf8"));
   assert.ok(desktop.app.windows.some((window: { label: string }) => window.label === "overlay"));

@@ -169,6 +169,54 @@ test("legacy bearer acceptance is explicit, bounded and never overrides issuer o
     } finally { env.jwt.legacyAcceptUntil = saved; }
 });
 
+test("signing out one platform preserves other device sessions and account versions, including local-only accounts", async () => {
+    for (const type of ["user", "guest"] as const) {
+        for (const cloudSyncEnabled of [false, true]) {
+            const account = await Account.create({ type, cloudSyncEnabled,
+                ...(type === "user" ? { googleId: randomUUID() } : { guestId: randomUUID() }) });
+            const tokens = [generateAuthToken(account), generateAuthToken(account), generateAuthToken(account)];
+            const version = account.sessionVersion;
+            assert.equal((await request("/auth/logout", tokens[0], "POST")).status, 204);
+            const rejected = await request("/auth/session", tokens[0]);
+            assert.equal(rejected.status, 401);
+            assert.equal((await rejected.json()).code, "DEVICE_SESSION_REVOKED");
+            for (const token of tokens.slice(1)) {
+                const restored = await request("/auth/session", token);
+                assert.equal(restored.status, 200);
+                assert.equal((await restored.json()).token, token);
+            }
+            assert.equal((await Account.findById(account._id))!.sessionVersion, version);
+            if (type === "guest") assert.equal((await request("/auth/guest/renew", tokens[0], "POST")).status, 401);
+        }
+    }
+});
+
+test("logout cancels only its own pending OAuth attempt", async () => {
+    const account = await Account.create({ type: "user", googleId: randomUUID() });
+    const tokens = [generateAuthToken(account), generateAuthToken(account)];
+    const attempts = [];
+    const verifier = "a".repeat(43), challenge = createHash("sha256").update(verifier).digest("base64url");
+    for (const token of tokens) {
+        const prepared = await request("/auth/prepare", token, "POST", { flow: "browser", code_challenge: challenge });
+        assert.equal(prepared.status, 200);
+        const { state, url } = await prepared.json();
+        const launch = await fetch(url.replace(env.google.callbackUrl.replace(/\/callback$/, ""), `${base}/auth/google`), { redirect: "manual" });
+        attempts.push({ state, cookie: launch.headers.get("set-cookie")!.split(";")[0]!, pending: (await OAuthState.findOne({ state }))! });
+    }
+    assert.equal((await request("/auth/logout", tokens[0], "POST")).status, 204);
+    mock.method(OAuth2Client.prototype, "getToken", async () => ({ tokens: { id_token: "test-provider-token" } }));
+    let nonce = "";
+    mock.method(OAuth2Client.prototype, "verifyIdToken", async () => ({ getPayload: () => ({ sub: account.googleId, nonce }) }));
+    try {
+        for (const [index, attempt] of attempts.entries()) {
+            nonce = attempt.pending.nonce;
+            const callback = await fetch(`${base}/auth/google/callback?state=${attempt.state}&code=verified-code`, { headers: { Cookie: attempt.cookie }, redirect: "manual" });
+            const location = callback.headers.get("location")!;
+            assert.ok(location.includes(index === 0 ? "auth_error=authentication_failed" : "ticket="));
+        }
+    } finally { mock.restoreAll(); }
+});
+
 test("real migration transaction rolls back partial work and ticket failure; retries revoke guest access", async () => {
     const source = await Account.create({ cloudSyncEnabled: true, type: "guest", guestId: randomUUID() });
     const task = await taskService.addTask(String(source._id), "Transfer me");

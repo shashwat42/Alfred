@@ -10,12 +10,12 @@ export function sessionWasRevoked(account: Pick<IAccount, "revokedDeviceSessions
         && activeRevocations(account).includes(createHash("sha256").update(token).digest("hex"));
 }
 
-export async function revokeDeviceSession(account: IAccount, hash: string, sessionExpiresAt: Date): Promise<boolean> {
+export async function revokeDeviceSession(account: IAccount, hash: string, sessionExpiresAt: Date, { requireCloudSync = true } = {}): Promise<boolean> {
     const version = account.sessionVersion ?? 0;
     // Guest tokens can be renewed for 30 days after expiry.
     const expiresAt = new Date(sessionExpiresAt.getTime() + (account.type === "guest" ? 30 * 86400_000 : 0));
     const result = await Account.updateOne({
-        _id: account._id, cloudSyncEnabled: true, migratedTo: { $exists: false },
+        _id: account._id, ...(requireCloudSync ? { cloudSyncEnabled: true } : {}), migratedTo: { $exists: false },
         ...(version === 0 ? { $or: [{ sessionVersion: 0 }, { sessionVersion: { $exists: false } }] } : { sessionVersion: version }),
     }, [{ $set: { revokedDeviceSessions: { $concatArrays: [
         { $filter: { input: { $ifNull: ["$revokedDeviceSessions", []] }, as: "entry",
