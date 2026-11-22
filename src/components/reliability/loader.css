@@ -1,0 +1,25 @@
+.alfred-loader {
+  display: grid;
+  place-items: center;
+  min-height: 140px;
+  padding: 24px;
+  box-sizing: border-box;
+  background: transparent;
+}
+.alfred-loader-fullscreen { width: 100%; height: 100dvh; min-height: 0; }
+.alfred-loader-overlay { position: absolute; inset: 0; z-index: 5; min-height: 0; padding: 16px; pointer-events: none; }
+.alfred-bow-loader { position: relative; display: block; width: 56px; height: 29.12px; animation: alfred-bow-spin 2.48s linear infinite; transform-origin: center; }
+.alfred-bow-shape { position: relative; display: block; width: 100%; height: 100%; background: #fff; clip-path: polygon(2% 0,41% 28%,59% 28%,98% 0,100% 8%,100% 92%,98% 100%,59% 72%,41% 72%,2% 100%,0 92%,0 8%); }
+.alfred-bow-fold { position: absolute; width: 29%; height: 1px; top: 50%; background: #858080; border-radius: 1px; }
+.alfred-bow-fold.left-upper { right: 53%; transform-origin: right center; transform: rotate(20deg); }
+.alfred-bow-fold.left-lower { right: 53%; transform-origin: right center; transform: rotate(-20deg); }
+.alfred-bow-fold.right-upper { left: 53%; transform-origin: left center; transform: rotate(-20deg); }
+.alfred-bow-fold.right-lower { left: 53%; transform-origin: left center; transform: rotate(20deg); }
+.alfred-bow-knot { position: absolute; left: 39%; top: 22%; width: 22%; height: 56%; box-sizing: border-box; border: 1px solid #858080; border-radius: 3px; background: #fff; }
+@keyframes alfred-bow-spin {
+  0% { transform: rotate(0deg); }
+  40.645161% { transform: rotate(84deg); }
+  53.548387% { transform: rotate(624deg); }
+  100% { transform: rotate(720deg); }
+}
+@media (prefers-reduced-motion: reduce) { .alfred-bow-loader { animation: none; } }

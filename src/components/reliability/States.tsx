@@ -2,10 +2,20 @@ import { useContext, useEffect, useRef, type ReactNode } from "react";
 import { AppStateContext } from "./appStateContext";
 import Logo from "../../assets/Alfred_Logo.svg";
 import { ErrorNotice } from "./Notifications";
+import "./loader.css";
 
-export function Loader({ label = "Loading Alfred…", overlay = false }: { label?: string; overlay?: boolean }) {
-  return <div className={`alfred-loader${overlay ? " alfred-loader-overlay" : ""}`} role="status" aria-live="polite"><span className="tuxedo-loader" aria-hidden="true"><i className="tuxedo-lapel left" /><i className="tuxedo-lapel right" /><i className="tuxedo-bow" />{[0, 1, 2].map(index => <i key={index} className="tuxedo-button" style={{ animationDelay: `${index * .25}s`, top: 24 + index * 8 }} />)}</span>{label}</div>;
+export function Loader({ label = "Loading Alfred…", overlay = false, fullscreen = false }: { label?: string; overlay?: boolean; fullscreen?: boolean }) {
+  return <div className={`alfred-loader${overlay ? " alfred-loader-overlay" : ""}${fullscreen ? " alfred-loader-fullscreen" : ""}`} role="status" aria-label={label}>
+    <span className="alfred-bow-loader" aria-hidden="true">
+      <span className="alfred-bow-shape">
+        <i className="alfred-bow-fold left-upper" /><i className="alfred-bow-fold left-lower" />
+        <i className="alfred-bow-fold right-upper" /><i className="alfred-bow-fold right-lower" />
+      </span>
+      <span className="alfred-bow-knot" />
+    </span>
+  </div>;
 }
+
 export function StateCard({ title, children, action, onAction, error = false }: { title: string; children?: ReactNode; action?: string; onAction?: () => void; error?: boolean }) {
   if (error) return <ErrorNotice title={title} message={typeof children === "string" ? children : title} retry={onAction} />;
   return <section className="alfred-state" role="status"><img src={Logo} width="46" height="46" alt="" /><h2>{title}</h2><div>{children}</div>{action && <button type="button" onClick={onAction}>{action}</button>}</section>;

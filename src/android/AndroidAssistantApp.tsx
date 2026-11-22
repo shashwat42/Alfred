@@ -1,7 +1,7 @@
 import { getSavedOverlayMode } from "../lib/overlayMode.ts";
 import { ErrorNotice } from "../components/reliability/Notifications";
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
-import { AudioLines, SendHorizontal, Mic, MicOff, LoaderCircle, ExternalLink, Square, Trash2, X, Sparkles } from "lucide-react";
+import { AudioLines, SendHorizontal, Mic, MicOff, LoaderCircle, Square, X, Sparkles } from "lucide-react";
 import Logo from "../assets/Alfred_Logo.svg";
 import { AUTH_CHANGE_EVENT, AUTH_STORAGE_KEY, getSession } from "../auth/auth.ts";
 import { SafeMarkdown } from "../components/SafeMarkdown.tsx";
@@ -46,7 +46,6 @@ export default function AndroidAssistantApp() {
   const generation = useRef(0);
   const abort = useRef<AbortController | null>(null);
   const [audioLevel, setAudioLevel] = useState(0);
-  const [menuOpen, setMenuOpen] = useState(false);
   const list = useRef<HTMLDivElement>(null);
   const account = useRef(getSession()?.account.id);
   const speechDone = useRef<(() => void) | null>(null);
@@ -190,9 +189,9 @@ export default function AndroidAssistantApp() {
   }, []);
   useEffect(() => audioRecorder.addLevelListener(setAudioLevel), []);
 
-  const native = (type: "dismiss" | "openApp") => {
+  const dismiss = () => {
     stop();
-    void androidAssistantRequest(type).catch((err: unknown) => setError(err instanceof Error ? err.message : "Android action failed."));
+    void androidAssistantRequest("dismiss").catch((err: unknown) => setError(err instanceof Error ? err.message : "Android action failed."));
   };
   const toggleMic = () => {
     if (!voiceRef.current) { void toggleVoice(); return; }
@@ -206,17 +205,17 @@ export default function AndroidAssistantApp() {
     }
   };
   return <main className={`android-assistant${voice ? " is-voice" : ""}`} aria-label="Alfred floating assistant" onClick={event => {
-    if (bridgeAvailable && !(event.target as Element).closest("[data-overlay-content]")) native("dismiss");
+    if (bridgeAvailable && !(event.target as Element).closest("[data-overlay-content]")) dismiss();
   }}>
     {voice && <div className="android-assistant-dock">
       <div className="android-assistant-voice-bar" data-overlay-content>
-        <button className="android-assistant-logo-button" aria-label="Assistant options" aria-expanded={menuOpen} aria-haspopup="menu" onClick={() => setMenuOpen(!menuOpen)}><AssistantLogo state={state} /></button>
+        <span className="android-assistant-logo-slot"><AssistantLogo state={state} /></span>
         <span className="android-assistant-activity" role="status" aria-label={state}>
           {state === "Thinking" || state === "Preparing audio" || state === "Preparing voice" ? <LoaderCircle className="android-assistant-spinner" size={30} /> : <span className={`android-assistant-wave${state === "Listening" && !micMuted ? " is-recording" : ""}`} style={{ "--voice-level": state === "Listening" && !micMuted ? Math.min(1, audioLevel * 4) : 0 } as CSSProperties} aria-hidden="true">{[12, 25, 17, 34, 24, 40, 28, 18, 30, 14].map((height, index) => <i key={index} style={{ height, animationDelay: `${index * -0.09}s` }} />)}</span>}
         </span>
         <button className="android-assistant-mic" aria-label={micMuted || state === "Paused" ? "Turn microphone on" : "Turn microphone off"} aria-pressed={!micMuted && state !== "Paused"} onClick={toggleMic}>{micMuted || state === "Paused" ? <MicOff size={28} /> : <Mic size={28} />}</button>
       </div>
-      <ModeSwitchButton voice onClick={() => { setMenuOpen(false); stop(); }} />
+      <ModeSwitchButton voice onClick={stop} />
     </div>}
     <form className="android-assistant-dock" hidden={voice} onSubmit={(event) => {
       event.preventDefault(); if (voice || busyRef.current || !prompt.trim()) return;
@@ -227,14 +226,8 @@ export default function AndroidAssistantApp() {
         <input aria-label="Ask Alfred" placeholder="Ask Alfred" maxLength={MAX_MESSAGE_CHAR_LIMIT} value={prompt} onChange={(event) => setPrompt(event.target.value)} disabled={voice} />
         {busy ? <button type="button" className="android-assistant-stop" aria-label="Stop response" onClick={stop}><Square size={20} /></button> : <button type="submit" aria-label="Send message" disabled={voice || !prompt.trim()}><SendHorizontal size={30} /></button>}
       </div>
-      <ModeSwitchButton voice={false} disabled={busy} onClick={() => { setMenuOpen(false); void toggleVoice(); }} />
+      <ModeSwitchButton voice={false} disabled={busy} onClick={() => void toggleVoice()} />
     </form>
-    {!voice && <button className="android-assistant-options" data-overlay-content aria-label="Assistant options" aria-expanded={menuOpen} aria-haspopup="menu" onClick={() => setMenuOpen(!menuOpen)}>Options</button>}
-    {menuOpen && <div className="android-assistant-menu" data-overlay-content role="menu" aria-label="Assistant options">
-      <button role="menuitem" onClick={() => native("dismiss")}><X size={16} />Dismiss assistant</button>
-      <button role="menuitem" onClick={() => native("openApp")}><ExternalLink size={16} />Open Alfred app</button>
-      <button role="menuitem" disabled={!messages.length && !error} onClick={() => { stop(); history.current = []; setMessages([]); setError(""); setRetryPrompt(null); setPrompt(""); setMenuOpen(false); }}><Trash2 size={16} />New conversation</button>
-    </div>}
     <ErrorNotice message={error || (!bridgeAvailable ? "Assistant preview only. Install the Android app to use system controls." : null)} title="Assistant unavailable" retry={bridgeAvailable && error && !busy ? () => {
       if (voice) { void toggleVoice(retryPrompt ?? undefined); }
       else if (retryPrompt) { void send(retryPrompt).catch((err: unknown) => setError(err instanceof Error ? err.message : "Please retry.")); }

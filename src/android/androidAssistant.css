@@ -20,7 +20,7 @@ html.is-android-assistant, html.is-android-assistant body, html.is-android-assis
 .android-assistant-composer, .android-assistant-voice-bar { display: flex; align-items: center; justify-content: space-between; flex: 1; min-width: 0; height: 48px; box-sizing: border-box; padding: 0 12px; border-radius: 999px; background: #080808; }
 .android-assistant .android-assistant-mode-switch { width: 44px; height: 44px; border-radius: 50%; color: #202024; background: #fff; }
 .android-assistant .android-assistant-mode-switch:hover { background: #ededed; color: #080808; }
-.android-assistant .android-assistant-logo-button { width: 44px; height: 44px; border-radius: 50%; }
+.android-assistant-logo-slot { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; flex-shrink: 0; }
 .android-assistant-activity { display: flex; align-items: center; justify-content: center; min-width: 48px; height: 44px; color: #fff; }
 .android-assistant-wave { display: flex; align-items: center; gap: 2px; height: 40px; opacity: .4; }
 .android-assistant-wave i { display: block; width: 3px; border-radius: 3px; background: #fff; transform: scaleY(.3); }
@@ -29,7 +29,6 @@ html.is-android-assistant, html.is-android-assistant body, html.is-android-assis
 @keyframes android-assistant-wave { from { transform: scaleY(.25); } to { transform: scaleY(calc(.5 + var(--voice-level, 0) * .5)); } }
 .android-assistant .android-assistant-mic { color: #a51c22; border-radius: 50%; }
 .android-assistant .android-assistant-mic[aria-pressed=false] { opacity: .65; }
-.android-assistant .android-assistant-options { order: 2; align-self: flex-end; width: auto; height: 24px; padding: 0 8px; font-size: 11px; }
 .android-assistant-logo { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; flex: 0 0 auto; margin: 0 4px; box-sizing: border-box; border: 2px solid #ffffff26; border-radius: 50%; background: #141416; transition: transform 80ms ease-out, box-shadow 150ms ease-out, border-color 150ms ease-out; }
 .android-assistant-logo img { width: 24px; height: 24px; object-fit: contain; }
 .android-assistant-composer .android-assistant-logo { width: 28px; height: 28px; margin: 0 2px; border-width: 1px; }
@@ -50,8 +49,6 @@ html.is-android-assistant, html.is-android-assistant body, html.is-android-assis
 .android-assistant-composer:focus-within { outline: 1px solid #ef444466; }
 .android-assistant-composer button[type=submit], .android-assistant .android-assistant-stop { background: transparent; color: #a51c22; }
 .android-assistant { position: relative; }
-.android-assistant-menu { position: absolute; bottom: 72px; right: max(4px, calc((100% - 620px) / 2)); z-index: 10; width: 190px; padding: 6px; border-radius: 12px; background: #18181b; border: 1px solid #ffffff1f; box-shadow: 0 6px 16px #0006; }
-.android-assistant-menu button { width: 100%; justify-content: flex-start; gap: 8px; padding: 0 10px; font-size: 12px; }
 .android-assistant-messages { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; flex: 1; order: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; padding: 12px 4px; scrollbar-width: thin; scrollbar-color: #ffffff33 transparent; }
 .android-assistant-messages:empty { display: none; }
 .android-assistant-messages > :first-child { margin-top: auto; }

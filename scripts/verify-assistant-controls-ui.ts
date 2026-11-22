@@ -41,6 +41,8 @@ try {
   await act(async () => { root.render(createElement(AndroidAssistantApp)); await settle(); });
   await click('Switch to voice mode');
   assert.equal(harness.recordings, 1);
+  assert.equal(container.querySelector('[aria-haspopup="menu"], [role="menu"]'), null);
+  assert.equal(container.querySelector('.android-assistant-logo-slot button'), null);
   assert.ok(container.querySelector('.android-assistant-wave.is-recording'));
   await click('Turn microphone off');
   assert.ok(container.querySelector('.is-voice'), 'Muting keeps voice mode open');
@@ -67,8 +69,8 @@ try {
   await act(async () => { container.querySelector<HTMLElement>('.android-assistant-messages')!.click(); await settle(); });
   assert.equal(harness.commands.at(-1), 'dismiss', 'Tapping the transparent part of the conversation dismisses the assistant');
   harness.commands.length = 0;
-  await click('Assistant options'); await click('Dismiss assistant');
-  assert.equal(harness.commands.at(-1), 'dismiss');
+  assert.equal(container.querySelector('[aria-haspopup="menu"], [role="menu"]'), null);
+  assert.doesNotMatch(container.textContent!, /Options|Dismiss assistant|Open Alfred app|New conversation/);
 
   const { StartupSettings } = await server.ssrLoadModule('/src/components/dashboard/StartupSettings.tsx');
   await act(async () => { root.render(createElement(StartupSettings)); await settle(); });
@@ -83,7 +85,7 @@ try {
   harness.failWrite = false;
   await act(async () => { toggle().click(); await settle(); });
   assert.equal(harness.enabled, false);
-  console.log('PASS: Android mode switching, mute/resume, thinking animation, conversation preservation, menu and outside dismissal, and isolated Windows startup toggle/error handling.');
+  console.log('PASS: Android mode switching, mute/resume, thinking animation, conversation preservation, no options menu and outside dismissal, and isolated Windows startup toggle/error handling.');
 } finally {
   await act(async () => root.unmount()); await server.close(); await dom.happyDOM.abort();
   Reflect.deleteProperty(globalThis, '__assistantUiHarness');

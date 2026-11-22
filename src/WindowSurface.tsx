@@ -10,5 +10,5 @@ const AndroidAssistant = lazy(() => import('./android/AndroidAssistantApp.tsx'))
 export default function WindowSurface({ surface }: { surface: Surface }) {
   const Component = surface === 'android-assistant' ? AndroidAssistant
     : surface === 'desktop-overlay' ? Overlay : MainApp;
-  return <Suspense fallback={<Loader label="Getting Alfred ready…" />}><Component /></Suspense>;
+  return <Suspense fallback={<Loader label="Getting Alfred ready…" fullscreen />}><Component /></Suspense>;
 }

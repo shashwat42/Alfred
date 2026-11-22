@@ -43,7 +43,7 @@ export function ApplicationBoundary({ children }: { children: ReactNode }) {
         unmounting the account, navigation or open drafts. */}
     <div className="live-app-surface" hidden={startScreen}>
       {selector && (legal || !known) && <header className="app-state-bar">{brand}</header>}
-      {legal ? <main className="alfred-page"><a href="/">Return to Alfred</a><Legal page={legal} /></main> : !known ? <NotFound /> : awaitingGoogle && session?.account.type !== "user" ? welcome : !session ? recovering || (error && getSession()) ? <SessionRecovery message={error ?? ""} /> : loading ? <Loader label="Getting Alfred ready…" /> : welcome : requiresAccountChoice ? welcome : <>
+      {legal ? <main className="alfred-page"><a href="/">Return to Alfred</a><Legal page={legal} /></main> : !known ? <NotFound /> : awaitingGoogle && session?.account.type !== "user" ? welcome : !session ? recovering || (error && getSession()) ? <SessionRecovery message={error ?? ""} /> : loading ? <Loader label="Getting Alfred ready…" fullscreen /> : welcome : requiresAccountChoice ? welcome : <>
         {error && <ErrorState message={error} retry={retry} />}
         {!error && <AccountPanel key={session.account.id} onboardingOnly />}{children}
       </>}
