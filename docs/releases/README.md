@@ -1,6 +1,6 @@
 # Alfred releases
 
-Alfred 1.1.0 uses one checked version across Windows, Fedora Linux, Android
+Alfred 1.1.1 uses one checked version across Windows, Fedora Linux, Android
 and the backend. Run `npm run release:check` before packaging; production and
 development frontend builds run it automatically. App versions are independent
 of the server's account session-revocation counters.
@@ -68,4 +68,4 @@ Windows keeps its existing signed updater. Do not attach the older Android APK
 under a newer version name.
 
 See [desktop app updates](../app-updates.md), [Fedora setup](../linux-fedora.md),
-and the [1.1.0 notes](v1.1.0.md).
+and the [1.1.1 notes](v1.1.1.md).

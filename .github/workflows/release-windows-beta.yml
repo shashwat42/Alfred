@@ -44,6 +44,7 @@ jobs:
           npm run lint
           npm --prefix Alfred_Backend run check
           npm --prefix Alfred_Backend test
+          npm run test:recovery-ui
           npm run test:reliability-ui
           npm run test:updates-ui
           npm run test:startup-ui

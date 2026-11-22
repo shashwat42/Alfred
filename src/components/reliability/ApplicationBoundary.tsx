@@ -16,6 +16,10 @@ const StateSelector = __DEV_PREVIEW__ ? lazy(() => import("../../dev/AppStates")
 export function ApplicationBoundary({ children }: { children: ReactNode }) {
   const { loading, session, error, retry, loginWithGoogle, continueAsGuest, requiresAccountChoice } = useAuth();
   const [development, setDevelopment] = useState(false), [selected, setSelected] = useState("");
+  const [recovering, setRecovering] = useState(false);
+  // Keep recovery mounted while its actions clear the error or retry auth.
+  if (session && recovering) setRecovering(false);
+  else if (!session && error && getSession() && !recovering) setRecovering(true);
   const [awaitingGoogle, setAwaitingGoogle] = useState(false);
   const welcome = <WelcomeScreen errorMessage={error ?? undefined} message={awaitingGoogle ? "Finish signing in with Google in your browser, or continue here as a guest." : undefined} guest={async () => { await continueAsGuest(); setAwaitingGoogle(false); }} google={async () => { setAwaitingGoogle(true); try { await loginWithGoogle(); } catch (e) { setAwaitingGoogle(false); throw e; } }} />;
   useEffect(() => {
@@ -39,7 +43,7 @@ export function ApplicationBoundary({ children }: { children: ReactNode }) {
         unmounting the account, navigation or open drafts. */}
     <div className="live-app-surface" hidden={startScreen}>
       {selector && (legal || !known) && <header className="app-state-bar">{brand}</header>}
-      {legal ? <main className="alfred-page"><a href="/">Return to Alfred</a><Legal page={legal} /></main> : !known ? <NotFound /> : awaitingGoogle && session?.account.type !== "user" ? welcome : !session ? loading ? <Loader label="Getting Alfred ready…" /> : error && getSession() ? <SessionRecovery message={error} /> : welcome : requiresAccountChoice ? welcome : <>
+      {legal ? <main className="alfred-page"><a href="/">Return to Alfred</a><Legal page={legal} /></main> : !known ? <NotFound /> : awaitingGoogle && session?.account.type !== "user" ? welcome : !session ? recovering || (error && getSession()) ? <SessionRecovery message={error ?? ""} /> : loading ? <Loader label="Getting Alfred ready…" /> : welcome : requiresAccountChoice ? welcome : <>
         {error && <ErrorState message={error} retry={retry} />}
         {!error && <AccountPanel key={session.account.id} onboardingOnly />}{children}
       </>}

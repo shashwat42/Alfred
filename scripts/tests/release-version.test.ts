@@ -13,10 +13,11 @@ test("release validation rejects platform and backend drift before packaging", (
       fs.mkdirSync(path.dirname(path.join(root, name)), { recursive: true });
       fs.copyFileSync(path.join(projectRoot, name), path.join(root, name));
     }
-    assert.equal(checkReleaseVersions(root), "1.1.0");
+    const version = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8")).version;
+    assert.equal(checkReleaseVersions(root), version);
     for (const name of files.filter(name => name !== "package.json")) {
       const file = path.join(root, name), original = fs.readFileSync(file, "utf8");
-      const changed = name.endsWith(".json") ? JSON.stringify({ ...JSON.parse(original), version: "0.0.1" }) : original.replace('version = "1.1.0"', 'version = "0.0.1"');
+      const changed = name.endsWith(".json") ? JSON.stringify({ ...JSON.parse(original), version: "0.0.1" }) : original.replace(`version = "${version}"`, 'version = "0.0.1"');
       fs.writeFileSync(file, changed);
       assert.throws(() => checkReleaseVersions(root), /Release versions must match/);
       fs.writeFileSync(file, original);

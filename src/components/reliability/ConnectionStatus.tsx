@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { API_BASE_URL } from "../../auth/auth.ts";
-import { StateCard } from "./States.tsx";
+import { RotateCw } from "lucide-react";
+import Logo from "../../assets/Alfred_Logo.svg";
+import "./recovery.css";
 
 /** Cover the app without unmounting drafts or active sessions. */
 export function ConnectionStatus() {
@@ -37,9 +39,14 @@ export function ConnectionStatus() {
     } catch { /* Keep recovery controls visible. */ }
     finally { setChecking(false); }
   };
-  return <dialog ref={dialog} className="connection-screen" onCancel={() => setDismissed(true)} aria-label={offline ? "You are offline" : "Server unavailable"}>
-    <StateCard title={offline ? "You’re offline" : "Alfred is temporarily unavailable"}>{offline ? "Reconnect to use the assistant and cloud features. Your saved device content is still available." : "We couldn’t reach the Alfred server. Your current work is preserved. We’ll reconnect automatically."}</StateCard>
-    <button type="button" disabled={checking} onClick={() => void retry()}>{checking ? "Checking…" : "Try again"}</button>
-    <button type="button" onClick={() => setDismissed(true)}>Continue with saved content</button>
+  return <dialog ref={dialog} className="connection-screen recovery-screen" onCancel={() => setDismissed(true)} aria-label={offline ? "You are offline" : "Server unavailable"}>
+    <div className="recovery-content">
+      <img className="recovery-logo" src={Logo} alt="Alfred" width="100" height="100" />
+      <h1>{offline ? "You’re offline" : "Alfred is temporarily unavailable"}</h1>
+      <div className="recovery-actions" aria-busy={checking}>
+        <button type="button" className="recovery-primary" disabled={checking} onClick={() => void retry()}><RotateCw size={16} aria-hidden="true" />{checking ? "Checking…" : "Try again"}</button>
+        <button type="button" className="recovery-link" onClick={() => setDismissed(true)}>Continue with saved content</button>
+      </div>
+    </div>
   </dialog>;
 }
